@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+@theme {
+  --color-obsidian:  #0B0B14;
+  --color-surface:   #14141F;
+  --color-elevated:  #1D1D2B;
+  --color-line:      #262637;
+
+  --color-cream:     #F4F1FF;
+  --color-muted: #DCD6F0;
+  --color-subtle: #B8B0D4;
+
+  --color-purple-300: #C4B5FD;
+  --color-purple-400: #A78BFA;
+  --color-purple-500: #8B5CF6;
+  --color-purple-600: #7C3AED;
+  --color-purple-700: #6D28D9;
+
+  --color-pink-400: #F472B6;
+  --color-pink-500: #EC4899;
+  --color-pink-600: #DB2777;
+
+  --color-gold-400: #FFB800;
+
+  --color-success: #10B981;
+  --color-danger:  #EF4444;
+
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-obsidian);
+  color: var(--color-cream);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+button { font-family: inherit; }
+img { display: block; max-width: 100%; }
+input, textarea { font-family: inherit; color: inherit; }
+
+.mobile-shell {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
