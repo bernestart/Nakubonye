@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Send, Trash2, ImagePlus, X, Heart, Smile } from 'lucide-react'
+import { Send, Trash2, ImagePlus, X, Heart, Smile, Pin } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl } from '../lib/photo'
@@ -27,7 +27,7 @@ export default function CommunityFeed({ communityId, isMember }) {
 
     const { data: rows, error: pErr } = await supabase
       .from('community_posts')
-      .select('id, author_id, content, image_path, created_at')
+      .select('id, author_id, content, image_path, created_at, pinned_until')
       .eq('community_id', communityId)
       .order('created_at', { ascending: false })
       .limit(50)
@@ -71,6 +71,35 @@ export default function CommunityFeed({ communityId, isMember }) {
     } else {
       setReactions({})
     }
+
+    const enriched = (rows || []).map((r) => {
+      const pp = profMap.get(r.author_id) || {}
+      let imageUrl = ''
+      if (r.image_path) {
+        const { data } = supabase.storage.from('community-media').getPublicUrl(r.image_path)
+        imageUrl = data?.publicUrl || ''
+      }
+      return {
+        id: r.id,
+        author_id: r.author_id,
+        content: r.content,
+        image_url: imageUrl,
+        created_at: r.created_at,
+        pinned_until: r.pinned_until,
+        pinned: !!(r.pinned_until && new Date(r.pinned_until) > new Date()),
+        author_name: pp.display_name || pp.username || 'Someone',
+        author_photo: publicPhotoUrl(photoMap.get(r.author_id)),
+        author_verified: pp.is_verified,
+      }
+    })
+
+    enriched.sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1
+      if (!a.pinned && b.pinned) return 1
+      return new Date(b.created_at) - new Date(a.created_at)
+    })
+
+    setPosts(enriched)
 
     setLoading(false)
   }, [session?.user?.id, communityId])
@@ -175,6 +204,21 @@ export default function CommunityFeed({ communityId, isMember }) {
       }))
     }
     setPickerFor(null)
+  }
+
+  async function pinCommunityPost(postId) {
+    if (!confirm('Pin this post to the top for 24 hours? Costs 40 coins.')) return
+    tap('medium')
+    setError('')
+    const { data, error: err } = await supabase.rpc('pin_community_post', { p_post_id: postId })
+    if (err) {
+      if (/insufficient/i.test(err.message)) setError('Not enough coins. Get more in Wallet.')
+      else if (/already pinned/i.test(err.message)) setError('This post is already pinned.')
+      else if (/author/i.test(err.message)) setError('Only the author can pin a post.')
+      else setError(err.message)
+      return
+    }
+    load()
   }
 
   if (!isMember) {
@@ -300,6 +344,20 @@ export default function CommunityFeed({ communityId, isMember }) {
                       })}
                     </p>
                   </div>
+                  {post.pinned && (
+                    <div className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9.5px] font-black tracking-wide">
+                      PINNED
+                    </div>
+                  )}
+                  {mine && !post.pinned && (
+                    <button
+                      onClick={() => pinCommunityPost(post.id)}
+                      className="w-8 h-8 rounded-full grid place-items-center text-muted hover:text-amber-400"
+                      aria-label="Pin post"
+                    >
+                      <Pin size={15} strokeWidth={2.2} />
+                    </button>
+                  )}
                   {mine && (
                     <button
                       onClick={() => deletePost(post.id)}
