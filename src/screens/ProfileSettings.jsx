@@ -63,6 +63,7 @@ export default function ProfileSettings() {
 
         <div className="flex flex-col gap-2">
           <MenuItem icon={<Users size={18} />} label="Communities" onClick={() => nav('/communities')} />
+          <MenuItem icon={<Gift size={18} />} label="Get 50 free coins" onClick={() => nav('/facebook-reward')} />
           <MenuItem icon={<Gift size={18} />} label="Invite friends" onClick={() => nav('/invite')} />
           <MenuItem icon={<Bell size={18} />} label="Notifications" onClick={() => nav('/notifications')} />
           <MenuItem icon={<Shield size={18} />} label="Admin" onClick={() => nav('/admin')} />
