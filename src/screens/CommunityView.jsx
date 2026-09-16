@@ -6,6 +6,7 @@ import { useAuth } from '../lib/auth'
 import { publicPhotoUrl, calcAge } from '../lib/photo'
 import { tap } from '../lib/haptic'
 import BrandGlow from '../components/BrandGlow'
+import CommunityFeed from '../components/CommunityFeed'
 
 export default function CommunityView() {
   const nav = useNavigate()
@@ -18,6 +19,7 @@ export default function CommunityView() {
   const [members, setMembers] = useState([])
   const [joined, setJoined] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [tab, setTab] = useState('feed')
 
   const load = useCallback(async () => {
     if (!session?.user?.id || !id) return
@@ -196,11 +198,48 @@ export default function CommunityView() {
                   </>
                 )}
               </button>
+
+              <button
+                onClick={() => { tap('light'); nav('/communities/' + community.id + '/discover') }}
+                className="h-11 px-6 rounded-full font-bold text-[14px] flex items-center gap-2 mx-auto mt-3 bg-white/[0.06] border border-white/12 text-cream"
+              >
+                Discover members →
+              </button>
             </div>
 
-            <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-3">
-              Members · {members.length}
-            </p>
+            {/* Tabs */}
+            <div className="flex gap-1 p-1 rounded-2xl bg-white/[0.04] border border-white/8 mb-4">
+              <button
+                type="button"
+                onClick={() => { tap('light'); setTab('feed') }}
+                className={`flex-1 h-9 rounded-xl text-[13px] font-bold transition-colors ${
+                  tab === 'feed'
+                    ? 'bg-white text-[#0B0B14] shadow-[0_2px_6px_rgba(0,0,0,0.25)]'
+                    : 'text-muted'
+                }`}
+              >
+                Feed
+              </button>
+              <button
+                type="button"
+                onClick={() => { tap('light'); setTab('members') }}
+                className={`flex-1 h-9 rounded-xl text-[13px] font-bold transition-colors ${
+                  tab === 'members'
+                    ? 'bg-white text-[#0B0B14] shadow-[0_2px_6px_rgba(0,0,0,0.25)]'
+                    : 'text-muted'
+                }`}
+              >
+                Members · {members.length}
+              </button>
+            </div>
+
+            {tab === 'feed' ? (
+              <CommunityFeed communityId={community.id} isMember={joined} />
+            ) : (
+              <>
+                <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-3">
+                  Members · {members.length}
+                </p>
 
             {members.length === 0 ? (
               <div className="text-center py-10">
@@ -247,6 +286,8 @@ export default function CommunityView() {
                   </button>
                 ))}
               </div>
+            )}
+              </>
             )}
           </>
         )}

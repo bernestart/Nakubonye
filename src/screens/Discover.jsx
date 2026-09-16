@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { motion, useMotionValue, useTransform } from 'framer-motion'
 import { X, Heart, MapPin, Check, Undo2, MessageCircle, Zap, SlidersHorizontal } from 'lucide-react'
 import { friendlyError } from '../lib/errors'
@@ -19,6 +19,7 @@ const SWIPE_THRESHOLD = 130
 export default function Discover() {
   const nav = useNavigate()
   const { session, profile } = useAuth()
+  const { communityId } = useParams()
   const [cards, setCards] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -60,6 +61,7 @@ export default function Discover() {
       p_same_country: sameCountry,
       p_verified_only: verifiedOnly,
       p_online_only: onlineOnly,
+      p_community_id: communityId ? Number(communityId) : null,
     })
     if (rpcError) { setError(friendlyError(rpcError)); setLoading(false); return }
 
@@ -77,7 +79,7 @@ export default function Discover() {
       is_boosted: !!r.is_boosted,
     })))
     setLoading(false)
-  }, [session?.user?.id, sameCity, sharedInterests, sameCountry, verifiedOnly, onlineOnly])
+  }, [session?.user?.id, sameCity, sharedInterests, sameCountry, verifiedOnly, onlineOnly, communityId])
 
   useEffect(() => { load() }, [load])
 

@@ -104,6 +104,7 @@ export default function App() {
         <Route path="/invite" element={<Guard><Invite /></Guard>} />
         <Route path="/communities" element={<Guard><Communities /></Guard>} />
         <Route path="/communities/:id" element={<Guard><CommunityView /></Guard>} />
+        <Route path="/communities/:id/discover" element={<Guard><Discover /></Guard>} />
         <Route path="/notifications" element={<Guard><Notifications /></Guard>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
