@@ -153,14 +153,17 @@ export default function Communities() {
                     {c.emoji || '💬'}
                   </div>
 
-                  <div className="flex-1 min-w-0">
+                  <button
+                    onClick={() => { tap('light'); nav('/communities/' + c.id) }}
+                    className="flex-1 min-w-0 text-left"
+                  >
                     <p className="text-cream font-bold text-[14.5px] truncate">
                       {c.name}
                     </p>
                     <p className="text-muted text-[12.5px] truncate">
                       {c.description || ''} · {c.member_count} {c.member_count === 1 ? 'member' : 'members'}
                     </p>
-                  </div>
+                  </button>
 
                   <button
                     onClick={() => joined ? leave(c) : join(c)}
