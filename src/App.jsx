@@ -12,6 +12,7 @@ import BrandGlow from './components/BrandGlow'
 import Welcome from './screens/Welcome'
 import SignUp from './screens/SignUp'
 import SignIn from './screens/SignIn'
+import ResetPassword from './screens/ResetPassword'
 import Onboarding from './screens/Onboarding'
 import Discover from './screens/Discover'
 import Filters from './screens/Filters'
@@ -117,6 +118,7 @@ export default function App() {
         <Route path="/" element={<PublicOnly><Welcome /></PublicOnly>} />
         <Route path="/signup" element={<PublicOnly><SignUp /></PublicOnly>} />
         <Route path="/signin" element={<PublicOnly><SignIn /></PublicOnly>} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/onboarding" element={<Guard><Onboarding /></Guard>} />
         <Route path="/discover" element={<Guard><Discover /></Guard>} />
         <Route path="/filters" element={<Guard><Filters /></Guard>} />
