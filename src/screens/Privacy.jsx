@@ -112,7 +112,7 @@ function ContactBox() {
         <span className="text-subtle">Email:</span> <span className="font-semibold">contact@nakubonye.com</span>
       </p>
       <p className="text-cream text-[13.5px]">
-        <span className="text-subtle">WhatsApp:</span> <span className="font-semibold">+257 65 39 40 84</span>
+        <span className="text-subtle">WhatsApp:</span> <a href="https://wa.me/25765394084" target="_blank" rel="noopener" className="font-semibold text-purple-300">+257 65 39 40 84</a>
       </p>
     </div>
   )
