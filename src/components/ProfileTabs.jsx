@@ -13,7 +13,8 @@ export default function ProfileTabs({ active = 'preview' }) {
       <div className="flex items-center justify-between">
         <span className="text-cream font-bold text-[15px]">My profile</span>
         <button
-          onClick={() => { tap('light'); nav('/me/settings') }}
+          type="button"
+          onClick={() => { tap('light'); nav('/me') }}
           className="w-8 h-8 rounded-full grid place-items-center text-muted"
           aria-label="Settings"
         >
