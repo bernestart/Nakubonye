@@ -35,6 +35,7 @@ import ProfileSettings from './screens/ProfileSettings'
 import ProfileViewers from './screens/ProfileViewers'
 import Admin from './screens/Admin'
 import FacebookReward from './screens/FacebookReward'
+import AccountSecurity from './screens/AccountSecurity'
 import Wallet from './screens/Wallet'
 import Premium from './screens/Premium'
 import Invite from './screens/Invite'
@@ -137,6 +138,7 @@ export default function App() {
         <Route path="/profile-views" element={<Guard><ProfileViewers /></Guard>} />
         <Route path="/admin" element={<Guard><Admin /></Guard>} />
         <Route path="/facebook-reward" element={<Guard><FacebookReward /></Guard>} />
+        <Route path="/settings/security" element={<Guard><AccountSecurity /></Guard>} />
         <Route path="/safety"   element={<Guard><SafetyCenter /></Guard>} />
         <Route path="/blocked"  element={<Guard><BlockedList /></Guard>} />
         <Route path="/profile/:userId" element={<Guard><ProfileView /></Guard>} />
