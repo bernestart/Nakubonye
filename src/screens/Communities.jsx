@@ -195,7 +195,7 @@ export default function Communities() {
         )}
 
         <p className="text-center text-subtle text-[11.5px] mt-8 leading-relaxed">
-          More communities are coming. Want to suggest one? Send us a message in Settings.
+          More communities are coming. Want to suggest one? WhatsApp us at <a href="https://wa.me/25765394084" target="_blank" rel="noopener" className="text-purple-300 font-semibold">+257 65 39 40 84</a>
         </p>
       </div>
     </div>

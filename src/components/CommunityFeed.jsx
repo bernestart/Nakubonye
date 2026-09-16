@@ -54,7 +54,7 @@ export default function CommunityFeed({ communityId, isMember }) {
       ;(photos || []).forEach((p) => {
         if (!photoMap.has(p.user_id)) photoMap.set(p.user_id, p.storage_path)
       })
-    }$1
+    }
     // Load reactions for these posts
     const postIds = (rows || []).map((r) => r.id)
     if (postIds.length > 0) {

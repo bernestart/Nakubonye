@@ -417,7 +417,7 @@ function ActionBtn({ children, onClick, disabled, label, size = 54, variant = 'n
       aria-label={label}
       title={title}
       style={{ width: size, height: size }}
-      className={`rounded-full grid place-items-center shrink-0 transition-opacity ${disabled ? 'opacity-40' : ''}`}
+      className={`rounded-full grid place-items-center shrink-0 transition-opacity bg-black/35 backdrop-blur-xl border border-white/12 ${disabled ? 'opacity-40' : ''}`}
     >
       <span
         className={iconColor}
