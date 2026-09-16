@@ -387,7 +387,7 @@ export default function Chat() {
               {other?.display_name || other?.username || 'Someone'}
               {other?.is_verified && <span className="text-purple-400 text-[11px]">✓</span>}
             </p>
-            <p className="text-subtle text-[11px] font-medium">{otherTyping ? 'typing…' : 'Matched'}</p>
+            <p className="text-subtle text-[11px] font-medium">{otherTyping ? 'typing…' : (other?.isDirect ? 'Direct message' : 'Matched')}</p>
           </div>
         </button>
         <button

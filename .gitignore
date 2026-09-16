@@ -31,3 +31,4 @@ npm-debug.log*
 # Vite cache
 .vite
 /*.cjs
+.service-key

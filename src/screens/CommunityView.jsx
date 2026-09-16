@@ -253,6 +253,8 @@ export default function CommunityView() {
 
             {tab === 'feed' ? (
               <CommunityFeed communityId={community.id} isMember={joined} />
+            ) : tab === 'chat' ? (
+              <CommunityChat communityId={community.id} isMember={joined} isPremium={isPremium} />
             ) : (
               <>
                 <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-3">
