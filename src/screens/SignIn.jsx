@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import ForgotPasswordModal from '../components/ForgotPasswordModal'
 import { supabase } from '../lib/supabase'
 import { friendlyError } from '../lib/errors'
 import BrandGlow from '../components/BrandGlow'
@@ -10,6 +11,7 @@ export default function SignIn() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [showReset, setShowReset] = useState(false)
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -128,13 +130,28 @@ export default function SignIn() {
           </button>
         </form>
 
-        <p className="text-center text-white/55 text-[13.5px] mt-7">
+        <button
+          type="button"
+          onClick={() => setShowReset(true)}
+          className="block mx-auto text-center text-purple-300 text-[13.5px] font-semibold mt-6 hover:text-purple-200"
+        >
+          Forgot your password?
+        </button>
+
+        <p className="text-center text-white/55 text-[13.5px] mt-5">
           New here?{' '}
           <Link to="/signup" className="text-purple-300 font-semibold">
             Create an account
           </Link>
         </p>
       </main>
+
+      {showReset && (
+        <ForgotPasswordModal
+          onClose={() => setShowReset(false)}
+          initialEmail={email}
+        />
+      )}
     </div>
   )
 }
