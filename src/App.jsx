@@ -32,6 +32,7 @@ import EditProfile from './screens/EditProfile'
 import Preview from './screens/Preview'
 import ProfileSettings from './screens/ProfileSettings'
 import ProfileViewers from './screens/ProfileViewers'
+import Admin from './screens/Admin'
 import Wallet from './screens/Wallet'
 import Premium from './screens/Premium'
 import Invite from './screens/Invite'
@@ -50,10 +51,45 @@ function Loading() {
 }
 
 function Guard({ children }) {
-  const { session, loading } = useAuth()
+  const { session, profile, loading } = useAuth()
   if (loading) return <Loading />
   if (!session) return <Navigate to="/" replace />
+  if (profile?.is_banned) return <BannedScreen reason={profile.banned_reason} />
   return children
+}
+
+function BannedScreen({ reason }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, display: 'grid', placeItems: 'center',
+      background: '#0B0B14', padding: 24, textAlign: 'center', zIndex: 9999
+    }}>
+      <div style={{ maxWidth: 340 }}>
+        <div style={{ fontSize: 56, marginBottom: 16 }}>🚫</div>
+        <h1 className="text-cream text-[22px] font-extrabold mb-3">Account suspended</h1>
+        <p className="text-muted text-[14px] leading-relaxed mb-4">
+          {reason || 'Your account has been suspended for violating our community guidelines.'}
+        </p>
+        <p className="text-muted text-[13px] leading-relaxed mb-2">
+          If you believe this is a mistake, contact support:
+        </p>
+        <a
+          href="https://wa.me/25765394084"
+          target="_blank"
+          rel="noopener"
+          className="text-purple-300 font-semibold text-[14px]"
+        >
+          +257 65 39 40 84
+        </a>
+        <button
+          onClick={async () => { const { supabase } = await import('./lib/supabase'); await supabase.auth.signOut() }}
+          className="block w-full mt-8 h-11 rounded-full bg-white/[0.06] border border-white/12 text-cream font-semibold text-[14px]"
+        >
+          Sign out
+        </button>
+      </div>
+    </div>
+  )
 }
 
 function PublicOnly({ children }) {
@@ -96,6 +132,7 @@ export default function App() {
         <Route path="/me"         element={<Guard><ProfileSettings /></Guard>} />
         <Route path="/me/preview"  element={<Guard><Preview /></Guard>} />
         <Route path="/profile-views" element={<Guard><ProfileViewers /></Guard>} />
+        <Route path="/admin" element={<Guard><Admin /></Guard>} />
         <Route path="/safety"   element={<Guard><SafetyCenter /></Guard>} />
         <Route path="/blocked"  element={<Guard><BlockedList /></Guard>} />
         <Route path="/profile/:userId" element={<Guard><ProfileView /></Guard>} />
