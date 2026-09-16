@@ -7,6 +7,8 @@ import { publicPhotoUrl } from '../lib/photo'
 import { tap } from '../lib/haptic'
 
 export default function CommunityFeed({ communityId, isMember }) {
+  // MARKER 1
+
   const nav = useNavigate()
   const { session } = useAuth()
 
@@ -221,7 +223,11 @@ export default function CommunityFeed({ communityId, isMember }) {
     load()
   }
 
+  // MARKER 2 - about to check isMember
+  const __marker = { isMember, communityId, postsCount: posts.length, loading }
+
   if (!isMember) {
+    // MARKER 3 - rendering not-member
     return (
       <div className="text-center py-12">
         <div className="w-14 h-14 rounded-2xl bg-white/[0.04] border border-white/8 grid place-items-center mx-auto mb-4">
@@ -233,8 +239,14 @@ export default function CommunityFeed({ communityId, isMember }) {
     )
   }
 
+  // MARKER 4 - rendering main content
+  console.log('[CommunityFeed]', __marker)
+
   return (
     <div className="flex flex-col gap-4">
+      <div style={{ background: '#ef4444', color: '#fff', padding: 10, textAlign: 'center', borderRadius: 8, fontSize: 12, fontWeight: 'bold' }}>
+        FEED RENDERING · isMember: {String(isMember)} · posts: {posts.length} · loading: {String(loading)}
+      </div>
       {error && (
         <div className="text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5">
           {error}
@@ -441,5 +453,3 @@ export default function CommunityFeed({ communityId, isMember }) {
       )}
     </div>
   )
-}
-}
