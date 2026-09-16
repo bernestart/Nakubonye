@@ -1,8 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, ShieldCheck, UserX, LogOut, ChevronRight,
-  Wallet as WalletIcon, Crown, Trash2, Bell, Gift, FileText, Zap
-} from 'lucide-react'
+  Wallet as WalletIcon, Crown, Trash2, Bell, Gift, FileText, Zap, Info } from 'lucide-react'
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -80,6 +79,7 @@ export default function ProfileSettings() {
           <MenuItem icon={<ShieldCheck size={18} />} label="Get verified" onClick={() => nav('/verify')} />
           <MenuItem icon={<ShieldCheck size={18} />} label="Safety Center" onClick={() => nav('/safety')} />
           <MenuItem icon={<UserX size={18} />} label="Blocked users" onClick={() => nav('/blocked')} />
+          <MenuItem icon={<Info size={18} />} label="About Nakubonye" onClick={() => nav('/about')} />
           <MenuItem icon={<FileText size={18} />} label="Terms of Service" onClick={() => nav('/terms')} />
           <MenuItem icon={<ShieldCheck size={18} />} label="Privacy Policy" onClick={() => nav('/privacy')} />
           <MenuItem
@@ -99,8 +99,10 @@ export default function ProfileSettings() {
           />
         </div>
 
-        <p className="text-center text-subtle text-[11px] mt-10">
-          Nakubonye · v2.0
+        <p className="text-center text-subtle text-[11px] mt-10 leading-relaxed">
+          Nakubonye · v2.0 · Made in Burundi 🇧🇮
+          <br />
+          Built by Ernest Niyobuhungiro · Bernest 🎨 Designer
         </p>
       </div>
 

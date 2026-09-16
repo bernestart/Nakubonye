@@ -16,6 +16,7 @@ import Onboarding from './screens/Onboarding'
 import Discover from './screens/Discover'
 import Filters from './screens/Filters'
 import Terms from './screens/Terms'
+import About from './screens/About'
 import Privacy from './screens/Privacy'
 import Verify from './screens/Verify'
 import Boost from './screens/Boost'
@@ -80,6 +81,7 @@ export default function App() {
         <Route path="/discover" element={<Guard><Discover /></Guard>} />
         <Route path="/filters" element={<Guard><Filters /></Guard>} />
         <Route path="/terms" element={<Terms />} />
+        <Route path="/about" element={<About />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/verify" element={<Guard><Verify /></Guard>} />
         <Route path="/boost" element={<Guard><Boost /></Guard>} />
