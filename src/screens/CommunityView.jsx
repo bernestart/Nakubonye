@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { Component, useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Check, Plus, MapPin, UserPlus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -252,7 +252,7 @@ export default function CommunityView() {
             </div>
 
             {tab === 'feed' ? (
-              <CommunityFeed communityId={community.id} isMember={joined} />
+              <FeedErrorBoundary><CommunityFeed communityId={community.id} isMember={joined} /></FeedErrorBoundary>
             ) : tab === 'chat' ? (
               <CommunityChat communityId={community.id} isMember={joined} isPremium={isPremium} />
             ) : (
@@ -314,4 +314,28 @@ export default function CommunityView() {
       </div>
     </div>
   )
+}
+
+
+class FeedErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { err: null }
+  }
+  componentDidCatch(error) {
+    this.setState({ err: error })
+  }
+  render() {
+    if (this.state.err) {
+      return (
+        <div style={{ padding: 16, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 16, color: '#fca5a5', fontSize: 13 }}>
+          <strong>Feed error:</strong>
+          <pre style={{ whiteSpace: 'pre-wrap', marginTop: 8, fontSize: 12 }}>
+            {String(this.state.err?.message || this.state.err)}
+          </pre>
+        </div>
+      )
+    }
+    return this.props.children
+  }
 }

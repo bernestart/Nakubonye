@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Send, Lock, Sparkles } from 'lucide-react'
+import { Send, Sparkles } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl } from '../lib/photo'
@@ -135,38 +135,6 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
     )
   }
 
-  if (!isPremium) {
-    return (
-      <div className="text-center py-8">
-        <div className="rounded-3xl overflow-hidden border border-purple-500/30 mb-5"
-          style={{ background: 'linear-gradient(160deg, rgba(124,58,237,0.25) 0%, rgba(236,72,153,0.15) 100%)' }}
-        >
-          <div className="absolute inset-0 opacity-40" />
-          <div className="relative p-6">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 grid place-items-center mx-auto mb-4 shadow-[0_10px_30px_rgba(124,58,237,0.55)]">
-              <Lock size={24} strokeWidth={2.4} className="text-white" />
-            </div>
-            <h2 className="text-cream text-[20px] font-extrabold tracking-tight mb-2">
-              Community chat is Premium
-            </h2>
-            <p className="text-muted text-[13.5px] leading-relaxed mb-5 px-3">
-              Talk live with everyone in this community. Premium unlocks the chat in every community you join.
-            </p>
-            <button
-              onClick={() => { tap('light'); nav('/premium') }}
-              className="inline-flex items-center gap-2 h-11 px-6 rounded-full bg-gradient-to-r from-purple-600 via-purple-500 to-pink-500 text-white font-bold text-[14px] shadow-[0_10px_28px_rgba(124,58,237,0.5)]"
-            >
-              <Lock size={16} strokeWidth={2.4} />
-              Unlock with Premium
-            </button>
-          </div>
-        </div>
-        <p className="text-subtle text-[11.5px] leading-relaxed">
-          You can still read and post in the Feed for free.
-        </p>
-      </div>
-    )
-  }
 
   return (
     <div className="flex flex-col" style={{ minHeight: '400px' }}>
