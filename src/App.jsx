@@ -31,6 +31,7 @@ import ProfileView from './screens/ProfileView'
 import EditProfile from './screens/EditProfile'
 import Preview from './screens/Preview'
 import ProfileSettings from './screens/ProfileSettings'
+import ProfileViewers from './screens/ProfileViewers'
 import Wallet from './screens/Wallet'
 import Premium from './screens/Premium'
 import Invite from './screens/Invite'
@@ -94,6 +95,7 @@ export default function App() {
         <Route path="/messages/:userId" element={<Guard><Chat /></Guard>} />
         <Route path="/me"         element={<Guard><ProfileSettings /></Guard>} />
         <Route path="/me/preview"  element={<Guard><Preview /></Guard>} />
+        <Route path="/profile-views" element={<Guard><ProfileViewers /></Guard>} />
         <Route path="/safety"   element={<Guard><SafetyCenter /></Guard>} />
         <Route path="/blocked"  element={<Guard><BlockedList /></Guard>} />
         <Route path="/profile/:userId" element={<Guard><ProfileView /></Guard>} />

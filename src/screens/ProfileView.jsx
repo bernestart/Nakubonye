@@ -39,6 +39,9 @@ export default function ProfileView() {
     if (!myId || !userId) return
     setLoading(true); setError('')
 
+    // Record that I viewed this profile (silent, no errors surfaced)
+    try { await supabase.rpc('record_profile_view', { p_viewed_id: userId }) } catch {}
+
     const { data: prof, error: profErr } = await supabase
       .from('profiles')
       .select('id, display_name, username, date_of_birth, gender, bio, city, country, is_verified, looking_for, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children')

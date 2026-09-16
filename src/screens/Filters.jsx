@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Check, RotateCcw } from 'lucide-react'
+import { ArrowLeft, Check, RotateCcw, Lock } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { tap } from '../lib/haptic'
@@ -11,6 +11,7 @@ export default function Filters() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [isPremium, setIsPremium] = useState(false)
 
   const [preferredGender, setPreferredGender] = useState('')
   const [minAge, setMinAge] = useState(18)
@@ -55,6 +56,11 @@ export default function Filters() {
   }, [session?.user?.id])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    if (!session?.user?.id) { setIsPremium(false); return }
+    supabase.rpc('is_premium').then(({ data }) => setIsPremium(!!data))
+  }, [session?.user?.id])
 
   async function save() {
     if (!session?.user?.id) return
@@ -216,23 +222,29 @@ export default function Filters() {
 
             {/* Match quality */}
             <SectionTitle>Match quality</SectionTitle>
-            <ToggleRow
+            <PremiumToggle
               label="Shared interests"
               desc="Only people who share at least one of your interests"
               on={sharedInterests}
               onToggle={() => { tap('light'); setSharedInterests(!sharedInterests) }}
+              isPremium={isPremium}
+              onUpgrade={() => { tap('light'); nav('/premium') }}
             />
-            <ToggleRow
+            <PremiumToggle
               label="Verified profiles only"
               desc="Only show profiles with a verified badge"
               on={verifiedOnly}
               onToggle={() => { tap('light'); setVerifiedOnly(!verifiedOnly) }}
+              isPremium={isPremium}
+              onUpgrade={() => { tap('light'); nav('/premium') }}
             />
-            <ToggleRow
+            <PremiumToggle
               label="Online only"
               desc="Only people active in the last 5 minutes"
               on={onlineOnly}
               onToggle={() => { tap('light'); setOnlineOnly(!onlineOnly) }}
+              isPremium={isPremium}
+              onUpgrade={() => { tap('light'); nav('/premium') }}
             />
 
             {error && (
@@ -285,6 +297,34 @@ function ToggleRow({ label, desc, on, onToggle }) {
       </div>
       <span className={`w-11 h-6 rounded-full relative transition-colors shrink-0 ${on ? 'bg-purple-600' : 'bg-white/15'}`}>
         <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${on ? 'left-[22px]' : 'left-0.5'}`} />
+      </span>
+    </button>
+  )
+}
+
+
+function PremiumToggle({ label, desc, on, onToggle, isPremium, onUpgrade }) {
+  return (
+    <button
+      onClick={() => {
+        if (!isPremium) { onUpgrade(); return }
+        onToggle()
+      }}
+      className="w-full flex items-center gap-3 p-3.5 mb-2 rounded-2xl bg-white/[0.04] border border-white/8 text-left relative"
+    >
+      <div className="flex-1 min-w-0">
+        <p className="text-cream font-semibold text-[14px] mb-0.5 flex items-center gap-1.5">
+          {label}
+          {!isPremium && <Lock size={11} strokeWidth={2.4} className="text-amber-400" />}
+        </p>
+        <p className="text-muted text-[12px] leading-snug">{desc}</p>
+      </div>
+      <span className={`w-11 h-6 rounded-full relative transition-colors shrink-0 ${
+        !isPremium ? 'bg-amber-500/15 border border-amber-500/30' : (on ? 'bg-purple-600' : 'bg-white/15')
+      }`}>
+        <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${
+          !isPremium ? 'left-0.5' : (on ? 'left-[22px]' : 'left-0.5')
+        }`} />
       </span>
     </button>
   )

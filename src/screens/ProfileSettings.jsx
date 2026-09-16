@@ -1,7 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import {
-  ArrowLeft, ShieldCheck, UserX, LogOut, ChevronRight,
-  Wallet as WalletIcon, Crown, Trash2, Bell, Gift, FileText, Zap, Info, Users } from 'lucide-react'
+import { ArrowLeft, ShieldCheck, UserX, LogOut, ChevronRight, Wallet as WalletIcon, Crown, Trash2, Bell, Gift, FileText, Zap, Info, Users, Eye } from 'lucide-react'
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -68,6 +66,7 @@ export default function ProfileSettings() {
           <MenuItem icon={<Gift size={18} />} label="Invite friends" onClick={() => nav('/invite')} />
           <MenuItem icon={<Bell size={18} />} label="Notifications" onClick={() => nav('/notifications')} />
           <MenuItem icon={<Crown size={18} />} label="Premium" onClick={() => nav('/premium')} />
+          <MenuItem icon={<Eye size={18} />} label="Profile views" onClick={() => nav('/profile-views')} />
           <MenuItem icon={<Zap size={18} />} label="Boost my profile" onClick={() => nav('/boost')} />
           <MenuItem icon={<WalletIcon size={18} />} label="Wallet" onClick={() => nav('/wallet')} />
           {profile?.is_admin && (

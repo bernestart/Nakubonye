@@ -19,6 +19,9 @@ export default function EditProfile() {
   const { session, setProfile } = useAuth()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [extraSlots, setExtraSlots] = useState(0)
+  const [isPremium, setIsPremium] = useState(false)
+  const [buyBusy, setBuyBusy] = useState(false)
   const [error, setError] = useState('')
   const [savedMsg, setSavedMsg] = useState('')
 
@@ -64,6 +67,8 @@ export default function EditProfile() {
   const fileInputRef = useRef(null)
 
   const myId = session?.user?.id
+  const effectiveMax = isPremium ? 9 : 6 + extraSlots
+  const canBuySlot = !isPremium && extraSlots < 3
 
   const load = useCallback(async () => {
     if (!myId) return
@@ -117,7 +122,7 @@ export default function EditProfile() {
 
     const { data: lfRow } = await supabase
       .from('profiles')
-      .select('looking_for')
+      .select('looking_for, purchased_photo_slots')
       .eq('id', myId)
       .single()
     if (lfRow?.looking_for) setLookingFor(lfRow.looking_for)
@@ -334,6 +339,25 @@ export default function EditProfile() {
     setTimeout(() => setSavedMsg(''), 1600)
   }
 
+  async function buyPhotoSlot() {
+    if (buyBusy) return
+    if (!confirm('Buy one extra photo slot for 30 coins?')) return
+    setBuyBusy(true); setError('')
+    const { data, error: err } = await supabase.rpc('buy_photo_slot')
+    setBuyBusy(false)
+    if (err) {
+      if (/insufficient/i.test(err.message)) setError('Not enough coins. Get more in Wallet.')
+      else if (/premium/i.test(err.message)) setError('Premium already includes 9 slots.')
+      else if (/maximum/i.test(err.message)) setError('You already have all 3 extra slots.')
+      else setError(err.message)
+      return
+    }
+    const row = Array.isArray(data) ? data[0] : data
+    setExtraSlots(Number(row?.extra_slots || extraSlots + 1))
+    setSavedMsg('Extra slot unlocked ✓')
+    setTimeout(() => setSavedMsg(''), 2000)
+  }
+
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -396,7 +420,7 @@ export default function EditProfile() {
                 </div>
               ))}
 
-              {photos.length < MAX_PHOTOS && (
+              {photos.length < effectiveMax && (
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
@@ -419,6 +443,22 @@ export default function EditProfile() {
               hidden
               onChange={uploadPhoto}
             />
+
+            {photos.length >= effectiveMax && canBuySlot && (
+              <button
+                type="button"
+                onClick={buyPhotoSlot}
+                disabled={buyBusy}
+                className="rounded-2xl aspect-[3/4] border-2 border-dashed border-amber-500/40 bg-amber-500/8 flex flex-col items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <div className="w-9 h-9 rounded-full bg-amber-500/20 grid place-items-center">
+                  <span className="text-amber-400 text-lg font-bold">+</span>
+                </div>
+                <span className="text-amber-300 text-[10.5px] font-bold">
+                  {buyBusy ? 'Buying…' : 'Buy slot · 30'}
+                </span>
+              </button>
+            )}
 
             {/* Basics */}
             <SectionTitle>Basics</SectionTitle>

@@ -7,6 +7,7 @@ import { publicPhotoUrl, calcAge } from '../lib/photo'
 import { tap } from '../lib/haptic'
 import BrandGlow from '../components/BrandGlow'
 import CommunityFeed from '../components/CommunityFeed'
+import CommunityChat from '../components/CommunityChat'
 
 export default function CommunityView() {
   const nav = useNavigate()
@@ -19,6 +20,7 @@ export default function CommunityView() {
   const [members, setMembers] = useState([])
   const [joined, setJoined] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [isPremium, setIsPremium] = useState(false)
   const [tab, setTab] = useState('feed')
 
   const load = useCallback(async () => {
@@ -94,6 +96,11 @@ export default function CommunityView() {
   }, [session?.user?.id, id])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    if (!session?.user?.id) { setIsPremium(false); return }
+    supabase.rpc('is_premium').then(({ data }) => setIsPremium(!!data))
+  }, [session?.user?.id])
 
   async function toggle() {
     if (busy || !community) return
@@ -219,6 +226,17 @@ export default function CommunityView() {
                 }`}
               >
                 Feed
+              </button>
+              <button
+                type="button"
+                onClick={() => { tap('light'); setTab('chat') }}
+                className={`flex-1 h-9 rounded-xl text-[13px] font-bold transition-colors ${
+                  tab === 'chat'
+                    ? 'bg-white text-[#0B0B14] shadow-[0_2px_6px_rgba(0,0,0,0.25)]'
+                    : 'text-muted'
+                }`}
+              >
+                Chat
               </button>
               <button
                 type="button"
