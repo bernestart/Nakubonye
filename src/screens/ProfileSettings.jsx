@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, ShieldCheck, UserX, LogOut, ChevronRight,
-  Wallet as WalletIcon, Crown, Trash2, Bell, Gift, FileText, Zap, Info } from 'lucide-react'
+  Wallet as WalletIcon, Crown, Trash2, Bell, Gift, FileText, Zap, Info, Users } from 'lucide-react'
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
