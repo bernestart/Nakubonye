@@ -64,6 +64,7 @@ export default function ProfileSettings() {
         </button>
 
         <div className="flex flex-col gap-2">
+          <MenuItem icon={<Users size={18} />} label="Communities" onClick={() => nav('/communities')} />
           <MenuItem icon={<Gift size={18} />} label="Invite friends" onClick={() => nav('/invite')} />
           <MenuItem icon={<Bell size={18} />} label="Notifications" onClick={() => nav('/notifications')} />
           <MenuItem icon={<Crown size={18} />} label="Premium" onClick={() => nav('/premium')} />

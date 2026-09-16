@@ -34,6 +34,7 @@ import ProfileSettings from './screens/ProfileSettings'
 import Wallet from './screens/Wallet'
 import Premium from './screens/Premium'
 import Invite from './screens/Invite'
+import Communities from './screens/Communities'
 import Notifications from './screens/Notifications'
 import DeleteAccountModal from './components/DeleteAccountModal'
 import CallOverlay from './components/CallOverlay'
@@ -100,6 +101,7 @@ export default function App() {
         <Route path="/wallet" element={<Guard><Wallet /></Guard>} />
         <Route path="/premium" element={<Guard><Premium /></Guard>} />
         <Route path="/invite" element={<Guard><Invite /></Guard>} />
+        <Route path="/communities" element={<Guard><Communities /></Guard>} />
         <Route path="/notifications" element={<Guard><Notifications /></Guard>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
