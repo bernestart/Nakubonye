@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Send, Lock } from 'lucide-react'
+import { Send, Lock, Sparkles } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl } from '../lib/photo'
@@ -27,7 +27,7 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
 
     const { data: rows, error: err } = await supabase
       .from('community_messages')
-      .select('id, sender_id, content, created_at')
+      .select('id, sender_id, content, created_at, highlighted_until')
       .eq('community_id', communityId)
       .order('created_at', { ascending: true })
       .limit(200)
@@ -106,6 +106,21 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
       setText(body)
     }
     setSending(false)
+  }
+
+  async function highlightMessage(messageId) {
+    if (!confirm('Highlight this message for 24 hours? Costs 25 coins.')) return
+    tap('medium')
+    setError('')
+    const { data, error: err } = await supabase.rpc('highlight_community_message', { p_message_id: messageId })
+    if (err) {
+      if (/insufficient/i.test(err.message)) setError('Not enough coins. Get more in Wallet.')
+      else if (/already highlighted/i.test(err.message)) setError('This message is already highlighted.')
+      else if (/sender/i.test(err.message)) setError('Only you can highlight your own messages.')
+      else setError(err.message)
+      return
+    }
+    load()
   }
 
   if (!isMember) {
@@ -212,13 +227,32 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
                       mine
                         ? 'bg-gradient-to-br from-purple-600 to-purple-500 text-white rounded-br-md shadow-[0_4px_14px_rgba(124,58,237,0.35)]'
                         : 'bg-elevated text-cream border border-white/8 rounded-bl-md'
+                    }${
+                      m.highlighted_until && new Date(m.highlighted_until) > new Date()
+                        ? ' ring-2 ring-amber-400/70 shadow-[0_0_18px_rgba(245,158,11,0.5)]'
+                        : ''
                     }`}
                   >
                     {m.content}
                   </div>
-                  <p className={`text-[10px] text-subtle mt-0.5 px-1`}>
-                    {new Date(m.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                  </p>
+                  <div className="flex items-center gap-1 px-1 mt-0.5">
+                    <p className="text-[10px] text-subtle">
+                      {new Date(m.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                    </p>
+                    {mine && !(m.highlighted_until && new Date(m.highlighted_until) > new Date()) && (
+                      <button
+                        onClick={() => highlightMessage(m.id)}
+                        className="text-amber-400 hover:text-amber-300"
+                        aria-label="Highlight message"
+                        title="Highlight for 25 coins"
+                      >
+                        <Sparkles size={11} strokeWidth={2.3} />
+                      </button>
+                    )}
+                    {m.highlighted_until && new Date(m.highlighted_until) > new Date() && (
+                      <Sparkles size={11} strokeWidth={2.4} className="text-amber-400" />
+                    )}
+                  </div>
                 </div>
               </div>
             )
