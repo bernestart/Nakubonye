@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { AuthProvider, useAuth } from './lib/auth'
 import { usePresence } from './lib/usePresence'
 import GlobalMatchCelebration from './components/GlobalMatchCelebration'
+import GlobalEventPopup from './components/GlobalEventPopup'
 import { WalletProvider } from './lib/wallet'
 import { VoiceCallProvider } from './lib/voiceCall'
 import { NotificationsProvider } from './lib/notifications'
@@ -116,6 +117,7 @@ export default function App() {
       <WalletProvider>
       <NotificationsProvider>
       <GlobalMatchCelebration />
+      <GlobalEventPopup />
       <VoiceCallProvider>
       <Routes>
         <Route path="/" element={<PublicOnly><Welcome /></PublicOnly>} />
