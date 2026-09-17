@@ -8,11 +8,24 @@ import { useAuth } from '../lib/auth'
 import { publicPhotoUrl } from '../lib/photo'
 import { tap } from '../lib/haptic'
 import { useVoiceCall } from '../lib/voiceCall'
+import { isOnline } from '../lib/usePresence'
 import ReportModal from '../components/ReportModal'
 import BrandGlow from '../components/BrandGlow'
 import BlockConfirm from '../components/BlockConfirm'
 
 const REACTIONS = ['❤️', '😂', '😍', '👍', '🔥', '😮']
+
+function formatLastSeen(ts) {
+  if (!ts) return ''
+  const m = Math.floor((Date.now() - new Date(ts).getTime()) / 60000)
+  if (m < 1) return 'just now'
+  if (m < 60) return m + 'm ago'
+  const h = Math.floor(m / 60)
+  if (h < 24) return h + 'h ago'
+  const d = Math.floor(h / 24)
+  if (d < 7) return d + 'd ago'
+  return new Date(ts).toLocaleDateString()
+}
 
 export default function Chat() {
   const nav = useNavigate()
@@ -56,7 +69,7 @@ export default function Chat() {
     setLoading(true); setError('')
 
     const { data: prof } = await supabase
-      .from('profiles').select('id, display_name, username, is_verified').eq('id', otherId).single()
+      .from('profiles').select('id, display_name, username, is_verified, last_seen_at').eq('id', otherId).single()
     const { data: photo } = await supabase
       .from('profile_photos').select('storage_path').eq('user_id', otherId)
       .order('is_primary', { ascending: false }).order('display_order', { ascending: true }).limit(1)
@@ -204,6 +217,12 @@ export default function Chat() {
             .from('conversation_reads').select('last_read_at')
             .eq('conversation_id', conversationId).eq('user_id', otherId).maybeSingle()
           setTheirLastRead(theirRead?.last_read_at || null)
+        })
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: 'id=eq.' + otherId },
+        (payload) => {
+          const next = payload.new?.last_seen_at
+          if (next) setOther((cur) => cur ? { ...cur, last_seen_at: next } : cur)
         })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
@@ -399,7 +418,7 @@ export default function Chat() {
               {other?.display_name || other?.username || 'Someone'}
               {other?.is_verified && <span className="text-purple-400 text-[11px]">✓</span>}
             </p>
-            <p className="text-subtle text-[11px] font-medium">{otherTyping ? 'typing…' : other?.isDirect === true ? 'Direct message' : other?.isDirect === false ? 'Matched' : ''}</p>
+            <p className="text-subtle text-[11px] font-medium">{otherTyping ? 'typing…' : isOnline(other?.last_seen_at, 2) ? (<><span className="inline-block w-2 h-2 rounded-full mr-1.5 align-middle" style={{ background: '#22C55E', boxShadow: '0 0 6px rgba(34,197,94,0.55)' }} />Online</>) : other?.last_seen_at ? 'Last seen ' + formatLastSeen(other.last_seen_at) : other?.isDirect === true ? 'Direct message' : other?.isDirect === false ? 'Matched' : ''}</p>
           </div>
         </button>
         <button
