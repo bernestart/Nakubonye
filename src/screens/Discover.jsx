@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion, useMotionValue, useTransform } from 'framer-motion'
-import { X, Heart, MapPin, Check, Undo2, MessageCircle, Zap, SlidersHorizontal } from 'lucide-react'
+import { X, Heart, MapPin, Check, Undo2, MessageCircle, Zap, SlidersHorizontal, Lock } from 'lucide-react'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -251,10 +251,20 @@ export default function Discover() {
           style={{ position: 'absolute', bottom: 84, left: 0, right: 0, zIndex: 30 }}
           className="flex items-center justify-center gap-3.5"
         >
-          <ActionBtn onClick={handleUndo} disabled={busy || !canUndo || !isPremium} label="Undo" size={48} variant="undo" iconColor={isPremium ? 'text-amber-300' : 'text-white/25'}>
-            <Undo2 size={20} strokeWidth={2.4} />
+          <ActionBtn onClick={handleUndo} disabled={busy || !canUndo} label="Undo" size={48} variant="undo" iconColor={isPremium ? 'text-amber-400' : 'text-white/80'}>
+            <span className="relative inline-flex items-center justify-center">
+              <Undo2 size={20} strokeWidth={2.4} />
+              {!isPremium && (
+                <span
+                  className="absolute -top-1 -right-1.5 grid place-items-center rounded-full bg-amber-400"
+                  style={{ width: 13, height: 13, boxShadow: '0 0 4px 8px rgba(245,158,11,0.6)' }}
+                >
+                  <Lock size={8} strokeWidth={3} color="#0B0B14" />
+                </span>
+              )}
+            </span>
           </ActionBtn>
-          <ActionBtn onClick={handlePass} disabled={busy} label="Pass" size={54} variant="pass" iconColor="text-red-400">
+          <ActionBtn onClick={handlePass} disabled={busy} label="Pass" size={54} variant="pass" iconColor="text-red-500">
             <X size={26} strokeWidth={2.8} />
           </ActionBtn>
           <ActionBtn
@@ -271,7 +281,7 @@ export default function Discover() {
           >
             <MessageCircle size={24} strokeWidth={2.5} />
           </ActionBtn>
-          <ActionBtn onClick={handleLike} disabled={busy} label="Like" size={54} variant="like" iconColor="text-pink-400">
+          <ActionBtn onClick={handleLike} disabled={busy} label="Like" size={54} variant="like" iconColor="text-pink-500">
             <Heart size={26} strokeWidth={2.6} />
           </ActionBtn>
           <ActionBtn
@@ -441,6 +451,15 @@ function SwipeCard({ card, onPass, onLike, onSuper, disabled }) {
   )
 }
 
+const VARIANT_STYLE = {
+  pass:    { bg: 'rgba(244,63,94,0.22)',  border: 'rgba(244,63,94,0.55)'  },
+  like:    { bg: 'rgba(236,72,153,0.22)', border: 'rgba(236,72,153,0.6)'  },
+  super:   { bg: 'rgba(245,158,11,0.22)', border: 'rgba(245,158,11,0.6)'  },
+  undo:    { bg: 'rgba(245,158,11,0.15)', border: 'rgba(245,158,11,0.45)' },
+  message: { bg: 'rgba(56,189,248,0.18)', border: 'rgba(56,189,248,0.5)'  },
+  neutral: { bg: 'rgba(0,0,0,0.55)',      border: 'rgba(255,255,255,0.25)' },
+}
+
 function ActionBtn({ children, onClick, disabled, label, size = 54, variant = 'neutral', title, iconColor = 'text-white' }) {
   return (
     <motion.button
@@ -449,8 +468,15 @@ function ActionBtn({ children, onClick, disabled, label, size = 54, variant = 'n
       disabled={disabled}
       aria-label={label}
       title={title}
-      style={{ width: size, height: size }}
-      className={`rounded-full grid place-items-center shrink-0 transition-opacity bg-black/35 backdrop-blur-xl border border-white/12 ${disabled ? 'opacity-40' : ''}`}
+      style={{
+        width: size,
+        height: size,
+        background: (VARIANT_STYLE[variant] || VARIANT_STYLE.neutral).bg,
+        borderColor: (VARIANT_STYLE[variant] || VARIANT_STYLE.neutral).border,
+        backdropFilter: 'blur(14px)',
+        WebkitBackdropFilter: 'blur(14px)',
+      }}
+      className={`rounded-full grid place-items-center shrink-0 transition-all border-2 shadow-[0_8px_22px_rgba(0,0,0,0.55)] ${disabled ? 'opacity-50' : 'hover:brightness-125'}`}
     >
       <span
         className={iconColor}
