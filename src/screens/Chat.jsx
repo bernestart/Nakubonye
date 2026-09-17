@@ -40,6 +40,7 @@ export default function Chat() {
   const [messages, setMessages] = useState([])
   const [reactions, setReactions] = useState({})
   const [theirLastRead, setTheirLastRead] = useState(null)
+  const [myPreviousReadAt, setMyPreviousReadAt] = useState(null)
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [replyingTo, setReplyingTo] = useState(null)
@@ -164,6 +165,12 @@ export default function Chat() {
       .from('conversation_reads').select('last_read_at')
       .eq('conversation_id', convId).eq('user_id', otherId).maybeSingle()
     setTheirLastRead(theirRead?.last_read_at || null)
+
+    // Capture MY previous read mark BEFORE overwriting it — used for the "new messages" divider
+    const { data: myPrevRead } = await supabase
+      .from('conversation_reads').select('last_read_at')
+      .eq('conversation_id', convId).eq('user_id', myId).maybeSingle()
+    setMyPreviousReadAt(myPrevRead?.last_read_at || null)
 
     await supabase.from('conversation_reads').upsert(
       { conversation_id: convId, user_id: myId, last_read_at: new Date().toISOString() },
@@ -386,6 +393,10 @@ export default function Chat() {
     setReactionPickerFor(null)
   }
 
+  const firstUnreadIdx = messages.findIndex(
+    (m) => m.sender_id !== myId && myPreviousReadAt && new Date(m.created_at) > new Date(myPreviousReadAt)
+  )
+
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -509,6 +520,13 @@ export default function Chat() {
 
             return (
               <div key={m.id}>
+                {i === firstUnreadIdx && (
+                  <div className="flex items-center gap-3 py-3 px-2">
+                    <div className="flex-1 h-px bg-purple-500/30" />
+                    <span className="text-purple-300 text-[10.5px] font-bold tracking-wider uppercase">New messages</span>
+                    <div className="flex-1 h-px bg-purple-500/30" />
+                  </div>
+                )}
                 {showGap && (
                   <p className="text-center text-subtle text-[10.5px] font-medium py-1.5">{timeLabel(m.created_at)}</p>
                 )}
