@@ -88,11 +88,26 @@ export default function Chat() {
 
     if (match) {
       isDirect = false
+      // 1. Existing match conversation?
       const { data: existingConv } = await supabase
         .from('conversations').select('id').eq('match_id', match.id).maybeSingle()
       if (existingConv) {
         convId = existingConv.id
       } else {
+        // 2. Before creating a new one, adopt a direct conversation if it exists.
+        //    This prevents losing the paid-DM chat history when you match.
+        const { data: directToAdopt } = await supabase
+          .from('conversations')
+          .select('id')
+          .eq('is_direct', true)
+          .or(`and(initiator_id.eq.${myId},recipient_id.eq.${otherId}),and(initiator_id.eq.${otherId},recipient_id.eq.${myId})`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (directToAdopt) {
+          await supabase.from('conversations').update({ match_id: match.id }).eq('id', directToAdopt.id)
+          convId = directToAdopt.id
+        } else {
         const { data: created, error: createErr } = await supabase
           .from('conversations').insert({ match_id: match.id }).select('id').single()
         if (createErr) {
@@ -107,6 +122,7 @@ export default function Chat() {
           }
         } else {
           convId = created.id
+        }
         }
       }
     } else {
