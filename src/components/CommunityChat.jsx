@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Send, Sparkles } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -13,6 +13,7 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [messages, setMessages] = useState([])
+  const [lastSeenId, setLastSeenId] = useState(null)
   const [profiles, setProfiles] = useState(new Map())
   const [photos, setPhotos] = useState(new Map())
   const [text, setText] = useState('')
@@ -64,6 +65,20 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
   }, [myId, communityId])
 
   useEffect(() => { load() }, [load])
+
+  // Read last-seen id for this community from localStorage
+  useEffect(() => {
+    if (!communityId) return
+    const stored = localStorage.getItem('cc_last_seen_' + communityId)
+    setLastSeenId(stored ? Number(stored) : null)
+  }, [communityId])
+
+  // Persist newest message id after load so next visit does not show divider
+  useEffect(() => {
+    if (!communityId || messages.length === 0) return
+    const newest = messages[messages.length - 1]
+    if (newest?.id) localStorage.setItem('cc_last_seen_' + communityId, String(newest.id))
+  }, [messages, communityId])
 
   // Realtime
   useEffect(() => {
@@ -136,6 +151,15 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
   }
 
 
+  const firstUnreadIdx = (() => {
+    if (lastSeenId == null) return -1
+    for (let k = 0; k < messages.length; k++) {
+      const m = messages[k]
+      if (m.id > lastSeenId && m.sender_id !== myId) return k
+    }
+    return -1
+  })()
+
   return (
     <div className="flex flex-col" style={{ minHeight: '400px' }}>
       {error && (
@@ -160,13 +184,21 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
             <p className="text-muted text-[12.5px]">Say hello to the community.</p>
           </div>
         ) : (
-          messages.map((m) => {
+          messages.map((m, i) => {
             const mine = m.sender_id === myId
             const p = profiles.get(m.sender_id)
             const photo = photos.get(m.sender_id)
             const name = p?.display_name || p?.username || 'Someone'
             return (
-              <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'} gap-2`}>
+              <Fragment key={m.id}>
+              {i === firstUnreadIdx && (
+                <div className="flex items-center gap-3 py-3 px-2">
+                  <div className="flex-1 h-px bg-purple-500/30" />
+                  <span className="text-purple-300 text-[10.5px] font-bold tracking-wider uppercase">New messages</span>
+                  <div className="flex-1 h-px bg-purple-500/30" />
+                </div>
+              )}
+              <div className={`flex ${mine ? 'justify-end' : 'justify-start'} gap-2`}>
                 {!mine && (
                   <button
                     onClick={() => { tap('light'); nav('/profile/' + m.sender_id) }}
@@ -223,6 +255,7 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
                   </div>
                 </div>
               </div>
+              </Fragment>
             )
           })
         )}
