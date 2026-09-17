@@ -27,6 +27,8 @@ export default function EditProfile() {
 
   const [displayName, setDisplayName] = useState('')
   const [username, setUsername] = useState('')
+  const [gender, setGender] = useState('')
+  const [dateOfBirth, setDateOfBirth] = useState('')
   const [bio, setBio] = useState('')
   const [city, setCity] = useState('')
   const [country, setCountry] = useState('Burundi')
@@ -76,12 +78,14 @@ export default function EditProfile() {
 
     const { data: prof } = await supabase
       .from('profiles')
-      .select('display_name, username, bio, city, country, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children, hide_online_status, hide_age, incognito_mode, only_matches_can_message')
+      .select('display_name, username, gender, date_of_birth, bio, city, country, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children, hide_online_status, hide_age, incognito_mode, only_matches_can_message')
       .eq('id', myId).single()
 
     if (prof) {
       setDisplayName(prof.display_name || '')
       setUsername(prof.username || '')
+      setGender(prof.gender || '')
+      setDateOfBirth(prof.date_of_birth || '')
       setBio(prof.bio || '')
       setCity(prof.city || '')
       setCountry(prof.country || 'Burundi')
@@ -278,6 +282,8 @@ export default function EditProfile() {
         diet: diet || null,
         pets: pets || null,
         children: children || null,
+        gender: gender || null,
+        date_of_birth: dateOfBirth || null,
         hide_online_status: hideOnlineStatus,
         hide_age: hideAge,
         incognito_mode: incognitoMode,
@@ -467,6 +473,33 @@ export default function EditProfile() {
             </Field>
             <Field label="Username" hint="Lowercase, 3–20 chars, no spaces.">
               <Input value={username} onChange={(e) => setUsername(e.target.value)} />
+            </Field>
+            <Field label="Gender">
+              <div className="flex gap-2">
+                {['male', 'female', 'other'].map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => setGender(g)}
+                    className={`flex-1 h-11 rounded-2xl text-[14px] font-bold capitalize transition-colors border ${
+                      gender === g
+                        ? 'bg-purple-500/25 border-purple-500 text-cream'
+                        : 'bg-elevated border-white/8 text-muted'
+                    }`}
+                  >
+                    {g}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            <Field label="Date of birth" hint="Used to calculate your age. Hidden if you enable 'Hide my age'.">
+              <input
+                type="date"
+                value={dateOfBirth || ''}
+                onChange={(e) => setDateOfBirth(e.target.value)}
+                max={new Date().toISOString().slice(0,10)}
+                className="w-full bg-elevated border border-white/8 rounded-2xl px-4 py-3 text-cream text-[14.5px] focus:outline-none focus:border-purple-500"
+              />
             </Field>
             <Field label="City">
               <Input value={city} onChange={(e) => setCity(e.target.value)} />
