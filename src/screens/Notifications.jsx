@@ -187,28 +187,6 @@ export default function Notifications() {
       })
     }
 
-    // 5. Coins earned (positive transactions, past 30 days)
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-    const { data: coinRows } = await supabase
-      .from('coin_transactions')
-      .select('id, amount, description, transaction_type, created_at')
-      .eq('user_id', uid)
-      .gt('amount', 0)
-      .gt('created_at', thirtyDaysAgo)
-      .order('created_at', { ascending: false })
-      .limit(20)
-
-    ;(coinRows || []).forEach((t) => {
-      events.push({
-        key: 'coin-' + t.id,
-        type: 'coins',
-        amount: t.amount,
-        description: t.description || 'Coins earned',
-        transaction_type: t.transaction_type,
-        created_at: t.created_at,
-      })
-    })
-
     // Sort all by date descending, keep top 60
     events.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     setItems(events.slice(0, 60))
@@ -359,35 +337,6 @@ export default function Notifications() {
 }
 
 function Row({ item, onOpen }) {
-  // Special card for coins earned — gold, distinct from regular notifications
-  if (item.type === 'coins') {
-    return (
-      <button
-        onClick={onOpen}
-        className="flex items-center gap-3 p-3 rounded-2xl text-left transition-colors"
-        style={{
-          background: 'linear-gradient(135deg, rgba(245,158,11,0.18) 0%, rgba(236,72,153,0.12) 100%)',
-          border: '1px solid rgba(245,158,11,0.45)',
-          boxShadow: '0 4px 18px rgba(245,158,11,0.18)',
-        }}
-      >
-        <div className="shrink-0 w-12 h-12 rounded-full grid place-items-center"
-             style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #EC4899 100%)', boxShadow: '0 6px 18px rgba(245,158,11,0.5)' }}>
-          <Coins size={22} strokeWidth={2.4} className="text-white" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-amber-200 text-[14px] font-bold truncate">
-            {item.description}
-          </p>
-          <p className="text-amber-300/70 text-[12.5px] truncate">Coins reward</p>
-        </div>
-        <span className="text-amber-300 text-[15px] font-black shrink-0">
-          +{item.amount}
-        </span>
-      </button>
-    )
-  }
-
   const meta = TYPE_META[item.type]
   const Icon = meta.Icon
   const isPremium = item.type === 'dm' || item.type === 'super'
@@ -466,7 +415,6 @@ const TYPE_META = {
   match:   { Icon: Sparkles,       label: 'It’s a match',       bg: '#7C3AED' },
   message: { Icon: MessageCircle,  label: 'New message',        bg: '#8B5CF6' },
   super:   { Icon: Zap,            label: 'Sent a Super request', bg: '#F59E0B' },
-  coins:   { Icon: Coins,          label: 'Coins earned',        bg: '#F59E0B' },
   dm:      { Icon: MessageCircle,  label: 'Sent you a DM',      bg: '#A855F7' },
 }
 
