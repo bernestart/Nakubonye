@@ -70,9 +70,10 @@ export default function Chat() {
       .from('matches').select('id').eq('user_one_id', lo).eq('user_two_id', hi).maybeSingle()
 
     let convId = null
-    let isDirect = false
+    let isDirect = null  // null = unknown, true = direct, false = matched
 
     if (match) {
+      isDirect = false
       const { data: existingConv } = await supabase
         .from('conversations').select('id').eq('match_id', match.id).maybeSingle()
       if (existingConv) {
@@ -96,12 +97,23 @@ export default function Chat() {
       }
     } else {
       // No match — look for a direct conversation between us
-      const { data: directConv } = await supabase
-        .from('conversations')
-        .select('id')
-        .eq('is_direct', true)
-        .or(`and(initiator_id.eq.${myId},recipient_id.eq.${otherId}),and(initiator_id.eq.${otherId},recipient_id.eq.${myId})`)
-        .maybeSingle()
+      // Look for a direct conversation between us.
+      // Retry once in case the paid-DM RPC is still creating the row.
+      let directConv = null
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const { data: directConvs } = await supabase
+          .from('conversations')
+          .select('id, is_direct, match_id')
+          .eq('is_direct', true)
+          .or(`and(initiator_id.eq.${myId},recipient_id.eq.${otherId}),and(initiator_id.eq.${otherId},recipient_id.eq.${myId})`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+        if (directConvs && directConvs.length > 0) {
+          directConv = directConvs[0]
+          break
+        }
+        if (attempt === 0) await new Promise((r) => setTimeout(r, 600))
+      }
 
       if (directConv) {
         convId = directConv.id
@@ -113,7 +125,7 @@ export default function Chat() {
       }
     }
     setConversationId(convId)
-    if (isDirect) setOther((cur) => cur ? { ...cur, isDirect } : cur)
+    setOther((cur) => cur ? { ...cur, isDirect } : cur)
 
     const { data: msgs, error: msgErr } = await supabase
       .from('messages')
@@ -387,7 +399,7 @@ export default function Chat() {
               {other?.display_name || other?.username || 'Someone'}
               {other?.is_verified && <span className="text-purple-400 text-[11px]">✓</span>}
             </p>
-            <p className="text-subtle text-[11px] font-medium">{otherTyping ? 'typing…' : (other?.isDirect ? 'Direct message' : 'Matched')}</p>
+            <p className="text-subtle text-[11px] font-medium">{otherTyping ? 'typing…' : other?.isDirect === true ? 'Direct message' : other?.isDirect === false ? 'Matched' : ''}</p>
           </div>
         </button>
         <button
