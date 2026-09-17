@@ -17,49 +17,34 @@ export function NotificationsProvider({ children }) {
     }
     const uid = session.user.id
 
-    // Count unread messages (conversations with last_message_at > my last read)
+    // Fetch my last-seen-notifications timestamp
+    const { data: myProf } = await supabase
+      .from('profiles')
+      .select('notifications_seen_at')
+      .eq('id', uid)
+      .maybeSingle()
+    const seenAt = myProf?.notifications_seen_at
+      ? new Date(myProf.notifications_seen_at)
+      : new Date(0)
+
     let count = 0
 
-    const { data: convRows } = await supabase
+    // Paid DM openers received since last check
+    const { count: dmCount } = await supabase
       .from('conversations')
-      .select('id, match_id, initiator_id, recipient_id, is_direct, last_message_at')
-      .order('last_message_at', { ascending: false })
-      .limit(30)
+      .select('id', { count: 'exact', head: true })
+      .eq('is_direct', true)
+      .eq('recipient_id', uid)
+      .gt('created_at', seenAt.toISOString())
+    count += dmCount || 0
 
-    if (convRows?.length) {
-      const { data: matchRows } = await supabase
-        .from('matches')
-        .select('id')
-        .or(`user_one_id.eq.${uid},user_two_id.eq.${uid}`)
-      const myMatchIds = new Set((matchRows || []).map((m) => m.id))
-
-      const relevant = convRows.filter((c) => {
-        if (c.is_direct) return c.initiator_id === uid || c.recipient_id === uid
-        return myMatchIds.has(c.match_id)
-      })
-
-      if (relevant.length) {
-        const { data: readRows } = await supabase
-          .from('conversation_reads')
-          .select('conversation_id, last_read_at')
-          .eq('user_id', uid)
-          .in('conversation_id', relevant.map((c) => c.id))
-        const readMap = new Map((readRows || []).map((r) => [r.conversation_id, r.last_read_at]))
-
-        relevant.forEach((c) => {
-          if (!c.last_message_at) return
-          const readAt = readMap.get(c.id)
-          if (!readAt || new Date(c.last_message_at) > new Date(readAt)) count++
-        })
-      }
-    }
-
-    // Count pending super requests received
+    // Pending super requests received since last check
     const { count: superCount } = await supabase
       .from('super_requests')
       .select('id', { count: 'exact', head: true })
       .eq('recipient_id', uid)
       .eq('status', 'pending')
+      .gt('created_at', seenAt.toISOString())
     count += superCount || 0
 
     setUnreadCount(count)
@@ -75,7 +60,7 @@ export function NotificationsProvider({ children }) {
     const ch = supabase
       .channel('notif-' + uid)
       .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages' },
+        { event: 'INSERT', schema: 'public', table: 'conversations' },
         () => { refresh() })
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'super_requests', filter: 'recipient_id=eq.' + uid },

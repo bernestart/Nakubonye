@@ -88,81 +88,57 @@ export default function Notifications() {
       })
     })
 
-    // 3. Unread messages — gather from conversations where last_message_at > my read cursor
-    const { data: convRows } = await supabase
+    // 3. Paid direct message openers received (someone paid coins to DM me)
+    const { data: myProfSeen } = await supabase
+      .from('profiles')
+      .select('notifications_seen_at')
+      .eq('id', uid)
+      .maybeSingle()
+    const seenAt = myProfSeen?.notifications_seen_at
+      ? new Date(myProfSeen.notifications_seen_at)
+      : new Date(0)
+
+    const { data: dmRows } = await supabase
       .from('conversations')
-      .select('id, match_id, initiator_id, recipient_id, is_direct, last_message_at, last_message_preview')
-      .order('last_message_at', { ascending: false })
+      .select('id, initiator_id, recipient_id, created_at')
+      .eq('is_direct', true)
+      .eq('recipient_id', uid)
+      .order('created_at', { ascending: false })
       .limit(30)
 
-    const myConvs = (convRows || []).filter((c) =>
-      c.initiator_id === uid || c.recipient_id === uid ||
-      c.match_id // we'll verify membership via match below
-    )
+    const newDMs = (dmRows || []).filter((c) => new Date(c.created_at) > seenAt)
 
-    const myMatchIds = new Set((matchRows || []).map((m) => m.id))
-    const relevantConvs = myConvs.filter((c) => {
-      if (c.is_direct) return c.initiator_id === uid || c.recipient_id === uid
-      return myMatchIds.has(c.match_id)
-    })
+    if (newDMs.length) {
+      const senderIds = newDMs.map((c) => c.initiator_id)
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('id, display_name, username')
+        .in('id', senderIds)
+      const uProfiles = new Map((profs || []).map((p) => [p.id, p]))
 
-    if (relevantConvs.length) {
-      const convIds = relevantConvs.map((c) => c.id)
-      const { data: readRows } = await supabase
-        .from('conversation_reads')
-        .select('conversation_id, last_read_at')
-        .eq('user_id', uid)
-        .in('conversation_id', convIds)
-      const readMap = new Map((readRows || []).map((r) => [r.conversation_id, r.last_read_at]))
-
-      // For unread message notifications, we need to know who sent the last message.
-      // Approximate: if last_message_at > my read_at, treat as unread.
-      const unreadConvs = relevantConvs.filter((c) => {
-        if (!c.last_message_at) return false
-        const readAt = readMap.get(c.id)
-        return !readAt || new Date(c.last_message_at) > new Date(readAt)
+      const { data: photos } = await supabase
+        .from('profile_photos')
+        .select('user_id, storage_path, is_primary, display_order')
+        .in('user_id', senderIds)
+        .order('is_primary', { ascending: false })
+        .order('display_order', { ascending: true })
+      const uPhotos = new Map()
+      ;(photos || []).forEach((ph) => {
+        if (!uPhotos.has(ph.user_id)) uPhotos.set(ph.user_id, ph.storage_path)
       })
 
-      // Fetch other-user info for these
-      const otherIds = unreadConvs.map((c) => {
-        if (c.is_direct) return c.initiator_id === uid ? c.recipient_id : c.initiator_id
-        const match = (matchRows || []).find((m) => m.id === c.match_id)
-        return match ? (match.user_one_id === uid ? match.user_two_id : match.user_one_id) : null
-      }).filter(Boolean)
-
-      let uProfiles = new Map()
-      let uPhotos = new Map()
-      if (otherIds.length) {
-        const { data: profs } = await supabase
-          .from('profiles')
-          .select('id, display_name, username')
-          .in('id', otherIds)
-        ;(profs || []).forEach((p) => uProfiles.set(p.id, p))
-        const { data: photos } = await supabase
-          .from('profile_photos')
-          .select('user_id, storage_path, is_primary, display_order')
-          .in('user_id', otherIds)
-          .order('is_primary', { ascending: false })
-          .order('display_order', { ascending: true })
-        ;(photos || []).forEach((p) => {
-          if (!uPhotos.has(p.user_id)) uPhotos.set(p.user_id, p.storage_path)
-        })
-      }
-
-      unreadConvs.forEach((c, i) => {
-        const other = otherIds[i]
-        if (!other) return
-        const p = uProfiles.get(other)
+      newDMs.forEach((c) => {
+        const sender = c.initiator_id
+        const prof = uProfiles.get(sender)
         events.push({
-          key: 'msg-' + c.id,
-          type: 'message',
-          user_id: other,
-          display_name: p?.display_name,
-          username: p?.username,
-          photo_url: publicPhotoUrl(uPhotos.get(other)),
-          preview: c.last_message_preview,
-          created_at: c.last_message_at,
-          route: '/messages/' + other,
+          key: 'dm-' + c.id,
+          type: 'dm',
+          user_id: sender,
+          display_name: prof?.display_name,
+          username: prof?.username,
+          photo_url: publicPhotoUrl(uPhotos.get(sender)),
+          created_at: c.created_at,
+          route: '/messages/' + sender,
         })
       })
     }
