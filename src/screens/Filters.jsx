@@ -39,8 +39,8 @@ export default function Filters() {
       setMaxAge(pref.max_age || 100)
     }
 
-    // Load local Discover filters from sessionStorage (fast, no DB round-trip)
-    const saved = sessionStorage.getItem('discover_filters')
+    // Load local Discover filters from localStorage (fast, no DB round-trip)
+    const saved = localStorage.getItem('discover_filters')
     if (saved) {
       try {
         const f = JSON.parse(saved)
@@ -89,8 +89,8 @@ export default function Filters() {
 
     if (prefErr) { setSaving(false); setError(prefErr.message); return }
 
-    // Save Discover-local filters to sessionStorage
-    sessionStorage.setItem('discover_filters', JSON.stringify({
+    // Save Discover-local filters to localStorage
+    localStorage.setItem('discover_filters', JSON.stringify({
       sameCity, sameCountry, sharedInterests, verifiedOnly, onlineOnly,
     }))
 

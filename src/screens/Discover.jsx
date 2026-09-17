@@ -38,7 +38,7 @@ export default function Discover() {
 
   // Read filter state from storage on mount
   useEffect(() => {
-    const saved = sessionStorage.getItem('discover_filters')
+    const saved = localStorage.getItem('discover_filters')
     if (saved) {
       try {
         const f = JSON.parse(saved)
