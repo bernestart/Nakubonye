@@ -390,10 +390,33 @@ function Row({ item, onOpen }) {
 
   const meta = TYPE_META[item.type]
   const Icon = meta.Icon
+  const isPremium = item.type === 'dm' || item.type === 'super'
+  const premiumStyle = isPremium
+    ? {
+        background:
+          item.type === 'super'
+            ? 'linear-gradient(135deg, rgba(245,158,11,0.14) 0%, rgba(236,72,153,0.08) 100%)'
+            : 'linear-gradient(135deg, rgba(168,85,247,0.14) 0%, rgba(236,72,153,0.08) 100%)',
+        border:
+          item.type === 'super'
+            ? '1px solid rgba(245,158,11,0.5)'
+            : '1px solid rgba(168,85,247,0.5)',
+        boxShadow:
+          item.type === 'super'
+            ? '0 4px 18px rgba(245,158,11,0.18)'
+            : '0 4px 18px rgba(168,85,247,0.2)',
+      }
+    : {}
+  const premiumLabel =
+    item.type === 'super' ? 'SUPER REQUEST' : 'PAID DM'
+  const premiumLabelColor =
+    item.type === 'super' ? '#F59E0B' : '#A855F7'
+
   return (
     <button
       onClick={onOpen}
-      className="flex items-center gap-3 p-3 rounded-2xl text-left hover:bg-white/[0.03] transition-colors"
+      className="flex items-center gap-3 p-3 rounded-2xl text-left transition-colors"
+      style={isPremium ? premiumStyle : undefined}
     >
       <div className="relative shrink-0">
         <div className="w-12 h-12 rounded-full overflow-hidden bg-elevated border border-white/8">
@@ -417,6 +440,14 @@ function Row({ item, onOpen }) {
         <p className="text-cream text-[14px] font-semibold truncate">
           {item.display_name || item.username || 'Someone'}
         </p>
+        {isPremium && (
+          <span
+            className="inline-block text-[9.5px] font-black tracking-wider uppercase px-1.5 py-0.5 rounded mb-0.5"
+            style={{ background: premiumLabelColor, color: '#0B0B14' }}
+          >
+            {premiumLabel}
+          </span>
+        )}
         <p className="text-muted text-[12.5px] truncate">
           {meta.label}
           {item.preview ? ` · ${item.preview}` : ''}
@@ -436,6 +467,7 @@ const TYPE_META = {
   message: { Icon: MessageCircle,  label: 'New message',        bg: '#8B5CF6' },
   super:   { Icon: Zap,            label: 'Sent a Super request', bg: '#F59E0B' },
   coins:   { Icon: Coins,          label: 'Coins earned',        bg: '#F59E0B' },
+  dm:      { Icon: MessageCircle,  label: 'Sent you a DM',      bg: '#A855F7' },
 }
 
 function relTime(iso) {
