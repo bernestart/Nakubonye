@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { Compass, Heart, MessageCircle, User } from 'lucide-react'
 import { tap } from '../lib/haptic'
+import { useChatsUnread } from '../lib/badges'
 
 const items = [
   { to: '/discover', label: 'Discover', Icon: Compass },
@@ -37,6 +38,7 @@ function TwoHearts({ size = 22, strokeWidth = 1.9, fill = 'none', color }) {
 }
 
 export default function BottomNav() {
+  const chatsUnread = useChatsUnread()
   return (
     <nav
       style={{
@@ -68,7 +70,7 @@ export default function BottomNav() {
             {({ isActive }) => (
               <>
                 <span
-                  className="grid place-items-center transition-all duration-200"
+                  className="grid place-items-center transition-all duration-200 relative"
                   style={{
                     width: 44,
                     height: 26,
@@ -83,6 +85,28 @@ export default function BottomNav() {
                     fill={isActive ? 'currentColor' : 'none'}
                     color={isActive ? '#C4B5FD' : '#7A7A8C'}
                   />
+                  {to === '/messages' && chatsUnread > 0 && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: -4,
+                        right: -6,
+                        minWidth: 18,
+                        height: 18,
+                        padding: "0 5px",
+                        borderRadius: 999,
+                        background: "#EF4444",
+                        color: "#fff",
+                        fontSize: 10.5,
+                        fontWeight: 800,
+                        lineHeight: "18px",
+                        textAlign: "center",
+                        boxShadow: "0 0 8px rgba(239,68,68,0.6)",
+                      }}
+                    >
+                      {chatsUnread > 9 ? "9+" : chatsUnread}
+                    </span>
+                  )}
                 </span>
                 <span
                   className="text-[10.5px] font-semibold tracking-wide"
