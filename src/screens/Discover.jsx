@@ -483,7 +483,27 @@ function EmptyState({ onRefresh }) {
 }
 
 function MatchModal({ me, them, onClose, onMessage }) {
-  const myPhoto = me?.photo_url
+  const [resolvedMyPhoto, setResolvedMyPhoto] = useState(null)
+  useEffect(() => {
+    if (!me?.id || me?.photo_url) return
+    let cancelled = false
+    supabase
+      .from('profile_photos')
+      .select('storage_path')
+      .eq('user_id', me.id)
+      .order('is_primary', { ascending: false })
+      .order('display_order', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled && data?.storage_path) {
+          setResolvedMyPhoto(publicPhotoUrl(data.storage_path))
+        }
+      })
+    return () => { cancelled = true }
+  }, [me?.id, me?.photo_url])
+
+  const myPhoto = me?.photo_url || resolvedMyPhoto
   const theirPhoto = them?.photo_url
   const myInitial = (me?.display_name || 'Y')[0].toUpperCase()
   const theirInitial = (them?.display_name || 'T')[0].toUpperCase()
