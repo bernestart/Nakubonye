@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { Compass, Heart, MessageCircle, User } from 'lucide-react'
 import { tap } from '../lib/haptic'
-import { useChatsUnread } from '../lib/badges'
+import { useChatsUnread, useMatchesUnread } from '../lib/badges'
 
 const items = [
   { to: '/discover', label: 'Discover', Icon: Compass },
@@ -39,6 +39,7 @@ function TwoHearts({ size = 22, strokeWidth = 1.9, fill = 'none', color }) {
 
 export default function BottomNav() {
   const chatsUnread = useChatsUnread()
+  const matchesUnread = useMatchesUnread()
   return (
     <nav
       style={{
@@ -105,6 +106,28 @@ export default function BottomNav() {
                       }}
                     >
                       {chatsUnread > 9 ? "9+" : chatsUnread}
+                    </span>
+                  )}
+                  {to === '/matches' && matchesUnread > 0 && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: -4,
+                        right: -6,
+                        minWidth: 18,
+                        height: 18,
+                        padding: "0 5px",
+                        borderRadius: 999,
+                        background: "#EF4444",
+                        color: "#fff",
+                        fontSize: 10.5,
+                        fontWeight: 800,
+                        lineHeight: "18px",
+                        textAlign: "center",
+                        boxShadow: "0 0 8px rgba(239,68,68,0.6)",
+                      }}
+                    >
+                      {matchesUnread > 9 ? "9+" : matchesUnread}
                     </span>
                   )}
                 </span>

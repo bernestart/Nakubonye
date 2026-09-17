@@ -73,6 +73,18 @@ export default function Matches() {
 
   useEffect(() => { load() }, [load])
 
+  // Mark all my matches as seen so the nav badge clears.
+  useEffect(() => {
+    const userId = session?.user?.id
+    if (!userId) return
+    supabase
+      .from("matches")
+      .update({ seen_at: new Date().toISOString() })
+      .is("seen_at", null)
+      .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`)
+      .then(() => {})
+  }, [session?.user?.id])
+
   return (
     <div
       style={{

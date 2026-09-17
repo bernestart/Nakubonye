@@ -92,6 +92,39 @@ export default function Discover() {
     return () => { cancelled = true }
   }, [session?.user?.id])
 
+  // Realtime: celebrate any new match involving me — swipe, DM-reply, or anything else.
+  const celebratedRef = useRef(new Set())
+  useEffect(() => {
+    const myId = session?.user?.id
+    if (!myId) return
+    const ch = supabase
+      .channel("match-celebration-" + myId)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "matches" },
+        async (payload) => {
+          const m = payload.new
+          if (!m) return
+          if (m.user_one_id !== myId && m.user_two_id !== myId) return
+          const otherId = m.user_one_id === myId ? m.user_two_id : m.user_one_id
+          // skip if we already celebrated this user very recently (swipe path fires first)
+          if (celebratedRef.current.has(otherId)) return
+          celebratedRef.current.add(otherId)
+          setTimeout(() => celebratedRef.current.delete(otherId), 5000)
+          const { data: card } = await supabase
+            .from("profiles")
+            .select("id, display_name, username, photo_url, photos, is_verified, city, country")
+            .eq("id", otherId)
+            .maybeSingle()
+          if (!card) return
+          tap("match")
+          setMatchModal(card)
+        }
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [session?.user?.id])
+
   async function recordSwipe(targetId, action) {
     if (!session?.user?.id) return
     await supabase.from('swipes').upsert(

@@ -70,3 +70,35 @@ export function useChatsUnread() {
 
   return count
 }
+
+// Count of new matches I haven't opened yet (seen_at IS NULL).
+export function useMatchesUnread() {
+  const { session } = useAuth()
+  const myId = session?.user?.id
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    if (!myId) return
+    let cancelled = false
+
+    async function recount() {
+      const { data } = await supabase
+        .from("matches")
+        .select("id")
+        .is("seen_at", null)
+        .or(`user_one_id.eq.${myId},user_two_id.eq.${myId}`)
+      if (!cancelled) setCount(data?.length || 0)
+    }
+
+    recount()
+
+    const channel = supabase
+      .channel("matches-unread")
+      .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, () => recount())
+      .subscribe()
+
+    return () => { cancelled = true; supabase.removeChannel(channel) }
+  }, [myId])
+
+  return count
+}
