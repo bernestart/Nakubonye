@@ -2,6 +2,7 @@ import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { AuthProvider, useAuth } from './lib/auth'
 import { usePresence } from './lib/usePresence'
+import GlobalMatchCelebration from './components/GlobalMatchCelebration'
 import { WalletProvider } from './lib/wallet'
 import { VoiceCallProvider } from './lib/voiceCall'
 import { NotificationsProvider } from './lib/notifications'
@@ -114,6 +115,7 @@ export default function App() {
       <PresenceKeeper />
       <WalletProvider>
       <NotificationsProvider>
+      <GlobalMatchCelebration />
       <VoiceCallProvider>
       <Routes>
         <Route path="/" element={<PublicOnly><Welcome /></PublicOnly>} />
