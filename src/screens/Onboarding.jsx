@@ -418,7 +418,7 @@ export default function Onboarding() {
         {step === 4 && (
           <Section
             title="What are you looking for?"
-            sub="Honesty here means better matches."
+            sub="Honesty here means better connections."
           >
             <div className="flex flex-col gap-3">
               {LOOKING_FOR_OPTIONS.map((opt) => {
