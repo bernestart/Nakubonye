@@ -1,0 +1,623 @@
+import { useEffect, useMemo, useRef, useState } from "react"
+import {
+  X, Music, Image as ImageIcon, Sparkles, Type, Pencil, Wand2,
+  AtSign, Download, MoreHorizontal, Send, Undo2, Trash2, Eraser,
+  Users, Plus, Smile, Check,
+} from "lucide-react"
+
+const COLORS = ["#ffffff", "#000000", "#EC4899", "#A855F7", "#F59E0B", "#22C55E", "#3B82F6", "#EF4444"]
+const STICKER_LIB = ["❤️","😂","😍","🥰","🔥","✨","💯","👏","🙌","😎","🤩","😘","💜","💕","🌸","🌈","☀️","⭐","🎉","🎈","🍀","🌹","🦋","🍕","☕","🎶","⚡","💫","🌙","👑"]
+const FILTERS = [
+  { id: "none",    name: "Original", css: "none" },
+  { id: "warm",    name: "Warm",     css: "sepia(0.35) saturate(1.3) brightness(1.05)" },
+  { id: "cool",    name: "Cool",     css: "hue-rotate(180deg) saturate(1.1) brightness(1.05)" },
+  { id: "mono",    name: "Mono",     css: "grayscale(1) contrast(1.1)" },
+  { id: "vivid",   name: "Vivid",    css: "saturate(1.8) contrast(1.1)" },
+  { id: "fade",    name: "Fade",     css: "saturate(0.7) brightness(1.15) contrast(0.9)" },
+  { id: "vintage", name: "Vintage",  css: "sepia(0.55) saturate(1.1) contrast(1.05)" },
+  { id: "noir",    name: "Noir",     css: "grayscale(1) contrast(1.3) brightness(0.95)" },
+]
+
+export default function StoryEditor({ src, onCancel, onSave }) {
+  const wrapRef = useRef(null)
+  const canvasRef = useRef(null)
+  const baseImgRef = useRef(null)
+  const currentStroke = useRef([])
+  const drawing = useRef(false)
+  const dragRef = useRef(null)
+
+  const [activeTool, setActiveTool] = useState(null) // null | draw | text | stickers | filters
+  const [color, setColor] = useState("#ffffff")
+  const [width, setWidth] = useState(6)
+  const [mode, setMode] = useState("pen")
+  const [strokeHistory, setStrokeHistory] = useState([])
+  const [texts, setTexts] = useState([])
+  const [stickers, setStickers] = useState([])
+  const [activeId, setActiveId] = useState(null)
+  const [filterId, setFilterId] = useState("none")
+  const [caption, setCaption] = useState("")
+  const [audience, setAudience] = useState("Everyone")
+  const [toast, setToast] = useState("")
+  function showToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(""), 1600)
+  }
+
+  const filterCss = useMemo(() => FILTERS.find((f) => f.id === filterId)?.css || "none", [filterId])
+
+  // Load image
+  useEffect(() => {
+    const img = new Image()
+    img.onload = () => {
+      baseImgRef.current = img
+      const c = canvasRef.current
+      if (!c) return
+      c.width = img.naturalWidth
+      c.height = img.naturalHeight
+      redraw()
+    }
+    img.src = src
+  }, [src])
+
+  function redraw() {
+    const c = canvasRef.current
+    if (!c) return
+    const ctx = c.getContext("2d")
+    ctx.clearRect(0, 0, c.width, c.height)
+    const rect = c.getBoundingClientRect()
+    const sx = c.width / rect.width
+    const sy = c.height / rect.height
+    strokeHistory.forEach((s) => paintStroke(ctx, s, sx, sy))
+    if (currentStroke.current.length > 0) {
+      paintStroke(ctx, { color, width, mode, points: currentStroke.current }, sx, sy)
+    }
+  }
+
+  function paintStroke(ctx, stroke, sx = 1, sy = 1) {
+    const pts = stroke.points
+    if (!pts.length) return
+    ctx.lineCap = "round"
+    ctx.lineJoin = "round"
+    ctx.lineWidth = stroke.width * Math.max(sx, sy)
+    if (stroke.mode === "eraser") ctx.globalCompositeOperation = "destination-out"
+    else { ctx.globalCompositeOperation = "source-over"; ctx.strokeStyle = stroke.color }
+    ctx.beginPath()
+    ctx.moveTo(pts[0].x, pts[0].y)
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y)
+    if (pts.length === 1) ctx.lineTo(pts[0].x + 0.5, pts[0].y + 0.5)
+    ctx.stroke()
+    ctx.globalCompositeOperation = "source-over"
+  }
+
+  function pointFromEvent(e) {
+    const c = canvasRef.current
+    const rect = c.getBoundingClientRect()
+    const t = e.touches?.[0] || e
+    return {
+      x: ((t.clientX - rect.left) / rect.width) * c.width,
+      y: ((t.clientY - rect.top) / rect.height) * c.height,
+      rx: (t.clientX - rect.left) / rect.width,
+      ry: (t.clientY - rect.top) / rect.height,
+    }
+  }
+
+  function onStart(e) {
+    if (activeTool !== "draw") return
+    e.preventDefault()
+    drawing.current = true
+    currentStroke.current = [pointFromEvent(e)]
+    redraw()
+  }
+  function onMove(e) {
+    if (!drawing.current) return
+    e.preventDefault()
+    currentStroke.current.push(pointFromEvent(e))
+    redraw()
+  }
+  function onEnd(e) {
+    if (!drawing.current) return
+    e?.preventDefault?.()
+    if (currentStroke.current.length) {
+      setStrokeHistory((h) => [...h, { color, width, mode, points: currentStroke.current }])
+    }
+    currentStroke.current = []
+    drawing.current = false
+    redraw()
+  }
+
+  const lastPlaceRef = useRef(0)
+  function placeAt(e) {
+    const now = Date.now()
+    if (now - lastPlaceRef.current < 300) return
+    lastPlaceRef.current = now
+    if (activeTool === "text") {
+      const p = pointFromEvent(e)
+      const id = crypto.randomUUID()
+      setTexts((t) => [...t, { id, text: "Tap to type", x: p.rx, y: p.ry, color: "#ffffff", size: 24 }])
+      setActiveId(id)
+    } else if (activeTool === "stickers") {
+      const p = pointFromEvent(e)
+      const id = crypto.randomUUID()
+      setStickers((s) => [...s, { id, emoji: STICKER_LIB[0], x: p.rx, y: p.ry, size: 56 }])
+      setActiveId(id)
+    }
+  }
+
+  function startDrag(kind, id, e) {
+    e.stopPropagation()
+    setActiveId(id)
+    const wrap = wrapRef.current?.getBoundingClientRect()
+    if (!wrap) return
+    const t = e.touches?.[0] || e
+    dragRef.current = { kind, id, wrap }
+  }
+  function onDragMove(e) {
+    if (!dragRef.current) return
+    const { kind, id, wrap } = dragRef.current
+    const t = e.touches?.[0] || e
+    const nx = Math.max(0.02, Math.min(0.98, (t.clientX - wrap.left) / wrap.width))
+    const ny = Math.max(0.02, Math.min(0.98, (t.clientY - wrap.top) / wrap.height))
+    if (kind === "text") setTexts((arr) => arr.map((x) => (x.id === id ? { ...x, x: nx, y: ny } : x)))
+    else setStickers((arr) => arr.map((x) => (x.id === id ? { ...x, x: nx, y: ny } : x)))
+  }
+  function onDragEnd() { dragRef.current = null }
+
+  useEffect(() => {
+    const move = (e) => onDragMove(e)
+    const up = () => onDragEnd()
+    window.addEventListener("mousemove", move)
+    window.addEventListener("touchmove", move, { passive: false })
+    window.addEventListener("mouseup", up)
+    window.addEventListener("touchend", up)
+    return () => {
+      window.removeEventListener("mousemove", move)
+      window.removeEventListener("touchmove", move)
+      window.removeEventListener("mouseup", up)
+      window.removeEventListener("touchend", up)
+    }
+  })
+
+  useEffect(() => { redraw() }, [strokeHistory, color, width, mode])
+
+  function save() {
+    const img = baseImgRef.current
+    const c = canvasRef.current
+    if (!img || !c) return
+    const out = document.createElement("canvas")
+    out.width = img.naturalWidth
+    out.height = img.naturalHeight
+    const ctx = out.getContext("2d")
+    ctx.filter = filterCss === "none" ? "none" : filterCss
+    ctx.drawImage(img, 0, 0)
+    ctx.filter = "none"
+    ctx.drawImage(c, 0, 0, out.width, out.height)
+    const W = out.width, H = out.height
+    texts.forEach((t) => {
+      const fs = Math.round((t.size / 100) * W * 0.9)
+      ctx.font = "900 " + fs + "px system-ui, -apple-system, sans-serif"
+      ctx.textAlign = "center"; ctx.textBaseline = "middle"
+      ctx.lineWidth = Math.max(3, fs * 0.14); ctx.strokeStyle = "rgba(0,0,0,0.75)"
+      ctx.strokeText(t.text, t.x * W, t.y * H)
+      ctx.fillStyle = t.color
+      ctx.fillText(t.text, t.x * W, t.y * H)
+    })
+    stickers.forEach((s) => {
+      const fs = Math.round((s.size / 100) * W * 0.9)
+      ctx.font = fs + "px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+      ctx.fillText(s.emoji, s.x * W, s.y * H)
+    })
+    out.toBlob((blob) => { if (blob) onSave(blob, { caption, audience }) }, "image/jpeg", 0.92)
+  }
+
+  const sidebarItems = [
+    { label: "Stickers", icon: <Smile size={16} />,          on: () => setActiveTool("stickers") },
+    { label: "Effects",  icon: <Wand2 size={16} />,          on: () => setActiveTool("filters") },
+    { label: "Mention",  icon: <AtSign size={16} />,         on: () => { setCaption((c) => (c + " @").slice(0, 200)); showToast("Added @ to caption") } },
+    { label: "Save",     icon: <Download size={16} />,       on: save },
+    { label: "More",     icon: <MoreHorizontal size={16} />, on: () => showToast("More options coming soon") },
+  ]
+
+  return (
+    <div
+      ref={wrapRef}
+      className="fixed inset-0 bg-black overflow-hidden select-none flex flex-col justify-between"
+      style={{ width: "100vw", height: "100dvh", zIndex: 9999 }}
+    >
+      {/* Background media */}
+      <img
+        src={src}
+        alt=""
+        className="absolute inset-0 w-full h-full object-cover z-0 pointer-events-none"
+        style={{ filter: filterCss }}
+        draggable={false}
+      />
+
+      {/* Drawing canvas overlay */}
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 w-full h-full z-10"
+        style={{
+          objectFit: "cover",
+          touchAction: activeTool === "draw" ? "none" : "auto",
+          pointerEvents: activeTool === "draw" ? "auto" : "none",
+        }}
+        onMouseDown={onStart} onMouseMove={onMove} onMouseUp={onEnd} onMouseLeave={onEnd}
+        onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd}
+      />
+
+      {/* Tap layer for placing text/stickers */}
+      {(activeTool === "text" || activeTool === "stickers") && (
+        <div className="absolute inset-0 z-10" onClick={placeAt} />
+      )}
+
+      {/* Text overlays */}
+      {texts.map((t) => (
+        <div
+          key={t.id}
+          onMouseDown={(e) => startDrag("text", t.id, e)}
+          onTouchStart={(e) => startDrag("text", t.id, e)}
+          onClick={(e) => { e.stopPropagation(); setActiveId(t.id) }}
+          style={{
+            position: "absolute",
+            left: (t.x * 100) + "%",
+            top: (t.y * 100) + "%",
+            transform: "translate(-50%,-50%)",
+            color: t.color,
+            fontWeight: 900,
+            fontSize: t.size,
+            textShadow: "0 2px 12px rgba(0,0,0,0.85)",
+            WebkitTextStroke: "0.5px rgba(0,0,0,0.5)",
+            whiteSpace: "nowrap",
+            zIndex: 15,
+            touchAction: "none",
+            border: activeId === t.id && activeTool === "text" ? "1px dashed rgba(255,255,255,0.55)" : "none",
+            padding: 4,
+          }}
+        >
+          {t.text}
+        </div>
+      ))}
+
+      {/* Sticker overlays */}
+      {stickers.map((s) => (
+        <div
+          key={s.id}
+          onMouseDown={(e) => startDrag("sticker", s.id, e)}
+          onTouchStart={(e) => startDrag("sticker", s.id, e)}
+          onClick={(e) => { e.stopPropagation(); setActiveId(s.id) }}
+          style={{
+            position: "absolute",
+            left: (s.x * 100) + "%",
+            top: (s.y * 100) + "%",
+            transform: "translate(-50%,-50%)",
+            fontSize: s.size,
+            zIndex: 15,
+            touchAction: "none",
+            border: activeId === s.id && activeTool === "stickers" ? "1px dashed rgba(255,255,255,0.55)" : "none",
+            padding: 4,
+          }}
+        >
+          {s.emoji}
+        </div>
+      ))}
+
+      {/* TOP TOOLBAR */}
+      <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between pointer-events-none z-20">
+        <button
+          onClick={onCancel}
+          aria-label="Close"
+          className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white pointer-events-auto cursor-pointer"
+        >
+          <X size={20} strokeWidth={2.4} />
+        </button>
+        <div className="bg-black/40 backdrop-blur-md rounded-full p-2 text-white flex items-center gap-3 pointer-events-auto">
+          <button
+            onClick={() => showToast("Music coming soon")}
+            className="w-8 h-8 rounded-full grid place-items-center"
+            aria-label="Music"
+            title="Music"
+          >
+            <Music size={16} />
+          </button>
+          <button
+            onClick={() => showToast("Change photo from the previous screen")}
+            className="w-8 h-8 rounded-full grid place-items-center"
+            aria-label="Media"
+            title="Media"
+          >
+            <ImageIcon size={16} />
+          </button>
+          <button
+            onClick={() => setActiveTool("filters")}
+            className="w-8 h-8 rounded-full grid place-items-center"
+            aria-label="Restyle"
+            title="Restyle"
+          >
+            <Sparkles size={16} />
+          </button>
+          <button
+            onClick={() => setActiveTool("text")}
+            className="w-8 h-8 rounded-full grid place-items-center"
+            aria-label="Text"
+            title="Text"
+          >
+            <Type size={16} />
+          </button>
+          <button
+            onClick={() => setActiveTool("draw")}
+            className="w-8 h-8 rounded-full grid place-items-center"
+            aria-label="Draw"
+            title="Draw"
+          >
+            <Pencil size={16} />
+          </button>
+        </div>
+      </div>
+
+      {/* RIGHT SIDEBAR */}
+      <div className="absolute right-4 top-20 flex flex-col items-end gap-3.5 z-20">
+        {sidebarItems.map((item) => (
+          <button
+            key={item.label}
+            onClick={item.on}
+            className="flex items-center gap-2.5 cursor-pointer active:scale-95 transition-transform"
+          >
+            <span className="text-white text-xs font-semibold drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">
+              {item.label}
+            </span>
+            <span className="w-11 h-11 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white shadow-lg">
+              {item.icon}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* TOAST */}
+      {toast && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/80 text-white text-sm px-4 py-2 rounded-full z-50 pointer-events-none">
+          {toast}
+        </div>
+      )}
+
+      {/* BOTTOM OVERLAY */}
+      {!activeTool && (
+        <div
+          className="absolute bottom-0 left-0 right-0 p-4 flex flex-col gap-3 z-20 pt-12"
+          style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.3) 55%, transparent)" }}
+        >
+          <button
+            onClick={() => setActiveTool("filters")}
+            className="text-white/80 text-xs text-center font-medium drop-shadow mb-1 animate-pulse"
+          >
+            Swipe up for filters...
+          </button>
+
+          <div className="w-full bg-black/50 backdrop-blur-md border border-white/15 rounded-full px-4 py-3 flex items-center gap-3 text-white shadow-2xl">
+            <ImageIcon size={18} className="text-white/70" />
+            <input
+              value={caption}
+              onChange={(e) => setCaption(e.target.value.slice(0, 200))}
+              placeholder="Add a caption..."
+              className="bg-transparent border-none outline-none text-white placeholder-gray-300 w-full text-sm"
+            />
+            <AtSign size={18} className="text-white/70" />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setAudience((a) => (a === "Everyone" ? "Close Friends" : "Everyone"))}
+              className="bg-black/60 backdrop-blur-md border border-white/10 text-white text-xs px-4 py-2.5 rounded-full flex items-center gap-2 cursor-pointer font-medium"
+            >
+              <Users size={14} /> Status ({audience}) <Plus size={12} />
+            </button>
+            <button
+              onClick={save}
+              aria-label="Send"
+              className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center font-bold text-lg shadow-xl cursor-pointer hover:scale-105 transition-transform"
+            >
+              <Send size={20} strokeWidth={2.6} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* CONTEXTUAL TOOL PANELS */}
+      {activeTool === "draw" && (
+        <div className="absolute bottom-0 left-0 right-0 p-3 z-30 bg-black/70 backdrop-blur-md flex flex-col gap-2"
+             style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setMode("pen")}
+              className="w-10 h-10 rounded-full grid place-items-center"
+              style={{ background: mode === "pen" ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.06)" }}
+              aria-label="Pen"
+            >
+              <Pencil size={18} className="text-white" />
+            </button>
+            <button
+              onClick={() => setMode("eraser")}
+              className="w-10 h-10 rounded-full grid place-items-center"
+              style={{ background: mode === "eraser" ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.06)" }}
+              aria-label="Eraser"
+            >
+              <Eraser size={18} className="text-white" />
+            </button>
+            <div className="flex gap-2 overflow-x-auto flex-1" style={{ scrollbarWidth: "none" }}>
+              {COLORS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => { setColor(c); setMode("pen") }}
+                  aria-label={"Color " + c}
+                  className="shrink-0 w-8 h-8 rounded-full border-2"
+                  style={{ background: c, borderColor: color === c && mode === "pen" ? "#fff" : "rgba(255,255,255,0.15)" }}
+                />
+              ))}
+            </div>
+            <div className="flex gap-1.5">
+              {[3, 6, 12].map((w) => (
+                <button
+                  key={w}
+                  onClick={() => setWidth(w)}
+                  aria-label={"Width " + w}
+                  className="w-8 h-8 rounded-full grid place-items-center border-2"
+                  style={{ borderColor: width === w ? "#fff" : "rgba(255,255,255,0.15)" }}
+                >
+                  <span style={{ width: w + 2, height: w + 2, borderRadius: 999, background: "#fff", display: "block" }} />
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => { setStrokeHistory((h) => h.slice(0, -1)); setTimeout(redraw, 0) }}
+              className="w-10 h-10 rounded-full grid place-items-center bg-white/[0.08]"
+              aria-label="Undo"
+            >
+              <Undo2 size={16} className="text-white" />
+            </button>
+            <button
+              onClick={() => { setStrokeHistory([]); currentStroke.current = []; redraw() }}
+              className="w-10 h-10 rounded-full grid place-items-center bg-white/[0.08]"
+              aria-label="Clear"
+            >
+              <Trash2 size={16} className="text-white" />
+            </button>
+          </div>
+          <button
+            onClick={() => { setActiveTool(null); setActiveId(null) }}
+            className="self-center h-9 px-4 rounded-full bg-white/[0.08] text-white text-[13px] font-bold inline-flex items-center gap-1.5"
+          >
+            <Check size={14} strokeWidth={3} /> Done
+          </button>
+        </div>
+      )}
+
+      {activeTool === "text" && (
+        <div className="absolute bottom-0 left-0 right-0 p-3 z-30 bg-black/70 backdrop-blur-md flex flex-col gap-2"
+             style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+          <input
+            value={texts.find((x) => x.id === activeId)?.text || ""}
+            onChange={(e) => {
+              const v = e.target.value.slice(0, 120)
+              setTexts((arr) => arr.map((x) => (x.id === activeId ? { ...x, text: v } : x)))
+            }}
+            placeholder="Type your text..."
+            autoFocus
+            className="h-11 rounded-full bg-white/[0.08] px-4 text-white text-[14px] placeholder:text-white/50 focus:outline-none"
+          />
+          <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+            {COLORS.map((c) => (
+              <button
+                key={c}
+                onClick={() => setTexts((arr) => arr.map((x) => (x.id === activeId ? { ...x, color: c } : x)))}
+                aria-label={"Color " + c}
+                className="shrink-0 w-8 h-8 rounded-full border-2"
+                style={{ background: c, borderColor: texts.find((x) => x.id === activeId)?.color === c ? "#fff" : "rgba(255,255,255,0.15)" }}
+              />
+            ))}
+            {[16, 24, 36, 52].map((sz) => (
+              <button
+                key={sz}
+                onClick={() => setTexts((arr) => arr.map((x) => (x.id === activeId ? { ...x, size: sz } : x)))}
+                className="shrink-0 h-8 px-3 rounded-full text-white text-[12px] font-bold border"
+                style={{
+                  borderColor: texts.find((x) => x.id === activeId)?.size === sz ? "#fff" : "rgba(255,255,255,0.15)",
+                  background: "rgba(255,255,255,0.06)",
+                }}
+              >
+                {sz}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => { setActiveTool(null); setActiveId(null) }}
+            className="self-center h-9 px-4 rounded-full bg-white/[0.08] text-white text-[13px] font-bold inline-flex items-center gap-1.5"
+          >
+            <Check size={14} strokeWidth={3} /> Done
+          </button>
+        </div>
+      )}
+
+      {activeTool === "stickers" && (
+        <div className="absolute bottom-0 left-0 right-0 p-3 z-30 bg-black/70 backdrop-blur-md flex flex-col gap-2"
+             style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+          <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+            {STICKER_LIB.map((e) => (
+              <button
+                key={e}
+                onClick={() => {
+                  if (activeId) setStickers((arr) => arr.map((x) => (x.id === activeId ? { ...x, emoji: e } : x)))
+                  else {
+                    const id = crypto.randomUUID()
+                    setStickers((arr) => [...arr, { id, emoji: e, x: 0.5, y: 0.5, size: 56 }])
+                    setActiveId(id)
+                  }
+                }}
+                className="shrink-0 w-11 h-11 rounded-full grid place-items-center text-2xl"
+                style={{ background: "rgba(255,255,255,0.06)" }}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            {[32, 48, 64, 88].map((sz) => (
+              <button
+                key={sz}
+                onClick={() => setStickers((arr) => arr.map((x) => (x.id === activeId ? { ...x, size: sz } : x)))}
+                className="h-8 px-3 rounded-full text-white text-[12px] font-bold border"
+                style={{
+                  borderColor: stickers.find((x) => x.id === activeId)?.size === sz ? "#fff" : "rgba(255,255,255,0.15)",
+                  background: "rgba(255,255,255,0.06)",
+                }}
+              >
+                {sz}
+              </button>
+            ))}
+            <button
+              onClick={() => { setStickers([]); setActiveId(null) }}
+              className="ml-auto w-10 h-10 rounded-full grid place-items-center bg-white/[0.08]"
+              aria-label="Clear stickers"
+            >
+              <Trash2 size={16} className="text-white" />
+            </button>
+            <button
+              onClick={() => { setActiveTool(null); setActiveId(null) }}
+              className="h-9 px-4 rounded-full bg-white/[0.08] text-white text-[13px] font-bold inline-flex items-center gap-1.5"
+            >
+              <Check size={14} strokeWidth={3} /> Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeTool === "filters" && (
+        <div className="absolute bottom-0 left-0 right-0 p-3 z-30 bg-black/70 backdrop-blur-md flex flex-col gap-2"
+             style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+          <p className="text-white/70 text-[11.5px] font-semibold text-center">Filters</p>
+          <div className="flex gap-3 overflow-x-auto px-1" style={{ scrollbarWidth: "none" }}>
+            {FILTERS.map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setFilterId(f.id)}
+                className="shrink-0 flex flex-col items-center gap-1.5"
+              >
+                <div
+                  className="w-16 h-16 rounded-2xl overflow-hidden border-2"
+                  style={{ borderColor: filterId === f.id ? "#fff" : "transparent" }}
+                >
+                  <img src={src} alt="" className="w-full h-full object-cover" style={{ filter: f.css }} />
+                </div>
+                <span className="text-white text-[11px] font-semibold">{f.name}</span>
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setActiveTool(null)}
+            className="self-center h-9 px-4 rounded-full bg-white/[0.08] text-white text-[13px] font-bold inline-flex items-center gap-1.5"
+          >
+            <Check size={14} strokeWidth={3} /> Done
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}

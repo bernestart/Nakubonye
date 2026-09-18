@@ -25,7 +25,6 @@ export default function Stories() {
       .from("stories")
       .select("id", { count: "exact", head: true })
       .gt("expires_at", new Date().toISOString())
-      .neq("user_id", myId)
     setStoryCount(count || 0)
 
     const { data: rows } = await supabase.rpc("get_discover_profiles", {
@@ -117,13 +116,6 @@ export default function Stories() {
             <p className="text-muted text-[12.5px] leading-relaxed mb-4">
               Be the first. Share a moment — it disappears in 24h.
             </p>
-            <button
-              onClick={share}
-              className="inline-flex items-center gap-2 h-10 px-4 rounded-full text-white font-bold text-[13px]"
-              style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
-            >
-              <Share2 size={14} /> Invite friends
-            </button>
           </div>
         )}
 
