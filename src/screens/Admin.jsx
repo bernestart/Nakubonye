@@ -20,6 +20,8 @@ export default function Admin() {
   const [stats, setStats] = useState(null)
   const [users, setUsers] = useState([])
   const [reports, setReports] = useState([])
+  const [maintenanceOn, setMaintenanceOn] = useState(false)
+  const [maintenanceBusy, setMaintenanceBusy] = useState(false)
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState(null)
   const [userTx, setUserTx] = useState([])
@@ -46,12 +48,30 @@ export default function Admin() {
     if (u.error) { setError(u.error.message); setLoading(false); return }
 
     setStats((Array.isArray(s.data) ? s.data[0] : s.data) || {})
+
+    // Load maintenance mode flag
+    const { data: cfg } = await supabase.from("app_config").select("key, value").eq("key", "maintenance_mode").maybeSingle()
+    setMaintenanceOn(cfg?.value === "true")
     setReports(r.data || [])
     setUsers((u.data || []).map((x) => ({ ...x, photo_url: publicPhotoUrl(x.primary_photo) })))
     setLoading(false)
   }, [isAdmin, search])
 
   useEffect(() => { load() }, [load])
+
+  async function toggleMaintenance() {
+    if (maintenanceBusy) return
+    const next = !maintenanceOn
+    if (next && !confirm("Turn ON maintenance mode? All non-admin users will see the maintenance screen.")) return
+    setMaintenanceBusy(true)
+    const { error: err } = await supabase
+      .from("app_config")
+      .update({ value: String(next), updated_at: new Date().toISOString() })
+      .eq("key", "maintenance_mode")
+    setMaintenanceBusy(false)
+    if (err) { setError(err.message); return }
+    setMaintenanceOn(next)
+  }
 
   async function run(fn) {
     if (busy) return
@@ -100,6 +120,43 @@ export default function Admin() {
           <div className="grid place-items-center h-40 text-muted text-[13px]">Loading…</div>
         ) : (
           <>
+            {/* Maintenance mode toggle */}
+            <button
+              onClick={toggleMaintenance}
+              disabled={maintenanceBusy}
+              className="w-full mb-4 p-4 rounded-2xl border flex items-center justify-between disabled:opacity-60"
+              style={{
+                background: maintenanceOn
+                  ? "linear-gradient(135deg, rgba(245,158,11,0.18) 0%, rgba(236,72,153,0.10) 100%)"
+                  : "rgba(255,255,255,0.03)",
+                borderColor: maintenanceOn ? "rgba(245,158,11,0.55)" : "rgba(255,255,255,0.08)",
+              }}
+            >
+              <div className="text-left">
+                <p className="text-cream font-bold text-[13.5px]">
+                  {maintenanceOn ? "Maintenance mode: ON" : "Maintenance mode: OFF"}
+                </p>
+                <p className="text-muted text-[12px] mt-0.5">
+                  {maintenanceOn ? "Users see the building screen. Tap to turn off." : "Tap to show users the building screen."}
+                </p>
+              </div>
+              <span
+                className="w-12 h-7 rounded-full relative shrink-0 ml-3"
+                style={{
+                  background: maintenanceOn ? "#F59E0B" : "rgba(255,255,255,0.15)",
+                  transition: "background 200ms",
+                }}
+              >
+                <span
+                  className="absolute top-1 w-5 h-5 rounded-full bg-white shadow"
+                  style={{
+                    left: maintenanceOn ? "calc(100% - 22px)" : 4,
+                    transition: "left 200ms",
+                  }}
+                />
+              </span>
+            </button>
+
             {/* Stats grid */}
             {stats && (
               <div className="grid grid-cols-2 gap-2.5 mb-5">

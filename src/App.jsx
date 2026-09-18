@@ -1,7 +1,8 @@
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AuthProvider, useAuth } from './lib/auth'
 import { usePresence } from './lib/usePresence'
+import MaintenanceScreen from './components/MaintenanceScreen'
 import GlobalMatchCelebration from './components/GlobalMatchCelebration'
 import GlobalEventPopup from './components/GlobalEventPopup'
 import { WalletProvider } from './lib/wallet'
@@ -106,6 +107,36 @@ function PublicOnly({ children }) {
 }
 
 
+function MaintenanceGate({ children }) {
+  const { profile, loading: authLoading } = useAuth()
+  const [state, setState] = useState({ loading: true, on: false, message: "" })
+
+  useEffect(() => {
+    let cancelled = false
+    supabase
+      .from("app_config")
+      .select("key, value")
+      .in("key", ["maintenance_mode", "maintenance_message"])
+      .then(({ data }) => {
+        if (cancelled) return
+        const map = {}
+        ;(data || []).forEach((r) => { map[r.key] = r.value })
+        setState({
+          loading: false,
+          on: map.maintenance_mode === "true",
+          message: map.maintenance_message || "",
+        })
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  if (state.loading || authLoading) return null
+  if (!state.on) return children
+  // Admin bypasses maintenance
+  if (profile?.is_admin) return children
+  return <MaintenanceScreen message={state.message} />
+}
+
 function PresenceKeeper() {
   usePresence()
   return null
@@ -120,6 +151,7 @@ export default function App() {
       <GlobalMatchCelebration />
       <GlobalEventPopup />
       <VoiceCallProvider>
+      <MaintenanceGate>
       <Routes>
         <Route path="/" element={<PublicOnly><Welcome /></PublicOnly>} />
         <Route path="/signup" element={<PublicOnly><SignUp /></PublicOnly>} />
@@ -159,6 +191,7 @@ export default function App() {
         <Route path="/notifications" element={<Guard><Notifications /></Guard>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </MaintenanceGate>
       <CallOverlay />
       </VoiceCallProvider>
       </NotificationsProvider>
