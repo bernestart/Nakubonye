@@ -33,10 +33,10 @@ export default function Welcome() {
         </h1>
 
         {/* Tagline */}
-        <p className="text-purple-100/75 text-[16px] leading-[1.5] max-w-[300px] mb-10">
-          Meet someone special.
+        <p className="text-purple-100/90 text-[19px] leading-[1.45] max-w-[300px] mb-10 font-semibold">
+          Somebody is
           <br />
-          Start something real.
+          looking for you.
         </p>
 
         {/* Three hearts */}
