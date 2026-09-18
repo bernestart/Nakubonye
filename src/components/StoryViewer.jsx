@@ -1,11 +1,23 @@
 import { useEffect, useState } from "react"
-import { X } from "lucide-react"
+import { useNavigate } from "react-router-dom"
+import { useAuth } from "../lib/auth"
+import { X, Send } from "lucide-react"
 import { publicPhotoUrl } from "../lib/photo"
 
 export default function StoryViewer({ groups, startIndex, onClose, onViewed }) {
   const [groupIdx, setGroupIdx] = useState(startIndex || 0)
   const [storyIdx, setStoryIdx] = useState(0)
   const [progress, setProgress] = useState(0)
+  const nav = useNavigate()
+  const { session } = useAuth()
+  const myId = session?.user?.id
+  const [reply, setReply] = useState("")
+
+  function submitReply() {
+    const text = reply.trim()
+    if (!text || !group?.user_id) return
+    nav("/messages/" + group.user_id, { state: { prefill: text } })
+  }
 
   const group = groups[groupIdx]
   const story = group?.stories?.[storyIdx]
@@ -99,10 +111,36 @@ export default function StoryViewer({ groups, startIndex, onClose, onViewed }) {
 
         {/* Caption */}
         {story.caption && (
-          <div className="absolute bottom-16 left-4 right-4 z-20">
+          <div className="absolute bottom-24 left-4 right-4 z-20">
             <p className="text-white text-[15px] font-medium bg-black/40 backdrop-blur-md rounded-2xl px-4 py-3">
               {story.caption}
             </p>
+          </div>
+        )}
+
+        {/* Reply bar (only for other people's stories) */}
+        {group?.user_id !== myId && (
+          <div
+            className="absolute bottom-4 left-3 right-3 z-30 flex items-center gap-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <input
+              value={reply}
+              onChange={(e) => setReply(e.target.value.slice(0, 200))}
+              onKeyDown={(e) => { if (e.key === "Enter") submitReply() }}
+              placeholder={"Reply to " + (group?.display_name?.split(" ")[0] || "them") + "…"}
+              className="flex-1 h-11 rounded-full bg-white/10 border border-white/20 backdrop-blur-md px-4 text-white text-[14px] placeholder:text-white/60 focus:outline-none focus:bg-white/15"
+            />
+            {reply.trim() && (
+              <button
+                onClick={submitReply}
+                aria-label="Send reply"
+                className="w-11 h-11 rounded-full grid place-items-center shrink-0"
+                style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
+              >
+                <Send size={18} strokeWidth={2.6} className="text-white" />
+              </button>
+            )}
           </div>
         )}
 

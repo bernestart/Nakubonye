@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Send, MessageCircle, Paperclip, X, Smile, Mic, Square, Play, Pause, MoreVertical, Trash2, Eye, Flag, Ban, Check, CheckCheck , Phone, Video } from 'lucide-react'
 import { friendlyError } from '../lib/errors'
@@ -30,6 +30,7 @@ function formatLastSeen(ts) {
 export default function Chat() {
   const nav = useNavigate()
   const { userId: otherId } = useParams()
+  const location = useLocation()
   const { session } = useAuth()
   const voiceCall = useVoiceCall()
 
@@ -42,6 +43,11 @@ export default function Chat() {
   const [theirLastRead, setTheirLastRead] = useState(null)
   const [myPreviousReadAt, setMyPreviousReadAt] = useState(null)
   const [text, setText] = useState('')
+
+  useEffect(() => {
+    const prefill = location.state?.prefill
+    if (prefill && !text) setText(prefill)
+  }, [location.state?.prefill])
   const [sending, setSending] = useState(false)
   const [replyingTo, setReplyingTo] = useState(null)
   const [reactionPickerFor, setReactionPickerFor] = useState(null)
