@@ -22,7 +22,7 @@ export default function Terms() {
         <p className="text-subtle text-[12px] mb-6">Last updated: September 2026</p>
 
         <H>Welcome</H>
-        <P>Nakubonye is a dating app for adults, wherever you are. By creating an account you agree to these terms. If anything here feels wrong to you, please don't use the app.</P>
+        <P>Nakubonye is a community app for adults, wherever you are. People come here to chat, make friends, join communities, and — for some — find someone special. By creating an account you agree to these terms. If anything here feels wrong to you, please don't use the app.</P>
 
         <H>Who can use Nakubonye</H>
         <P>You must be 18 or older. By signing up you confirm this is true. We remove any account we find to belong to someone under 18, with no warning and no refund.</P>

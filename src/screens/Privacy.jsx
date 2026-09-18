@@ -22,7 +22,7 @@ export default function Privacy() {
         <p className="text-subtle text-[12px] mb-6">Last updated: September 2026</p>
 
         <H>Short version</H>
-        <P>We collect what we need to run a dating app — nothing more. We never sell your data. We never show your email to other users. You can delete your account and everything goes with it.</P>
+        <P>We collect what we need to run Nakubonye — nothing more. We never sell your data. We never show your email to other users. You can delete your account and everything goes with it.</P>
 
         <H>What we collect</H>
         <P>When you sign up and use Nakubonye, we store:</P>
