@@ -66,7 +66,7 @@ export default function Discover() {
     })
     if (rpcError) { setError(friendlyError(rpcError)); setLoading(false); return }
 
-    setCards((data || []).map((r) => ({
+    const list = (data || []).map((r) => ({
       id: r.id,
       display_name: r.display_name,
       username: r.username,
@@ -78,7 +78,22 @@ export default function Discover() {
       photo_url: publicPhotoUrl(r.primary_photo),
       last_seen_at: r.last_seen_at || null,
       is_boosted: !!r.is_boosted,
-    })))
+      hasStory: false,
+    }))
+
+    // Attach hasStory flag from active stories
+    const ids = list.map((c) => c.id).filter(Boolean)
+    if (ids.length > 0) {
+      const { data: storyRows } = await supabase
+        .from("stories")
+        .select("user_id")
+        .gt("expires_at", new Date().toISOString())
+        .in("user_id", ids)
+      const storySet = new Set((storyRows || []).map((r) => r.user_id))
+      list.forEach((c) => { c.hasStory = storySet.has(c.id) })
+    }
+
+    setCards(list)
     setLoading(false)
   }, [session?.user?.id, sameCity, sharedInterests, sameCountry, verifiedOnly, onlineOnly, communityId])
 
@@ -241,6 +256,7 @@ export default function Discover() {
               card={current}
               onPass={handlePass}
               onLike={handleLike}
+              onWatchStory={() => { tap('light'); nav('/stories') }}
               onSuper={() => {
                 if (!cards[0]) return
                 tap('medium')
@@ -335,7 +351,7 @@ export default function Discover() {
   )
 }
 
-function SwipeCard({ card, onPass, onLike, onSuper, disabled }) {
+function SwipeCard({ card, onPass, onLike, onSuper, onWatchStory, disabled }) {
   const x = useMotionValue(0)
   const y = useMotionValue(0)
   const rotate = useTransform(x, [-250, 250], [-9, 9])
@@ -396,6 +412,41 @@ function SwipeCard({ card, onPass, onLike, onSuper, disabled }) {
         />
       ) : (
         <div className="absolute inset-0 grid place-items-center text-7xl opacity-25">👤</div>
+      )}
+
+      {/* Story indicator — top-left corner */}
+      {card.hasStory && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onWatchStory?.() }}
+          aria-label="Watch story"
+          className="absolute z-20"
+          style={{ top: 12, left: 12 }}
+        >
+          <span
+            className="story-indicator-ring block"
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: 999,
+              padding: 3,
+              background: "linear-gradient(135deg, #C084FC 0%, #EC4899 100%)",
+              boxShadow: "0 4px 14px rgba(236,72,153,0.55)",
+            }}
+          >
+            <span
+              className="block w-full h-full rounded-full overflow-hidden"
+              style={{ border: "2px solid #0B0B14", background: "#14141F" }}
+            >
+              {card.photo_url ? (
+                <img src={card.photo_url} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span className="w-full h-full grid place-items-center text-purple-400 font-black text-sm">
+                  {(card.display_name || "?")[0]}
+                </span>
+              )}
+            </span>
+          </span>
+        </button>
       )}
 
       {/* BOOSTED badge — only if this profile is boosted */}
