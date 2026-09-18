@@ -17,6 +17,7 @@ import SignIn from './screens/SignIn'
 import ResetPassword from './screens/ResetPassword'
 import Onboarding from './screens/Onboarding'
 import Discover from './screens/Discover'
+import Stories from './screens/Stories'
 import Filters from './screens/Filters'
 import Terms from './screens/Terms'
 import About from './screens/About'
@@ -126,6 +127,7 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/onboarding" element={<Guard><Onboarding /></Guard>} />
         <Route path="/discover" element={<Guard><Discover /></Guard>} />
+        <Route path="/stories" element={<Guard><Stories /></Guard>} />
         <Route path="/filters" element={<Guard><Filters /></Guard>} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/about" element={<About />} />
