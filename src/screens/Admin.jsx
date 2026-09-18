@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, Search, Shield, ShieldOff, Trash2, Coins,
+  ArrowLeft, Search, Shield, ShieldOff, Trash2, Coins, Crown,
   AlertTriangle, Check, X, RefreshCw, Ban,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -22,10 +22,18 @@ export default function Admin() {
   const [reports, setReports] = useState([])
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState(null)
+  const [userTx, setUserTx] = useState([])
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
-    if (!isAdmin) { setLoading(false); return }
+    async function loadUserTx(userId) {
+    setUserTx([])
+    const { data, error: err } = await supabase.rpc('admin_get_user_transactions', { p_user_id: userId, p_limit: 20 })
+    if (err) { setUserTx([]); return }
+    setUserTx(data || [])
+  }
+
+  if (!isAdmin) { setLoading(false); return }
     setLoading(true); setError('')
 
     const [s, u, r] = await Promise.all([
@@ -118,7 +126,34 @@ export default function Admin() {
                       <p className="text-cream font-semibold mb-0.5">
                         {r.reporter_name} → {r.reported_name}
                       </p>
-                      <p className="text-muted">{r.reason}{r.details ? ' · ' + r.details : ''}</p>
+                      <p className="text-muted mb-2.5">{r.reason}{r.details ? ' · ' + r.details : ''}</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => run(() => supabase.rpc('admin_resolve_report', { p_report_id: r.id, p_action: 'dismissed' }))}
+                          disabled={busy}
+                          className="flex-1 h-9 rounded-full bg-white/[0.06] border border-white/12 text-muted font-bold text-[12px] disabled:opacity-40"
+                        >
+                          Dismiss
+                        </button>
+                        <button
+                          onClick={() => {
+                            const reason = prompt('Reason for banning this user?')
+                            if (reason === null) return
+                            run(async () => {
+                              const { error: e1 } = await supabase.rpc('admin_resolve_report', { p_report_id: r.id, p_action: 'actioned' })
+                              if (e1) return { error: e1 }
+                              if (r.reported_user_id) {
+                                return supabase.rpc('admin_ban_user', { p_user_id: r.reported_user_id, p_reason: reason || 'Reported content' })
+                              }
+                              return { error: null }
+                            })
+                          }}
+                          disabled={busy}
+                          className="flex-1 h-9 rounded-full bg-red-500/20 border border-red-500/50 text-red-300 font-bold text-[12px] disabled:opacity-40"
+                        >
+                          Ban user
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -144,7 +179,7 @@ export default function Admin() {
               {users.map((u) => (
                 <button
                   key={u.id}
-                  onClick={() => { tap('light'); setSelected(u) }}
+                  onClick={() => { tap('light'); setSelected(u); loadUserTx(u.id) }}
                   className={`flex items-center gap-3 p-3 rounded-2xl border text-left ${
                     u.is_banned ? 'bg-red-500/8 border-red-500/25' :
                     u.is_admin ? 'bg-purple-500/8 border-purple-500/25' :
@@ -218,6 +253,30 @@ export default function Admin() {
               </div>
             )}
 
+            {/* Recent coin activity */}
+            <div className="mb-5">
+              <p className="text-amber-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">
+                Recent coin activity
+              </p>
+              {userTx.length === 0 ? (
+                <p className="text-subtle text-[12px] py-2">No transactions</p>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  {userTx.slice(0, 10).map((t) => (
+                    <div key={t.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/8">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-cream text-[12.5px] font-semibold truncate">{t.description || t.transaction_type}</p>
+                        <p className="text-subtle text-[10.5px]">{new Date(t.created_at).toLocaleDateString()} · {t.transaction_type}</p>
+                      </div>
+                      <span className={`text-[13px] font-black shrink-0 ${Number(t.amount) >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                        {Number(t.amount) >= 0 ? "+" : ""}{t.amount}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Actions */}
             <div className="flex flex-col gap-2">
               {!selected.is_banned ? (
@@ -256,6 +315,46 @@ export default function Admin() {
                 className="w-full h-11 rounded-full bg-white/[0.06] border border-white/12 text-cream font-bold text-[13.5px] flex items-center justify-center gap-2 disabled:opacity-40"
               >
                 <Coins size={15} strokeWidth={2.4} /> Grant / deduct coins
+              </button>
+
+              <button
+                onClick={() => run(() => supabase.rpc('admin_set_verified', { p_user_id: selected.id, p_verified: !selected.is_verified }))}
+                disabled={busy}
+                className={`w-full h-11 rounded-full font-bold text-[13.5px] flex items-center justify-center gap-2 disabled:opacity-40 ${
+                  selected.is_verified
+                    ? 'bg-white/[0.06] border border-white/12 text-muted'
+                    : 'bg-sky-500/15 border border-sky-500/40 text-sky-300'
+                }`}
+              >
+                {selected.is_verified
+                  ? <><X size={15} strokeWidth={2.4} /> Remove verification</>
+                  : <><Check size={15} strokeWidth={2.6} /> Mark verified</>
+                }
+              </button>
+
+              <button
+                onClick={() => {
+                  const days = prompt('Grant premium for how many days?', '30')
+                  if (!days) return
+                  const n = parseInt(days, 10)
+                  if (!n || n <= 0) return
+                  run(() => supabase.rpc('admin_grant_premium', { p_user_id: selected.id, p_days: n }))
+                }}
+                disabled={busy || selected.is_admin}
+                className="w-full h-11 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 font-bold text-[13.5px] flex items-center justify-center gap-2 disabled:opacity-40"
+              >
+                <Crown size={15} strokeWidth={2.4} /> Grant premium
+              </button>
+
+              <button
+                onClick={() => {
+                  if (!confirm('Revoke premium immediately?')) return
+                  run(() => supabase.rpc('admin_revoke_premium', { p_user_id: selected.id }))
+                }}
+                disabled={busy || selected.is_admin}
+                className="w-full h-11 rounded-full bg-white/[0.06] border border-white/12 text-muted font-bold text-[13.5px] flex items-center justify-center gap-2 disabled:opacity-40"
+              >
+                <Crown size={15} strokeWidth={2.4} /> Revoke premium
               </button>
 
               <button
