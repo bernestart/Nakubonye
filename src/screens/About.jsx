@@ -107,6 +107,19 @@ export default function About() {
 
         <div className="flex flex-col gap-2">
           <button
+            onClick={() => nav('/roadmap')}
+            className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left"
+          >
+            <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
+              <Sparkles size={16} strokeWidth={2.4} className="text-purple-300" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="flex-1 text-cream font-semibold text-[13.5px]">What we're building</p>
+              <p className="text-muted text-[12px]">See the roadmap</p>
+            </div>
+          </button>
+
+          <button
             onClick={() => nav('/terms')}
             className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left"
           >
