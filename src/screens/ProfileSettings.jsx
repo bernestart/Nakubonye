@@ -1,8 +1,10 @@
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, ShieldCheck, UserX, LogOut, ChevronRight, Wallet as WalletIcon, Crown, Trash2, Bell, Gift, FileText, Zap, Info, Users, Eye, Shield, Key } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
+import StoryComposer from '../components/StoryComposer'
+import { Plus } from 'lucide-react'
 import DeleteAccountModal from '../components/DeleteAccountModal'
 import BrandGlow from '../components/BrandGlow'
 import BottomNav from '../components/BottomNav'
@@ -13,6 +15,22 @@ export default function ProfileSettings() {
   const [deleteOpen, setDeleteOpen] = useState(false)
 
   const initial = (profile?.display_name || 'U')[0].toUpperCase()
+  const [composerOpen, setComposerOpen] = useState(false)
+  const [hasStory, setHasStory] = useState(false)
+
+  useEffect(() => {
+    if (!session?.user?.id) return
+    const checkStory = async () => {
+      const { data } = await supabase
+        .from("stories")
+        .select("id")
+        .eq("user_id", session.user.id)
+        .gt("expires_at", new Date().toISOString())
+        .limit(1)
+      setHasStory((data || []).length > 0)
+    }
+    checkStory()
+  }, [session?.user?.id])
 
   return (
     <div style={{
@@ -22,6 +40,13 @@ export default function ProfileSettings() {
       background: '#0B0B14', overflow: 'hidden',
     }}>
       <BrandGlow />
+
+      {composerOpen && (
+        <StoryComposer
+          onClose={() => setComposerOpen(false)}
+          onDone={() => { setComposerOpen(false); window.location.reload() }}
+        />
+      )}
 
       <header
         style={{ height: 52, flexShrink: 0 }}
@@ -45,9 +70,32 @@ export default function ProfileSettings() {
           className="flex items-center gap-4 mb-8 text-left w-full active:opacity-70 transition-opacity"
           aria-label="Back to preview"
         >
-          <div className="w-16 h-16 rounded-full bg-purple-600 grid place-items-center text-white text-2xl font-black shrink-0">
-            {initial}
-          </div>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setComposerOpen(true) }}
+            className="relative shrink-0"
+            aria-label="Add to your story"
+          >
+            <span
+              className="block rounded-full p-[2px]"
+              style={{
+                background: hasStory
+                  ? "linear-gradient(135deg, #C084FC 0%, #EC4899 100%)"
+                  : "rgba(255,255,255,0.15)",
+              }}
+            >
+              <span className="block w-16 h-16 rounded-full bg-purple-600 grid place-items-center text-white text-2xl font-black overflow-hidden border-2 border-[#0B0B14]">
+                {profile?.photo_url ? (
+                  <img src={profile.photo_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  initial
+                )}
+              </span>
+            </span>
+            <span className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-purple-600 border-2 border-[#0B0B14] grid place-items-center">
+              <Plus size={12} strokeWidth={3} className="text-white" />
+            </span>
+          </button>
           <div className="min-w-0">
             <p className="text-cream font-bold text-[18px] truncate">
               {profile?.display_name || 'Your name'}
