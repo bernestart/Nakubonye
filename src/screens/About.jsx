@@ -37,7 +37,7 @@ export default function About() {
             I have seen you.
           </p>
           <p className="text-subtle text-[11.5px] mt-3">
-            Version 2.0 · Made in Burundi 🇧🇮
+            Version 2.0 · Proudly built in Burundi 🇧🇮 · For everyone, everywhere
           </p>
         </div>
 
@@ -46,9 +46,10 @@ export default function About() {
             Why we exist
           </p>
           <p className="text-cream/90 text-[13.5px] leading-relaxed">
-            Nakubonye is a dating app for people who want something real.
-            Not endless swiping. Not fake profiles. Just honest people meeting
-            honestly, wherever they are.
+            Nakubonye is a place for people who want something real.
+            Not endless swiping. Not fake profiles. Just honest people
+            meeting honestly — for friendship, for community, or for
+            something more. Wherever you are.
           </p>
         </div>
 
