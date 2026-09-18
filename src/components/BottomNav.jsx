@@ -1,9 +1,10 @@
 import { NavLink } from 'react-router-dom'
-import { Compass, Heart, MessageCircle, User } from 'lucide-react'
+import { Compass, Heart, MessageCircle, User, Newspaper } from 'lucide-react'
 import { tap } from '../lib/haptic'
 import { useChatsUnread, useMatchesUnread } from '../lib/badges'
 
 const items = [
+  { to: '/feed',     label: 'Feed',     Icon: Newspaper },
   { to: '/discover', label: 'Discover', Icon: Compass },
   { to: '/likes',    label: 'Likes',    Icon: Heart },
   { to: '/matches',  label: 'Matches',  Icon: TwoHearts },
@@ -57,7 +58,7 @@ export default function BottomNav() {
       }}
     >
       <div
-        className="grid grid-cols-5"
+        className="grid grid-cols-6"
         style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 8px)' }}
       >
         {items.map(({ to, label, Icon }) => (

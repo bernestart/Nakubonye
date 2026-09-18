@@ -24,6 +24,8 @@ import Terms from './screens/Terms'
 import About from './screens/About'
 import Privacy from './screens/Privacy'
 import Verify from './screens/Verify'
+import Roadmap from './screens/Roadmap'
+import Feed from './screens/Feed'
 import Boost from './screens/Boost'
 import AdminVerifications from './screens/AdminVerifications'
 import Likes from './screens/Likes'
@@ -102,7 +104,7 @@ function BannedScreen({ reason }) {
 function PublicOnly({ children }) {
   const { session, loading } = useAuth()
   if (loading) return <Loading />
-  if (session) return <Navigate to="/discover" replace />
+  if (session) return <Navigate to="/feed" replace />
   return children
 }
 
@@ -158,6 +160,8 @@ export default function App() {
         <Route path="/signin" element={<PublicOnly><SignIn /></PublicOnly>} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/onboarding" element={<Guard><Onboarding /></Guard>} />
+        <Route path="/feed" element={<Guard><Feed /></Guard>} />
+        <Route path="/roadmap" element={<Roadmap />} />
         <Route path="/discover" element={<Guard><Discover /></Guard>} />
         <Route path="/stories" element={<Guard><Stories /></Guard>} />
         <Route path="/filters" element={<Guard><Filters /></Guard>} />
