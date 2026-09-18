@@ -58,7 +58,10 @@ export default function Stories() {
 
     const myIds = new Set((mine || []).map((m) => m.community_id))
     setMyCommunityIds(myIds)
-    setCommunities((allComms || []).filter((c) => !myIds.has(c.id)).slice(0, 4))
+    // Show 6 communities — joined ones first, then unjoined, so users see what they've joined
+    const marked = (allComms || []).map((c) => ({ ...c, isJoined: myIds.has(c.id) }))
+    marked.sort((a, b) => Number(b.isJoined) - Number(a.isJoined))
+    setCommunities(marked.slice(0, 6))
   }, [myId])
 
   useEffect(() => { load() }, [load])
@@ -71,7 +74,7 @@ export default function Stories() {
       .insert({ user_id: myId, community_id: c.id })
     if (err) { setBusyId(null); return }
     setMyCommunityIds((s) => new Set([...s, c.id]))
-    setCommunities((list) => list.filter((x) => x.id !== c.id))
+    setCommunities((list) => list.map((x) => x.id === c.id ? { ...x, isJoined: true, member_count: (x.member_count || 0) + 1 } : x))
     setBusyId(null)
   }
 
