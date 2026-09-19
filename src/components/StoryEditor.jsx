@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
   X, Music, Image as ImageIcon, Sparkles, Type, Pencil, Wand2,
-  AtSign, Download, MoreHorizontal, Send, Undo2, Trash2, Eraser,
+  AtSign, Download, MoreHorizontal, Send, Undo2, Redo2, Trash2, Eraser,
   Users, Plus, Smile, Check,
 } from "lucide-react"
 
@@ -34,6 +34,8 @@ export default function StoryEditor({ src, onCancel, onSave }) {
   const currentStroke = useRef([])
   const drawing = useRef(false)
   const dragRef = useRef(null)
+  const historyRef = useRef([])
+  const redoRef = useRef([])
 
   const [activeTool, setActiveTool] = useState(null) // null | draw | text | stickers | filters
   const [color, setColor] = useState("#ffffff")
@@ -127,6 +129,7 @@ export default function StoryEditor({ src, onCancel, onSave }) {
     if (!drawing.current) return
     e?.preventDefault?.()
     if (currentStroke.current.length) {
+      snapshot()
       setStrokeHistory((h) => [...h, { color, width, mode, points: currentStroke.current }])
     }
     currentStroke.current = []
@@ -140,11 +143,13 @@ export default function StoryEditor({ src, onCancel, onSave }) {
     if (now - lastPlaceRef.current < 300) return
     lastPlaceRef.current = now
     if (activeTool === "text") {
+      snapshot()
       const p = pointFromEvent(e)
       const id = crypto.randomUUID()
       setTexts((t) => [...t, { id, text: "Tap to type", x: p.rx, y: p.ry, color: "#ffffff", size: 24, rotation: 0, fontId: "sans", style: "plain" }])
       setActiveId(id)
     } else if (activeTool === "stickers") {
+      snapshot()
       const p = pointFromEvent(e)
       const id = crypto.randomUUID()
       setStickers((s) => [...s, { id, emoji: STICKER_LIB[0], x: p.rx, y: p.ry, size: 56, rotation: 0 }])
@@ -215,6 +220,58 @@ export default function StoryEditor({ src, onCancel, onSave }) {
     }
   }
   function onDragEnd() { dragRef.current = null }
+
+  function snapshot() {
+    historyRef.current.push({
+      strokes: strokeHistory.map((x) => ({ ...x })),
+      texts: texts.map((x) => ({ ...x })),
+      stickers: stickers.map((x) => ({ ...x })),
+    })
+    if (historyRef.current.length > 40) historyRef.current.shift()
+    redoRef.current = []
+  }
+
+  function undoAll() {
+    if (historyRef.current.length === 0) {
+      // Nothing to undo — maybe just undo a single stroke as fallback
+      if (strokeHistory.length > 0) {
+        redoRef.current.push({
+          strokes: strokeHistory.map((x) => ({ ...x })),
+          texts: texts.map((x) => ({ ...x })),
+          stickers: stickers.map((x) => ({ ...x })),
+        })
+        const next = strokeHistory.slice(0, -1)
+        setStrokeHistory(next)
+        setTimeout(redraw, 0)
+      }
+      return
+    }
+    const snap = historyRef.current.pop()
+    redoRef.current.push({
+      strokes: strokeHistory.map((x) => ({ ...x })),
+      texts: texts.map((x) => ({ ...x })),
+      stickers: stickers.map((x) => ({ ...x })),
+    })
+    setStrokeHistory(snap.strokes)
+    setTexts(snap.texts)
+    setStickers(snap.stickers)
+    currentStroke.current = []
+    setTimeout(redraw, 0)
+  }
+
+  function redoAll() {
+    if (redoRef.current.length === 0) return
+    const snap = redoRef.current.pop()
+    historyRef.current.push({
+      strokes: strokeHistory.map((x) => ({ ...x })),
+      texts: texts.map((x) => ({ ...x })),
+      stickers: stickers.map((x) => ({ ...x })),
+    })
+    setStrokeHistory(snap.strokes)
+    setTexts(snap.texts)
+    setStickers(snap.stickers)
+    setTimeout(redraw, 0)
+  }
 
   useEffect(() => {
     const move = (e) => onDragMove(e)
@@ -572,14 +629,21 @@ export default function StoryEditor({ src, onCancel, onSave }) {
               ))}
             </div>
             <button
-              onClick={() => { setStrokeHistory((h) => h.slice(0, -1)); setTimeout(redraw, 0) }}
+              onClick={undoAll}
               className="w-10 h-10 rounded-full grid place-items-center bg-white/[0.08]"
               aria-label="Undo"
             >
               <Undo2 size={16} className="text-white" />
             </button>
             <button
-              onClick={() => { setStrokeHistory([]); currentStroke.current = []; redraw() }}
+              onClick={redoAll}
+              className="w-10 h-10 rounded-full grid place-items-center bg-white/[0.08]"
+              aria-label="Redo"
+            >
+              <Redo2 size={16} className="text-white" />
+            </button>
+            <button
+              onClick={() => { snapshot(); setStrokeHistory([]); currentStroke.current = []; redraw() }}
               className="w-10 h-10 rounded-full grid place-items-center bg-white/[0.08]"
               aria-label="Clear"
             >
@@ -719,7 +783,7 @@ export default function StoryEditor({ src, onCancel, onSave }) {
               </button>
             ))}
             <button
-              onClick={() => { setStickers([]); setActiveId(null) }}
+              onClick={() => { snapshot(); setStickers([]); setActiveId(null) }}
               className="ml-auto w-10 h-10 rounded-full grid place-items-center bg-white/[0.08]"
               aria-label="Clear stickers"
             >
