@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 import ReelComposer from "../components/ReelComposer"
+import ReelComments from "../components/ReelComments"
 
 export default function Reels() {
   const nav = useNavigate()
@@ -20,6 +21,8 @@ export default function Reels() {
   const [composerOpen, setComposerOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [currentIdx, setCurrentIdx] = useState(0)
+  const [commentCounts, setCommentCounts] = useState(new Map())
+  const [commentsFor, setCommentsFor] = useState(null)
   const containerRef = useRef(null)
   const videoRefs = useRef([])
 
@@ -60,6 +63,12 @@ export default function Reels() {
       const lc = new Map()
       ;(allLikes || []).forEach((l) => lc.set(l.reel_id, (lc.get(l.reel_id) || 0) + 1))
       setLikeCounts(lc)
+
+      // Comment counts
+      const { data: allComments } = await supabase.from("reel_comments").select("reel_id").in("reel_id", reelIds)
+      const cc = new Map()
+      ;(allComments || []).forEach((c) => cc.set(c.reel_id, (cc.get(c.reel_id) || 0) + 1))
+      setCommentCounts(cc)
     }
     setLoading(false)
   }, [myId])
@@ -227,9 +236,9 @@ export default function Reels() {
                   </button>
 
                   <button
-                    onClick={() => { tap("light"); setComposerOpen(true) }}
+                    onClick={() => { tap("light"); setCommentsFor(reel.id) }}
                     className="flex flex-col items-center gap-1"
-                    aria-label="Comment"
+                    aria-label="Comments"
                   >
                     <span
                       className="w-12 h-12 rounded-full grid place-items-center"
@@ -237,7 +246,7 @@ export default function Reels() {
                     >
                       <MessageCircle size={24} strokeWidth={2.4} color="#fff" />
                     </span>
-                    <span className="text-white text-[11px] font-bold">Chat</span>
+                    <span className="text-white text-[11px] font-bold">{commentCounts.get(reel.id) || 0}</span>
                   </button>
 
                   <button
@@ -310,6 +319,20 @@ export default function Reels() {
         <ReelComposer
           onClose={() => setComposerOpen(false)}
           onDone={() => { setComposerOpen(false); load() }}
+        />
+      )}
+
+      {commentsFor && (
+        <ReelComments
+          reelId={commentsFor}
+          onClose={() => setCommentsFor(null)}
+          onCountChange={(n) => {
+            setCommentCounts((prev) => {
+              const next = new Map(prev)
+              next.set(commentsFor, n)
+              return next
+            })
+          }}
         />
       )}
     </div>
