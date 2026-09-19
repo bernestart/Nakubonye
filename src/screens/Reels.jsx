@@ -26,6 +26,7 @@ export default function Reels() {
   const [commentsFor, setCommentsFor] = useState(null)
   const [actionsFor, setActionsFor] = useState(null)
   const [hiddenIds, setHiddenIds] = useState(new Set())
+  const [matchSet, setMatchSet] = useState(new Set())
   const containerRef = useRef(null)
   const videoRefs = useRef([])
   const clipIdxRefs = useRef({})
@@ -35,18 +36,37 @@ export default function Reels() {
     setLoading(true)
     const { data: rows } = await supabase
       .from("reels")
-      .select("id, user_id, video_url, clips, thumbnail_url, caption, duration_sec, trim_start, trim_end, mirrored, aspect_ratio, text_overlays, created_at")
+      .select("id, user_id, video_url, clips, thumbnail_url, caption, duration_sec, trim_start, trim_end, mirrored, aspect_ratio, text_overlays, audience, allow_comments, allow_remix, location, cover_frame_time, created_at")
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .limit(50)
 
-    const list = (rows || []).filter((r) => !hiddenIds.has(r.id))
+    const list = (rows || []).filter((r) => {
+      if (hiddenIds.has(r.id)) return false
+      if (r.user_id === myId) return true
+      const aud = r.audience || "public"
+      if (aud === "public") return true
+      if (aud === "friends") return matchSet.has(r.user_id)
+      if (aud === "private") return false
+      return true
+    })
     setReels(list)
 
     // Load hidden reel ids for this user
     const { data: hideRows } = await supabase.from("reel_hides").select("reel_id").eq("user_id", myId)
     const hidden = new Set((hideRows || []).map((h) => h.reel_id))
     setHiddenIds(hidden)
+
+    // Load my matches so we can filter friends-only reels
+    const { data: matchRows } = await supabase
+      .from("matches")
+      .select("user_one_id, user_two_id")
+      .or("user_one_id.eq." + myId + ",user_two_id.eq." + myId)
+    const ms = new Set()
+    ;(matchRows || []).forEach((m) => {
+      ms.add(m.user_one_id === myId ? m.user_two_id : m.user_one_id)
+    })
+    setMatchSet(ms)
 
     if (list.length > 0) {
       const ids = [...new Set(list.map((r) => r.user_id))]
@@ -309,6 +329,7 @@ export default function Reels() {
                     <span className="text-white text-[11px] font-bold">{count}</span>
                   </button>
 
+                  {reel.allow_comments !== false && (
                   <button
                     onClick={() => { tap("light"); setCommentsFor(reel.id) }}
                     className="flex flex-col items-center gap-1"
@@ -322,6 +343,7 @@ export default function Reels() {
                     </span>
                     <span className="text-white text-[11px] font-bold">{commentCounts.get(reel.id) || 0}</span>
                   </button>
+                  )}
 
                   <button
                     onClick={() => share(reel)}
@@ -375,6 +397,12 @@ export default function Reels() {
                   {reel.caption && (
                     <p className="text-white/95 text-[14px] leading-[1.4] whitespace-pre-wrap" style={{ textShadow: "0 1px 6px rgba(0,0,0,0.8)" }}>
                       {reel.caption}
+                    </p>
+                  )}
+
+                  {reel.location && (
+                    <p className="text-white/75 text-[12.5px] mt-1.5 flex items-center gap-1">
+                      📍 {reel.location}
                     </p>
                   )}
                 </div>
