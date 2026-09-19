@@ -6,6 +6,15 @@ import {
 } from "lucide-react"
 
 const COLORS = ["#ffffff", "#000000", "#EC4899", "#A855F7", "#F59E0B", "#22C55E", "#3B82F6", "#EF4444"]
+
+const FONTS = [
+  { id: "sans",     name: "Bold",       css: "900 1em system-ui, -apple-system, sans-serif" },
+  { id: "serif",    name: "Serif",      css: "700 1em Georgia, 'Times New Roman', serif" },
+  { id: "hand",     name: "Handwriting",css: "700 1em 'Brush Script MT', 'Comic Sans MS', cursive" },
+  { id: "mono",     name: "Mono",       css: "800 1em 'Courier New', monospace" },
+  { id: "display",  name: "Display",    css: "900 1em 'Impact', 'Arial Black', sans-serif" },
+  { id: "italic",   name: "Italic",     css: "italic 700 1em Georgia, serif" },
+]
 const STICKER_LIB = ["❤️","😂","😍","🥰","🔥","✨","💯","👏","🙌","😎","🤩","😘","💜","💕","🌸","🌈","☀️","⭐","🎉","🎈","🍀","🌹","🦋","🍕","☕","🎶","⚡","💫","🌙","👑"]
 const FILTERS = [
   { id: "none",    name: "Original", css: "none" },
@@ -133,7 +142,7 @@ export default function StoryEditor({ src, onCancel, onSave }) {
     if (activeTool === "text") {
       const p = pointFromEvent(e)
       const id = crypto.randomUUID()
-      setTexts((t) => [...t, { id, text: "Tap to type", x: p.rx, y: p.ry, color: "#ffffff", size: 24, rotation: 0 }])
+      setTexts((t) => [...t, { id, text: "Tap to type", x: p.rx, y: p.ry, color: "#ffffff", size: 24, rotation: 0, fontId: "sans" }])
       setActiveId(id)
     } else if (activeTool === "stickers") {
       const p = pointFromEvent(e)
@@ -242,7 +251,7 @@ export default function StoryEditor({ src, onCancel, onSave }) {
       ctx.save()
       ctx.translate(t.x * W, t.y * H)
       ctx.rotate(((t.rotation || 0) * Math.PI) / 180)
-      ctx.font = "900 " + fs + "px system-ui, -apple-system, sans-serif"
+      ctx.font = fs + "px " + ((FONTS.find((f) => f.id === (t.fontId || "sans"))?.css || "system-ui").replace(/^[^ ]+ /, "").replace(/^[\d.]+em /, ""))
       ctx.textAlign = "center"; ctx.textBaseline = "middle"
       ctx.lineWidth = Math.max(3, fs * 0.14); ctx.strokeStyle = "rgba(0,0,0,0.75)"
       ctx.strokeText(t.text, 0, 0)
@@ -318,6 +327,7 @@ export default function StoryEditor({ src, onCancel, onSave }) {
             color: t.color,
             fontWeight: 900,
             fontSize: t.size,
+            fontFamily: (FONTS.find((f) => f.id === (t.fontId || "sans"))?.css || "").replace(/^[^ ]+ /, "").replace(/^[\d.]+em /, ""),
             textShadow: "0 2px 12px rgba(0,0,0,0.85)",
             WebkitTextStroke: "0.5px rgba(0,0,0,0.5)",
             whiteSpace: "nowrap",
@@ -556,6 +566,25 @@ export default function StoryEditor({ src, onCancel, onSave }) {
             autoFocus
             className="h-11 rounded-full bg-white/[0.08] px-4 text-white text-[14px] placeholder:text-white/50 focus:outline-none"
           />
+          <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+            {FONTS.map((f) => {
+              const active = (texts.find((x) => x.id === activeId)?.fontId || "sans") === f.id
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => setTexts((arr) => arr.map((x) => (x.id === activeId ? { ...x, fontId: f.id } : x)))}
+                  className="shrink-0 h-9 px-3 rounded-full text-white text-[12px] border"
+                  style={{
+                    fontFamily: f.css.replace(/^[^ ]+ /, "").replace(/^[\d.]+em /, ""),
+                    borderColor: active ? "#fff" : "rgba(255,255,255,0.15)",
+                    background: active ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.06)",
+                  }}
+                >
+                  {f.name}
+                </button>
+              )
+            })}
+          </div>
           <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
             {COLORS.map((c) => (
               <button
