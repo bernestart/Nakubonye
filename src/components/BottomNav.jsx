@@ -1,12 +1,12 @@
 import { NavLink } from 'react-router-dom'
-import { Compass, Heart, MessageCircle, User, Newspaper } from 'lucide-react'
+import { Compass, Heart, MessageCircle, User, Newspaper, Clapperboard } from 'lucide-react'
 import { tap } from '../lib/haptic'
 import { useChatsUnread, useMatchesUnread } from '../lib/badges'
 
 const items = [
   { to: '/feed',     label: 'Feed',     Icon: Newspaper },
   { to: '/discover', label: 'Discover', Icon: Compass },
-  { to: '/likes',    label: 'Likes',    Icon: Heart },
+  { to: '/reels',    label: 'Reels',    Icon: Clapperboard },
   { to: '/matches',  label: 'Matches',  Icon: TwoHearts },
   { to: '/messages', label: 'Chat',     Icon: MessageCircle },
   { to: '/me',       label: 'Profile',  Icon: User },
