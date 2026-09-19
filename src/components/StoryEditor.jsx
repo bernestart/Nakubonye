@@ -133,32 +133,77 @@ export default function StoryEditor({ src, onCancel, onSave }) {
     if (activeTool === "text") {
       const p = pointFromEvent(e)
       const id = crypto.randomUUID()
-      setTexts((t) => [...t, { id, text: "Tap to type", x: p.rx, y: p.ry, color: "#ffffff", size: 24 }])
+      setTexts((t) => [...t, { id, text: "Tap to type", x: p.rx, y: p.ry, color: "#ffffff", size: 24, rotation: 0 }])
       setActiveId(id)
     } else if (activeTool === "stickers") {
       const p = pointFromEvent(e)
       const id = crypto.randomUUID()
-      setStickers((s) => [...s, { id, emoji: STICKER_LIB[0], x: p.rx, y: p.ry, size: 56 }])
+      setStickers((s) => [...s, { id, emoji: STICKER_LIB[0], x: p.rx, y: p.ry, size: 56, rotation: 0 }])
       setActiveId(id)
     }
   }
 
+  function itemById(kind, id) {
+    return kind === "text" ? texts.find((x) => x.id === id) : stickers.find((x) => x.id === id)
+  }
+  function pinchData(touches) {
+    const dx = touches[0].clientX - touches[1].clientX
+    const dy = touches[0].clientY - touches[1].clientY
+    return {
+      dist: Math.hypot(dx, dy),
+      angle: Math.atan2(dy, dx) * (180 / Math.PI),
+    }
+  }
   function startDrag(kind, id, e) {
     e.stopPropagation()
     setActiveId(id)
     const wrap = wrapRef.current?.getBoundingClientRect()
     if (!wrap) return
-    const t = e.touches?.[0] || e
-    dragRef.current = { kind, id, wrap }
+    const touches = e.touches
+    const item = itemById(kind, id)
+    if (touches && touches.length >= 2) {
+      const { dist, angle } = pinchData(touches)
+      dragRef.current = {
+        mode: "pinch",
+        kind, id, wrap,
+        initialDist: dist,
+        initialAngle: angle,
+        initialSize: item?.size || 24,
+        initialRotation: item?.rotation || 0,
+      }
+    } else {
+      dragRef.current = { mode: "drag", kind, id, wrap }
+    }
   }
   function onDragMove(e) {
-    if (!dragRef.current) return
-    const { kind, id, wrap } = dragRef.current
-    const t = e.touches?.[0] || e
-    const nx = Math.max(0.02, Math.min(0.98, (t.clientX - wrap.left) / wrap.width))
-    const ny = Math.max(0.02, Math.min(0.98, (t.clientY - wrap.top) / wrap.height))
-    if (kind === "text") setTexts((arr) => arr.map((x) => (x.id === id ? { ...x, x: nx, y: ny } : x)))
-    else setStickers((arr) => arr.map((x) => (x.id === id ? { ...x, x: nx, y: ny } : x)))
+    const ref = dragRef.current
+    if (!ref) return
+    const touches = e.touches
+    // If we were pinching but now only one touch remains, switch to drag
+    if (ref.mode === "pinch" && (!touches || touches.length < 2)) {
+      ref.mode = "drag"
+    }
+    if (ref.mode === "pinch") {
+      const { dist, angle } = pinchData(touches)
+      const scale = Math.max(0.2, Math.min(8, dist / ref.initialDist))
+      const newSize = Math.max(10, Math.min(240, ref.initialSize * scale))
+      const newRotation = ref.initialRotation + (angle - ref.initialAngle)
+      if (ref.kind === "text") {
+        setTexts((arr) => arr.map((x) => (x.id === ref.id ? { ...x, size: newSize, rotation: newRotation } : x)))
+      } else {
+        setStickers((arr) => arr.map((x) => (x.id === ref.id ? { ...x, size: newSize, rotation: newRotation } : x)))
+      }
+      return
+    }
+    // drag mode
+    const t = (touches && touches[0]) || e
+    const nx = Math.max(0.02, Math.min(0.98, (t.clientX - ref.wrap.left) / ref.wrap.width))
+    const ny = Math.max(0.02, Math.min(0.98, (t.clientY - ref.wrap.top) / ref.wrap.height))
+    if (ref.kind === "text") {
+      setTexts((arr) => arr.map((x) => (x.id === ref.id ? { ...x, x: nx, y: ny } : x)))
+    } else {
+      setStickers((arr) => arr.map((x) => (x.id === ref.id ? { ...x, x: nx, y: ny } : x)))
+    }
   }
   function onDragEnd() { dragRef.current = null }
 
@@ -194,17 +239,25 @@ export default function StoryEditor({ src, onCancel, onSave }) {
     const W = out.width, H = out.height
     texts.forEach((t) => {
       const fs = Math.round((t.size / 100) * W * 0.9)
+      ctx.save()
+      ctx.translate(t.x * W, t.y * H)
+      ctx.rotate(((t.rotation || 0) * Math.PI) / 180)
       ctx.font = "900 " + fs + "px system-ui, -apple-system, sans-serif"
       ctx.textAlign = "center"; ctx.textBaseline = "middle"
       ctx.lineWidth = Math.max(3, fs * 0.14); ctx.strokeStyle = "rgba(0,0,0,0.75)"
-      ctx.strokeText(t.text, t.x * W, t.y * H)
+      ctx.strokeText(t.text, 0, 0)
       ctx.fillStyle = t.color
-      ctx.fillText(t.text, t.x * W, t.y * H)
+      ctx.fillText(t.text, 0, 0)
+      ctx.restore()
     })
     stickers.forEach((s) => {
       const fs = Math.round((s.size / 100) * W * 0.9)
+      ctx.save()
+      ctx.translate(s.x * W, s.y * H)
+      ctx.rotate(((s.rotation || 0) * Math.PI) / 180)
       ctx.font = fs + "px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"
-      ctx.fillText(s.emoji, s.x * W, s.y * H)
+      ctx.fillText(s.emoji, 0, 0)
+      ctx.restore()
     })
     out.toBlob((blob) => { if (blob) onSave(blob, { caption, audience }) }, "image/jpeg", 0.92)
   }
@@ -261,7 +314,7 @@ export default function StoryEditor({ src, onCancel, onSave }) {
             position: "absolute",
             left: (t.x * 100) + "%",
             top: (t.y * 100) + "%",
-            transform: "translate(-50%,-50%)",
+            transform: `translate(-50%,-50%) rotate(${t.rotation || 0}deg)`,
             color: t.color,
             fontWeight: 900,
             fontSize: t.size,
@@ -289,7 +342,7 @@ export default function StoryEditor({ src, onCancel, onSave }) {
             position: "absolute",
             left: (s.x * 100) + "%",
             top: (s.y * 100) + "%",
-            transform: "translate(-50%,-50%)",
+            transform: `translate(-50%,-50%) rotate(${s.rotation || 0}deg)`,
             fontSize: s.size,
             zIndex: 15,
             touchAction: "none",
@@ -547,7 +600,7 @@ export default function StoryEditor({ src, onCancel, onSave }) {
                   if (activeId) setStickers((arr) => arr.map((x) => (x.id === activeId ? { ...x, emoji: e } : x)))
                   else {
                     const id = crypto.randomUUID()
-                    setStickers((arr) => [...arr, { id, emoji: e, x: 0.5, y: 0.5, size: 56 }])
+                    setStickers((arr) => [...arr, { id, emoji: e, x: 0.5, y: 0.5, size: 56, rotation: 0 }])
                     setActiveId(id)
                   }
                 }}
