@@ -142,7 +142,7 @@ export default function StoryEditor({ src, onCancel, onSave }) {
     if (activeTool === "text") {
       const p = pointFromEvent(e)
       const id = crypto.randomUUID()
-      setTexts((t) => [...t, { id, text: "Tap to type", x: p.rx, y: p.ry, color: "#ffffff", size: 24, rotation: 0, fontId: "sans" }])
+      setTexts((t) => [...t, { id, text: "Tap to type", x: p.rx, y: p.ry, color: "#ffffff", size: 24, rotation: 0, fontId: "sans", style: "plain" }])
       setActiveId(id)
     } else if (activeTool === "stickers") {
       const p = pointFromEvent(e)
@@ -248,15 +248,44 @@ export default function StoryEditor({ src, onCancel, onSave }) {
     const W = out.width, H = out.height
     texts.forEach((t) => {
       const fs = Math.round((t.size / 100) * W * 0.9)
+      const fontFamily = (FONTS.find((f) => f.id === (t.fontId || "sans"))?.css || "system-ui").replace(/^[^ ]+ /, "").replace(/^[\d.]+em /, "")
       ctx.save()
       ctx.translate(t.x * W, t.y * H)
       ctx.rotate(((t.rotation || 0) * Math.PI) / 180)
-      ctx.font = fs + "px " + ((FONTS.find((f) => f.id === (t.fontId || "sans"))?.css || "system-ui").replace(/^[^ ]+ /, "").replace(/^[\d.]+em /, ""))
+      ctx.font = "900 " + fs + "px " + fontFamily
       ctx.textAlign = "center"; ctx.textBaseline = "middle"
-      ctx.lineWidth = Math.max(3, fs * 0.14); ctx.strokeStyle = "rgba(0,0,0,0.75)"
-      ctx.strokeText(t.text, 0, 0)
-      ctx.fillStyle = t.color
-      ctx.fillText(t.text, 0, 0)
+      const metrics = ctx.measureText(t.text)
+      const padX = fs * 0.4, padY = fs * 0.25
+      if (t.style === "bg") {
+        const w = metrics.width + padX * 2
+        const h = fs + padY * 2
+        ctx.fillStyle = t.color
+        const r = Math.min(h / 2, 14)
+        const x = -w / 2, y = -h / 2
+        ctx.beginPath()
+        ctx.moveTo(x + r, y)
+        ctx.lineTo(x + w - r, y)
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r)
+        ctx.lineTo(x + w, y + h - r)
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
+        ctx.lineTo(x + r, y + h)
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r)
+        ctx.lineTo(x, y + r)
+        ctx.quadraticCurveTo(x, y, x + r, y)
+        ctx.closePath()
+        ctx.fill()
+        ctx.fillStyle = "#0B0B14"
+        ctx.fillText(t.text, 0, 0)
+      } else if (t.style === "outline") {
+        ctx.lineWidth = Math.max(1, fs * 0.07)
+        ctx.strokeStyle = t.color
+        ctx.strokeText(t.text, 0, 0)
+      } else {
+        ctx.lineWidth = Math.max(3, fs * 0.14); ctx.strokeStyle = "rgba(0,0,0,0.75)"
+        ctx.strokeText(t.text, 0, 0)
+        ctx.fillStyle = t.color
+        ctx.fillText(t.text, 0, 0)
+      }
       ctx.restore()
     })
     stickers.forEach((s) => {
@@ -319,23 +348,36 @@ export default function StoryEditor({ src, onCancel, onSave }) {
           onMouseDown={(e) => startDrag("text", t.id, e)}
           onTouchStart={(e) => startDrag("text", t.id, e)}
           onClick={(e) => { e.stopPropagation(); setActiveId(t.id) }}
-          style={{
-            position: "absolute",
-            left: (t.x * 100) + "%",
-            top: (t.y * 100) + "%",
-            transform: `translate(-50%,-50%) rotate(${t.rotation || 0}deg)`,
-            color: t.color,
-            fontWeight: 900,
-            fontSize: t.size,
-            fontFamily: (FONTS.find((f) => f.id === (t.fontId || "sans"))?.css || "").replace(/^[^ ]+ /, "").replace(/^[\d.]+em /, ""),
-            textShadow: "0 2px 12px rgba(0,0,0,0.85)",
-            WebkitTextStroke: "0.5px rgba(0,0,0,0.5)",
-            whiteSpace: "nowrap",
-            zIndex: 15,
-            touchAction: "none",
-            border: activeId === t.id && activeTool === "text" ? "1px dashed rgba(255,255,255,0.55)" : "none",
-            padding: 4,
-          }}
+          style={(() => {
+            const fontFamily = (FONTS.find((f) => f.id === (t.fontId || "sans"))?.css || "").replace(/^[^ ]+ /, "").replace(/^[\d.]+em /, "")
+            const base = {
+              position: "absolute",
+              left: (t.x * 100) + "%",
+              top: (t.y * 100) + "%",
+              transform: `translate(-50%,-50%) rotate(${t.rotation || 0}deg)`,
+              color: t.color,
+              fontWeight: 900,
+              fontSize: t.size,
+              fontFamily,
+              whiteSpace: "nowrap",
+              zIndex: 15,
+              touchAction: "none",
+              border: activeId === t.id && activeTool === "text" ? "1px dashed rgba(255,255,255,0.55)" : "none",
+              padding: 4,
+            }
+            if (t.style === "bg") {
+              return { ...base, background: t.color, color: "#0B0B14", padding: "6px 14px", borderRadius: 10 }
+            }
+            if (t.style === "outline") {
+              return {
+                ...base,
+                color: "transparent",
+                WebkitTextStroke: `${Math.max(1, t.size / 14)}px ${t.color}`,
+                textShadow: "none",
+              }
+            }
+            return { ...base, textShadow: "0 2px 12px rgba(0,0,0,0.85)", WebkitTextStroke: "0.5px rgba(0,0,0,0.5)" }
+          })()}
         >
           {t.text}
         </div>
@@ -566,6 +608,28 @@ export default function StoryEditor({ src, onCancel, onSave }) {
             autoFocus
             className="h-11 rounded-full bg-white/[0.08] px-4 text-white text-[14px] placeholder:text-white/50 focus:outline-none"
           />
+          <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+            {[
+              { id: "plain",   label: "Plain" },
+              { id: "bg",      label: "Background" },
+              { id: "outline", label: "Outline" },
+            ].map((st) => {
+              const active = (texts.find((x) => x.id === activeId)?.style || "plain") === st.id
+              return (
+                <button
+                  key={st.id}
+                  onClick={() => setTexts((arr) => arr.map((x) => (x.id === activeId ? { ...x, style: st.id } : x)))}
+                  className="shrink-0 h-9 px-3 rounded-full text-white text-[12px] border"
+                  style={{
+                    borderColor: active ? "#fff" : "rgba(255,255,255,0.15)",
+                    background: active ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.06)",
+                  }}
+                >
+                  {st.label}
+                </button>
+              )
+            })}
+          </div>
           <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
             {FONTS.map((f) => {
               const active = (texts.find((x) => x.id === activeId)?.fontId || "sans") === f.id
