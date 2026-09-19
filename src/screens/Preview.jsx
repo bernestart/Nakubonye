@@ -15,6 +15,8 @@ export default function Preview() {
   const { profile, session } = useAuth()
   const [photos, setPhotos] = useState([])
   const [interests, setInterests] = useState([])
+  const [reels, setReels] = useState([])
+  const [playingReel, setPlayingReel] = useState(null)
   const [prompts, setPrompts] = useState([])
   const [loading, setLoading] = useState(true)
   const [activePhoto, setActivePhoto] = useState(0)
@@ -55,6 +57,15 @@ export default function Preview() {
     } else {
       setInterests([])
     }
+
+    const { data: reelRows } = await supabase
+      .from("reels")
+      .select("id, video_url, thumbnail_url, caption, created_at")
+      .eq("user_id", myId)
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .limit(30)
+    setReels(reelRows || [])
 
     setLoading(false)
   }, [myId])
@@ -247,6 +258,36 @@ export default function Preview() {
               </div>
             </div>
 
+            {/* Reels grid */}
+            {reels.length > 0 && (
+              <div className="px-5 mt-6">
+                <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-3">
+                  Reels · {reels.length}
+                </p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {reels.map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => setPlayingReel(r)}
+                      className="aspect-[9/16] rounded-xl overflow-hidden bg-black relative"
+                      aria-label="Play reel"
+                    >
+                      <video
+                        src={r.video_url}
+                        muted
+                        playsInline
+                        preload="metadata"
+                        className="w-full h-full object-cover"
+                      />
+                      <span className="absolute bottom-1 left-1 text-white text-[10px] font-bold bg-black/60 rounded px-1.5 py-0.5">
+                        ▶
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Share */}
             <div className="px-5 mt-6">
               <button
@@ -273,6 +314,30 @@ export default function Preview() {
       </div>
 
       <div style={{ height: 72, flexShrink: 0 }} />
+      {playingReel && (
+        <div
+          className="fixed inset-0 z-[500] bg-black flex items-center justify-center"
+          onClick={() => setPlayingReel(null)}
+        >
+          <button
+            className="absolute top-4 right-4 w-10 h-10 rounded-full grid place-items-center bg-white/15 text-white z-10 text-[18px]"
+            onClick={() => setPlayingReel(null)}
+            aria-label="Close"
+          >
+            ✕
+          </button>
+          <video
+            src={playingReel.video_url}
+            autoPlay
+            loop
+            playsInline
+            controls
+            className="w-full h-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+
       <BottomNav />
     </div>
   )
