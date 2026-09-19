@@ -18,6 +18,10 @@ export default function ReelTrim({ src, onCancel, onDone }) {
   const [mirrored, setMirrored] = useState(false)
   const [aspectRatio, setAspectRatio] = useState("9:16")
   const [cropSheetOpen, setCropSheetOpen] = useState(false)
+  const [textOverlays, setTextOverlays] = useState([])
+  const [textSheetOpen, setTextSheetOpen] = useState(false)
+  const [editingTextId, setEditingTextId] = useState(null)
+  const [textDraft, setTextDraft] = useState({ text: "", color: "#ffffff", size: 24 })
 
   const effectiveEnd = trimEnd ?? duration
 
@@ -125,6 +129,14 @@ export default function ReelTrim({ src, onCancel, onDone }) {
       } else if (dragging === "playhead") {
         if (videoRef.current) videoRef.current.currentTime = time
         setCurrent(time)
+      } else if (dragging.startsWith("text-")) {
+        const id = dragging.slice(5)
+        const videoRect = videoRef.current?.getBoundingClientRect()
+        if (!videoRect) return
+        const t = e.touches?.[0] || e
+        const nx = Math.max(0, Math.min(1, (t.clientX - videoRect.left) / videoRect.width))
+        const ny = Math.max(0, Math.min(1, (t.clientY - videoRect.top) / videoRect.height))
+        setTextOverlays((arr) => arr.map((x) => (x.id === id ? { ...x, x: nx, y: ny } : x)))
       }
     }
     const up = () => setDragging(null)
@@ -175,7 +187,7 @@ export default function ReelTrim({ src, onCancel, onDone }) {
           Cancel
         </button>
         <button
-          onClick={() => onDone({ trimStart, trimEnd: trimEnd ?? duration, mirrored, aspectRatio })}
+          onClick={() => onDone({ trimStart, trimEnd: trimEnd ?? duration, mirrored, aspectRatio, textOverlays })}
           className="h-10 px-4 rounded-xl text-white font-bold text-[14px]"
           style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
         >
@@ -185,20 +197,49 @@ export default function ReelTrim({ src, onCancel, onDone }) {
 
       {/* Video preview */}
       <div className="flex-1 grid place-items-center overflow-hidden bg-black px-4">
-        <video
-          ref={videoRef}
-          src={src}
-          muted={false}
-          playsInline
-          className="max-h-full object-contain"
-          style={{
-            maxHeight: "55dvh",
-            transform: mirrored ? "scaleX(-1)" : "none",
-            aspectRatio: aspectRatio.replace(":", "/"),
-            width: "auto",
-            maxWidth: "100%",
-          }}
-        />
+        <div style={{ position: "relative", display: "inline-block", maxHeight: "55dvh" }}>
+          <video
+            ref={videoRef}
+            src={src}
+            muted={false}
+            playsInline
+            className="max-h-full object-contain"
+            style={{
+              maxHeight: "55dvh",
+              transform: mirrored ? "scaleX(-1)" : "none",
+              aspectRatio: aspectRatio.replace(":", "/"),
+              width: "auto",
+              maxWidth: "100%",
+              display: "block",
+            }}
+          />
+          {textOverlays.map((t) => (
+            <button
+              key={t.id}
+              onMouseDown={(e) => { e.preventDefault(); setDragging("text-" + t.id) }}
+              onTouchStart={(e) => { e.preventDefault(); setDragging("text-" + t.id) }}
+              onClick={() => { setEditingTextId(t.id); setTextDraft({ text: t.text, color: t.color, size: t.size }); setTextSheetOpen(true) }}
+              style={{
+                position: "absolute",
+                left: t.x * 100 + "%",
+                top: t.y * 100 + "%",
+                transform: "translate(-50%, -50%)",
+                color: t.color,
+                fontWeight: 900,
+                fontSize: t.size,
+                textShadow: "0 2px 12px rgba(0,0,0,0.85)",
+                WebkitTextStroke: "0.5px rgba(0,0,0,0.5)",
+                whiteSpace: "nowrap",
+                zIndex: 5,
+                padding: 4,
+                border: editingTextId === t.id ? "1px dashed rgba(255,255,255,0.7)" : "none",
+                touchAction: "none",
+              }}
+            >
+              {t.text || "Tap to type"}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Controls row: play + undo/redo + time */}
@@ -292,7 +333,14 @@ export default function ReelTrim({ src, onCancel, onDone }) {
         <button className="w-full h-10 rounded-xl border border-white/25 border-dashed text-white/85 font-medium text-[13.5px] inline-flex items-center justify-center gap-2">
           <Plus size={16} /> Audio
         </button>
-        <button className="w-full h-10 rounded-xl border border-white/25 border-dashed text-white/85 font-medium text-[13.5px] inline-flex items-center justify-center gap-2">
+        <button
+          onClick={() => {
+            setEditingTextId(null)
+            setTextDraft({ text: "", color: "#ffffff", size: 24 })
+            setTextSheetOpen(true)
+          }}
+          className="w-full h-10 rounded-xl border border-white/25 border-dashed text-white/85 font-medium text-[13.5px] inline-flex items-center justify-center gap-2"
+        >
           <Plus size={16} /> Text
         </button>
       </div>
@@ -318,6 +366,87 @@ export default function ReelTrim({ src, onCancel, onDone }) {
           </button>
         ))}
       </div>
+
+      {/* Text overlay sheet */}
+      {textSheetOpen && (
+        <div className="fixed inset-0 z-[240] flex items-end" onClick={() => setTextSheetOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-3"
+            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+          >
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto" />
+            <h3 className="text-cream font-extrabold text-[16px]">
+              {editingTextId ? "Edit text" : "Add text"}
+            </h3>
+            <input
+              value={textDraft.text}
+              onChange={(e) => setTextDraft((d) => ({ ...d, text: e.target.value.slice(0, 100) }))}
+              placeholder="Type something…"
+              autoFocus
+              className="h-12 rounded-full bg-white/[0.06] border border-white/10 px-5 text-cream text-[15px] placeholder:text-subtle focus:outline-none focus:border-purple-500"
+            />
+            <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+              {["#ffffff", "#000000", "#EC4899", "#A855F7", "#F59E0B", "#22C55E", "#3B82F6", "#EF4444"].map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setTextDraft((d) => ({ ...d, color: c }))}
+                  className="shrink-0 w-8 h-8 rounded-full border-2"
+                  style={{ background: c, borderColor: textDraft.color === c ? "#fff" : "rgba(255,255,255,0.15)" }}
+                />
+              ))}
+            </div>
+            <div className="flex gap-2">
+              {[16, 24, 36, 52].map((sz) => (
+                <button
+                  key={sz}
+                  onClick={() => setTextDraft((d) => ({ ...d, size: sz }))}
+                  className="flex-1 h-9 rounded-full text-white text-[12px] font-bold border"
+                  style={{
+                    borderColor: textDraft.size === sz ? "#fff" : "rgba(255,255,255,0.15)",
+                    background: textDraft.size === sz ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.06)",
+                  }}
+                >
+                  {sz}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2 mt-1">
+              {editingTextId && (
+                <button
+                  onClick={() => {
+                    setTextOverlays((arr) => arr.filter((x) => x.id !== editingTextId))
+                    setTextSheetOpen(false)
+                    setEditingTextId(null)
+                  }}
+                  className="flex-1 h-11 rounded-full bg-red-500/15 border border-red-500/40 text-red-300 font-bold text-[13.5px]"
+                >
+                  Delete
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  const clean = textDraft.text.trim()
+                  if (!clean) return
+                  if (editingTextId) {
+                    setTextOverlays((arr) => arr.map((x) => x.id === editingTextId ? { ...x, ...textDraft, text: clean } : x))
+                  } else {
+                    const id = crypto.randomUUID()
+                    setTextOverlays((arr) => [...arr, { id, ...textDraft, text: clean, x: 0.5, y: 0.5 }])
+                  }
+                  setTextSheetOpen(false)
+                  setEditingTextId(null)
+                }}
+                className="flex-1 h-11 rounded-full text-white font-bold text-[13.5px]"
+                style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
+              >
+                {editingTextId ? "Update" : "Add"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Crop ratio sheet */}
       {cropSheetOpen && (

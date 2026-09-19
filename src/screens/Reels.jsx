@@ -34,7 +34,7 @@ export default function Reels() {
     setLoading(true)
     const { data: rows } = await supabase
       .from("reels")
-      .select("id, user_id, video_url, thumbnail_url, caption, duration_sec, trim_start, trim_end, mirrored, aspect_ratio, created_at")
+      .select("id, user_id, video_url, thumbnail_url, caption, duration_sec, trim_start, trim_end, mirrored, aspect_ratio, text_overlays, created_at")
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .limit(50)
@@ -228,6 +228,30 @@ export default function Reels() {
                   className="w-full h-full object-cover"
                   style={{ transform: reel.mirrored ? "scaleX(-1)" : "none" }}
                 />
+
+                {/* Text overlays baked on top */}
+                {Array.isArray(reel.text_overlays) && reel.text_overlays.map((t) => (
+                  <div
+                    key={t.id}
+                    style={{
+                      position: "absolute",
+                      left: t.x * 100 + "%",
+                      top: t.y * 100 + "%",
+                      transform: "translate(-50%, -50%)",
+                      color: t.color || "#ffffff",
+                      fontWeight: 900,
+                      fontSize: t.size || 24,
+                      textShadow: "0 2px 12px rgba(0,0,0,0.9)",
+                      WebkitTextStroke: "0.5px rgba(0,0,0,0.5)",
+                      whiteSpace: "nowrap",
+                      zIndex: 15,
+                      pointerEvents: "none",
+                      maxWidth: "90%",
+                    }}
+                  >
+                    {t.text}
+                  </div>
+                ))}
 
                 {/* Dark gradient bottom for readability */}
                 <div className="absolute inset-x-0 bottom-0 pointer-events-none"
