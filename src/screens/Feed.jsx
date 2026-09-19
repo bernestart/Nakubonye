@@ -115,6 +115,12 @@ export default function Feed() {
           >
             Stories
           </button>
+          <button
+            onClick={() => { tap("light"); nav("/reels") }}
+            className="h-9 px-3 rounded-full text-cream font-bold text-[13px] bg-white/[0.06] border border-white/12"
+          >
+            Reels
+          </button>
           <NotificationBell />
         </div>
       </header>

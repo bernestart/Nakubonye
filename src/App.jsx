@@ -26,6 +26,7 @@ import Privacy from './screens/Privacy'
 import Verify from './screens/Verify'
 import Roadmap from './screens/Roadmap'
 import Feed from './screens/Feed'
+import Reels from './screens/Reels'
 import Boost from './screens/Boost'
 import AdminVerifications from './screens/AdminVerifications'
 import Likes from './screens/Likes'
@@ -161,6 +162,7 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/onboarding" element={<Guard><Onboarding /></Guard>} />
         <Route path="/feed" element={<Guard><Feed /></Guard>} />
+        <Route path="/reels" element={<Guard><Reels /></Guard>} />
         <Route path="/roadmap" element={<Roadmap />} />
         <Route path="/discover" element={<Guard><Discover /></Guard>} />
         <Route path="/stories" element={<Guard><Stories /></Guard>} />
