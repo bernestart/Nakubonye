@@ -330,7 +330,7 @@ export default function ReelComposer({ onClose, onDone }) {
             <div className="grid grid-cols-3 gap-2">
               {[
                 { id: "public",  label: "Public",  icon: "🌍" },
-                { id: "friends", label: "Friends", icon: "👥" },
+                { id: "matches", label: "Matches", icon: "💜" },
                 { id: "private", label: "Only me", icon: "🔒" },
               ].map((a) => (
                 <button

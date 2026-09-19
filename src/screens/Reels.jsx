@@ -46,7 +46,7 @@ export default function Reels() {
       if (r.user_id === myId) return true
       const aud = r.audience || "public"
       if (aud === "public") return true
-      if (aud === "friends") return matchSet.has(r.user_id)
+      if (aud === "matches") return matchSet.has(r.user_id)
       if (aud === "private") return false
       return true
     })
