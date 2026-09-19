@@ -31,6 +31,11 @@ export default function ReelComposer({ onClose, onDone }) {
   const [mirroredState, setMirroredState] = useState(false)
   const [textOverlaysState, setTextOverlaysState] = useState([])
   const [clipsState, setClipsState] = useState([])
+  const [audienceState, setAudienceState] = useState("public")
+  const [allowComments, setAllowComments] = useState(true)
+  const [allowRemix, setAllowRemix] = useState(true)
+  const [locationState, setLocationState] = useState("")
+  const [coverTime, setCoverTime] = useState(0)
   const [aspectRatioState, setAspectRatioState] = useState("9:16")
   const [trimEnd, setTrimEnd] = useState(null)
 
@@ -195,6 +200,11 @@ export default function ReelComposer({ onClose, onDone }) {
       mirrored: mirroredState,
       aspect_ratio: aspectRatioState,
       text_overlays: textOverlaysState,
+      audience: audienceState,
+      allow_comments: allowComments,
+      allow_remix: allowRemix,
+      location: locationState.trim() || null,
+      cover_frame_time: coverTime || 0,
     })
     if (insErr) { setError(insErr.message); setBusy(false); return }
     setProgress(100); setBusy(false); setStage("capture"); onDone?.()
@@ -252,29 +262,141 @@ export default function ReelComposer({ onClose, onDone }) {
   }
 
   if (preview && file) {
+    const coverThumb = (() => {
+      const list = clipsState.length > 0 ? clipsState : [{ url: preview, trimStart: 0, trimEnd: duration || 0 }]
+      return list[0].url
+    })()
+
     return (
-      <div className="fixed inset-0 z-[220] bg-black flex flex-col">
-        <header className="flex items-center justify-between px-3 py-3 z-10">
-          <button onClick={onClose} className="w-10 h-10 rounded-full grid place-items-center bg-black/50 text-white" aria-label="Close"><X size={22} /></button>
+      <div className="fixed inset-0 z-[220] bg-black flex flex-col" style={{ height: "100dvh" }}>
+        {/* Header */}
+        <header className="flex items-center justify-between px-3 py-3 z-10 shrink-0">
+          <button onClick={() => setStage("decorate")} className="h-10 px-3 rounded-xl bg-white/10 text-white font-semibold text-[13.5px] inline-flex items-center gap-1">
+            ← Back
+          </button>
           <h2 className="text-white font-bold text-[16px]">New reel</h2>
-          <button onClick={submit} disabled={busy} className="h-10 px-4 rounded-full text-white font-bold text-[13.5px] inline-flex items-center gap-2 disabled:opacity-40" style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}>
+          <button
+            onClick={submit}
+            disabled={busy}
+            className="h-10 px-4 rounded-full text-white font-bold text-[13.5px] inline-flex items-center gap-2 disabled:opacity-40"
+            style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
+          >
             <Send size={14} /> {busy ? "Posting…" : "Post"}
           </button>
         </header>
-        <div className="flex-1 grid place-items-center bg-black overflow-hidden">
-          <video src={preview} controls playsInline onLoadedMetadata={onLoadedMeta} className="max-w-full max-h-full object-contain" />
-        </div>
-        <div className="p-3 flex flex-col gap-2" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
-          <input value={caption} onChange={(e) => setCaption(e.target.value.slice(0, 200))} placeholder="Add a caption…" className="h-12 rounded-full bg-white/10 px-5 text-white text-[14.5px] placeholder:text-white/50 focus:outline-none" />
-          {error && <p className="text-red-400 text-[12.5px] text-center">{error}</p>}
+
+        <div className="flex-1 overflow-y-auto pb-4">
+          {/* Preview + caption block */}
+          <div className="px-3 flex gap-3">
+            <div className="relative shrink-0 rounded-xl overflow-hidden bg-black" style={{ width: 96, height: 96 }}>
+              <video src={preview} muted playsInline className="w-full h-full object-cover" />
+              <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[10px] text-center py-0.5 font-bold">
+                Cover
+              </div>
+            </div>
+            <textarea
+              value={caption}
+              onChange={(e) => setCaption(e.target.value.slice(0, 500))}
+              placeholder="Write a caption…"
+              rows={4}
+              className="flex-1 rounded-xl bg-white/[0.06] border border-white/10 px-3 py-2.5 text-white text-[14px] placeholder:text-white/45 focus:outline-none focus:border-purple-500 resize-none"
+            />
+          </div>
+
+          {/* Cover frame picker */}
+          <div className="px-3 mt-3">
+            <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">
+              Cover frame
+            </p>
+            <input
+              type="range"
+              min={0}
+              max={Math.max(0, Math.floor(duration || 0))}
+              step={0.1}
+              value={coverTime}
+              onChange={(e) => setCoverTime(parseFloat(e.target.value))}
+              className="w-full"
+            />
+            <p className="text-white/50 text-[11.5px] mt-1">
+              Thumbnail at {coverTime.toFixed(1)}s
+            </p>
+          </div>
+
+          {/* Audience */}
+          <div className="px-3 mt-4">
+            <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">
+              Audience
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { id: "public",  label: "Public",  icon: "🌍" },
+                { id: "friends", label: "Friends", icon: "👥" },
+                { id: "private", label: "Only me", icon: "🔒" },
+              ].map((a) => (
+                <button
+                  key={a.id}
+                  onClick={() => setAudienceState(a.id)}
+                  className="h-12 rounded-xl font-bold text-[13px] flex flex-col items-center justify-center gap-0.5"
+                  style={{
+                    background: audienceState === a.id
+                      ? "linear-gradient(135deg, rgba(236,72,153,0.22) 0%, rgba(168,85,247,0.22) 100%)"
+                      : "rgba(255,255,255,0.04)",
+                    border: audienceState === a.id ? "1px solid rgba(236,72,153,0.6)" : "1px solid rgba(255,255,255,0.08)",
+                    color: audienceState === a.id ? "#fff" : "#888",
+                  }}
+                >
+                  <span className="text-base leading-none">{a.icon}</span>
+                  <span>{a.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Toggles */}
+          <div className="px-3 mt-4 flex flex-col gap-2">
+            <ToggleRow
+              label="Allow comments"
+              sub="People can comment on this reel"
+              on={allowComments}
+              onToggle={() => setAllowComments((v) => !v)}
+            />
+            <ToggleRow
+              label="Allow remix"
+              sub="Others can use this reel in theirs"
+              on={allowRemix}
+              onToggle={() => setAllowRemix((v) => !v)}
+            />
+          </div>
+
+          {/* Location */}
+          <div className="px-3 mt-4">
+            <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">
+              Location
+            </p>
+            <input
+              value={locationState}
+              onChange={(e) => setLocationState(e.target.value.slice(0, 80))}
+              placeholder="Add a location (optional)"
+              className="w-full h-11 rounded-xl bg-white/[0.06] border border-white/10 px-4 text-white text-[13.5px] placeholder:text-white/45 focus:outline-none focus:border-purple-500"
+            />
+          </div>
+
+          {error && <p className="text-red-400 text-[12.5px] text-center px-3 mt-3">{error}</p>}
+
           {busy && progress > 0 && (
-            <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div className="mx-3 mt-3 h-1.5 rounded-full bg-white/10 overflow-hidden">
               <div className="h-full bg-purple-500" style={{ width: progress + "%" }} />
             </div>
           )}
-          <button onClick={retake} className="h-11 rounded-full bg-white/10 text-white font-semibold text-[13.5px] inline-flex items-center justify-center gap-2">
-            <RotateCcw size={15} /> Retake / change
-          </button>
+
+          <div className="px-3 mt-4">
+            <button
+              onClick={retake}
+              className="w-full h-11 rounded-full bg-white/10 text-white font-semibold text-[13.5px] inline-flex items-center justify-center gap-2"
+            >
+              <RotateCcw size={15} /> Retake / change
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -328,5 +450,28 @@ export default function ReelComposer({ onClose, onDone }) {
         </div>
       )}
     </div>
+  )
+}
+
+function ToggleRow({ label, sub, on, onToggle }) {
+  return (
+    <button
+      onClick={onToggle}
+      className="w-full flex items-center justify-between p-3 rounded-xl bg-white/[0.04] border border-white/8 text-left"
+    >
+      <div className="flex-1 min-w-0 pr-3">
+        <p className="text-cream font-semibold text-[13.5px]">{label}</p>
+        <p className="text-muted text-[11.5px] truncate">{sub}</p>
+      </div>
+      <span
+        className="w-11 h-6 rounded-full relative shrink-0"
+        style={{ background: on ? "#EC4899" : "rgba(255,255,255,0.15)", transition: "background 200ms" }}
+      >
+        <span
+          className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow"
+          style={{ left: on ? "calc(100% - 22px)" : 2, transition: "left 200ms" }}
+        />
+      </span>
+    </button>
   )
 }
