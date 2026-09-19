@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Heart, MessageCircle, Share2, Plus, Volume2, VolumeX, ArrowLeft } from "lucide-react"
+import { Heart, MessageCircle, Share2, Plus, Volume2, VolumeX, ArrowLeft, MoreVertical } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 import ReelComposer from "../components/ReelComposer"
 import ReelComments from "../components/ReelComments"
+import ReelActionsSheet from "../components/ReelActionsSheet"
 
 export default function Reels() {
   const nav = useNavigate()
@@ -23,6 +24,8 @@ export default function Reels() {
   const [currentIdx, setCurrentIdx] = useState(0)
   const [commentCounts, setCommentCounts] = useState(new Map())
   const [commentsFor, setCommentsFor] = useState(null)
+  const [actionsFor, setActionsFor] = useState(null)
+  const [hiddenIds, setHiddenIds] = useState(new Set())
   const containerRef = useRef(null)
   const videoRefs = useRef([])
 
@@ -36,8 +39,13 @@ export default function Reels() {
       .order("created_at", { ascending: false })
       .limit(50)
 
-    const list = rows || []
+    const list = (rows || []).filter((r) => !hiddenIds.has(r.id))
     setReels(list)
+
+    // Load hidden reel ids for this user
+    const { data: hideRows } = await supabase.from("reel_hides").select("reel_id").eq("user_id", myId)
+    const hidden = new Set((hideRows || []).map((h) => h.reel_id))
+    setHiddenIds(hidden)
 
     if (list.length > 0) {
       const ids = [...new Set(list.map((r) => r.user_id))]
@@ -177,7 +185,7 @@ export default function Reels() {
           className="absolute inset-0 overflow-y-scroll"
           style={{ scrollSnapType: "y mandatory", scrollbarWidth: "none" }}
         >
-          {reels.map((reel, idx) => {
+          {reels.filter((r) => !hiddenIds.has(r.id)).map((reel, idx) => {
             const prof = profiles.get(reel.user_id)
             const photo = photos.get(reel.user_id)
             const name = prof?.display_name || prof?.username || "Someone"
@@ -262,6 +270,19 @@ export default function Reels() {
                     </span>
                     <span className="text-white text-[11px] font-bold">Share</span>
                   </button>
+
+                  <button
+                    onClick={() => { tap("light"); setActionsFor(reel) }}
+                    className="flex flex-col items-center gap-1"
+                    aria-label="More"
+                  >
+                    <span
+                      className="w-12 h-12 rounded-full grid place-items-center"
+                      style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(10px)" }}
+                    >
+                      <MoreVertical size={22} strokeWidth={2.4} color="#fff" />
+                    </span>
+                  </button>
                 </div>
 
                 {/* Bottom info: author + caption */}
@@ -319,6 +340,20 @@ export default function Reels() {
         <ReelComposer
           onClose={() => setComposerOpen(false)}
           onDone={() => { setComposerOpen(false); load() }}
+        />
+      )}
+
+      {actionsFor && (
+        <ReelActionsSheet
+          reel={actionsFor}
+          onClose={() => setActionsFor(null)}
+          onHidden={(id) => {
+            setHiddenIds((prev) => new Set([...prev, id]))
+            // If we hid the current reel, jump to next
+            const visible = reels.filter((r) => !hiddenIds.has(r.id) && r.id !== id)
+            const nextIdx = Math.min(currentIdx, Math.max(0, visible.length - 1))
+            setCurrentIdx(nextIdx)
+          }}
         />
       )}
 
