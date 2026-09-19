@@ -1,20 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Pause, Play, Undo2, Redo2, Plus, ImagePlus, Crop, FlipHorizontal, Scissors, Type, Music } from "lucide-react"
+import { Pause, Play, Undo2, Redo2, Plus, ImagePlus, Crop, FlipHorizontal, Scissors, Type, X, Check } from "lucide-react"
 
-const FILMSTRIP_FRAMES = 8
+const FILMSTRIP_PER_CLIP = 6
 
-export default function ReelTrim({ src, onCancel, onDone }) {
+export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
   const videoRef = useRef(null)
   const trackRef = useRef(null)
-  const [duration, setDuration] = useState(0)
+  const fileRef = useRef(null)
+  const [clips, setClips] = useState([])
+  const [activeClipIdx, setActiveClipIdx] = useState(0)
+  const [durations, setDurations] = useState({}) // clipId -> duration
   const [current, setCurrent] = useState(0)
-  const [trimStart, setTrimStart] = useState(0)
-  const [trimEnd, setTrimEnd] = useState(null)
   const [playing, setPlaying] = useState(false)
-  const [frames, setFrames] = useState([])
+  const [frames, setFrames] = useState({}) // clipId -> [dataURLs]
   const [history, setHistory] = useState([])
   const [future, setFuture] = useState([])
-  const [dragging, setDragging] = useState(null) // "start" | "end" | "playhead"
+  const [dragging, setDragging] = useState(null)
   const [mirrored, setMirrored] = useState(false)
   const [aspectRatio, setAspectRatio] = useState("9:16")
   const [cropSheetOpen, setCropSheetOpen] = useState(false)
@@ -22,77 +23,119 @@ export default function ReelTrim({ src, onCancel, onDone }) {
   const [textSheetOpen, setTextSheetOpen] = useState(false)
   const [editingTextId, setEditingTextId] = useState(null)
   const [textDraft, setTextDraft] = useState({ text: "", color: "#ffffff", size: 24 })
+  const [splitFlash, setSplitFlash] = useState(false)
 
-  const effectiveEnd = trimEnd ?? duration
+  const activeClip = clips[activeClipIdx]
+  const activeDuration = activeClip ? (durations[activeClip.id] || 0) : 0
+  const activeTrimStart = activeClip?.trimStart ?? 0
+  const activeTrimEnd = activeClip?.trimEnd ?? activeDuration
 
-  // Load metadata + extract filmstrip frames
+  // ===== INITIALISE first clip from src =====
+  useEffect(() => {
+    if (!src) return
+    const id = "clip-" + crypto.randomUUID().slice(0, 8)
+    setClips([{
+      id,
+      url: src,
+      file: initialFile || null,
+      trimStart: 0,
+      trimEnd: null,
+    }])
+    setActiveClipIdx(0)
+  }, [src])
+
+  // ===== LOAD DURATION for active clip =====
   useEffect(() => {
     const v = videoRef.current
-    if (!v) return
-    const onLoaded = async () => {
+    if (!v || !activeClip) return
+    const onLoaded = () => {
       const d = v.duration || 0
-      setDuration(d)
-      setTrimEnd(d)
-
-      // Extract filmstrip frames
-      const capture = v.cloneNode(true)
-      capture.muted = true
-      capture.src = v.src
-      capture.crossOrigin = "anonymous"
-      const results = []
-      for (let i = 0; i < FILMSTRIP_FRAMES; i++) {
-        const t = (d / (FILMSTRIP_FRAMES - 1)) * i
-        const frame = await new Promise((resolve) => {
-          const onSeek = () => {
-            try {
-              const c = document.createElement("canvas")
-              const w = 60
-              const h = Math.round(w * (capture.videoHeight / capture.videoWidth) || w * 1.6)
-              c.width = w; c.height = h
-              c.getContext("2d").drawImage(capture, 0, 0, w, h)
-              capture.removeEventListener("seeked", onSeek)
-              resolve(c.toDataURL("image/jpeg", 0.6))
-            } catch { resolve(null) }
-          }
-          capture.addEventListener("seeked", onSeek)
-          try { capture.currentTime = t } catch { resolve(null) }
-        })
-        results.push(frame)
+      setDurations((prev) => ({ ...prev, [activeClip.id]: d }))
+      if (activeClip.trimEnd == null) {
+        setClips((arr) => arr.map((c) => c.id === activeClip.id ? { ...c, trimEnd: d } : c))
       }
-      setFrames(results)
+      // Extract filmstrip for this clip
+      if (!frames[activeClip.id]) {
+        extractFilmstrip(activeClip)
+      }
     }
     v.addEventListener("loadedmetadata", onLoaded)
     return () => v.removeEventListener("loadedmetadata", onLoaded)
-  }, [src])
+  }, [activeClip?.id])
 
-  // Playhead follows video current time
-  useEffect(() => {
+  async function extractFilmstrip(clip) {
     const v = videoRef.current
     if (!v) return
+    const capture = document.createElement("video")
+    capture.src = clip.url
+    capture.muted = true
+    capture.crossOrigin = "anonymous"
+    await new Promise((res) => { capture.onloadedmetadata = res; setTimeout(res, 2000) })
+    const total = capture.duration || 0
+    const results = []
+    for (let i = 0; i < FILMSTRIP_PER_CLIP; i++) {
+      const t = (total / (FILMSTRIP_PER_CLIP - 1)) * i
+      const frame = await new Promise((resolve) => {
+        const onSeek = () => {
+          try {
+            const c = document.createElement("canvas")
+            const w = 60
+            const h = Math.round(w * (capture.videoHeight / capture.videoWidth) || w * 1.6)
+            c.width = w; c.height = h
+            c.getContext("2d").drawImage(capture, 0, 0, w, h)
+            capture.removeEventListener("seeked", onSeek)
+            resolve(c.toDataURL("image/jpeg", 0.6))
+          } catch { resolve(null) }
+        }
+        capture.addEventListener("seeked", onSeek)
+        try { capture.currentTime = t } catch { resolve(null) }
+      })
+      results.push(frame)
+    }
+    setFrames((prev) => ({ ...prev, [clip.id]: results }))
+  }
+
+  // ===== PLAYBACK: follow clip's time =====
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v || !activeClip) return
     const onTime = () => {
       setCurrent(v.currentTime)
-      if (trimEnd != null && v.currentTime >= trimEnd) {
-        v.pause()
-        v.currentTime = trimStart
-        setPlaying(false)
+      if (v.currentTime >= activeTrimEnd) {
+        // Advance to next clip or loop
+        if (activeClipIdx < clips.length - 1) {
+          const nextIdx = activeClipIdx + 1
+          setActiveClipIdx(nextIdx)
+          const nextClip = clips[nextIdx]
+          setTimeout(() => {
+            if (videoRef.current) {
+              videoRef.current.src = nextClip.url
+              videoRef.current.currentTime = nextClip.trimStart || 0
+              videoRef.current.play().catch(() => {})
+            }
+          }, 30)
+        } else {
+          // Loop to first
+          setActiveClipIdx(0)
+          setTimeout(() => {
+            if (videoRef.current) {
+              videoRef.current.src = clips[0].url
+              videoRef.current.currentTime = clips[0].trimStart || 0
+              videoRef.current.play().catch(() => {})
+            }
+          }, 30)
+        }
       }
     }
     v.addEventListener("timeupdate", onTime)
     return () => v.removeEventListener("timeupdate", onTime)
-  }, [trimStart, trimEnd])
+  }, [activeClip, activeTrimEnd, activeClipIdx, clips])
 
-  // Auto-pause at end
-  useEffect(() => {
-    const v = videoRef.current
-    if (!v) return
-    if (trimStart != null && v.currentTime < trimStart) v.currentTime = trimStart
-  }, [trimStart])
-
-  const togglePlay = () => {
+  function togglePlay() {
     const v = videoRef.current
     if (!v) return
     if (v.paused) {
-      if (v.currentTime < trimStart || v.currentTime >= effectiveEnd) v.currentTime = trimStart
+      if (v.currentTime < activeTrimStart || v.currentTime >= activeTrimEnd) v.currentTime = activeTrimStart
       v.play().catch(() => {})
       setPlaying(true)
     } else {
@@ -101,31 +144,54 @@ export default function ReelTrim({ src, onCancel, onDone }) {
     }
   }
 
-  // Drag handles on the yellow timeline
-  const onHandleDown = (which, e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setDragging(which)
-    // Snapshot for undo
-    setHistory((h) => [...h, { trimStart, trimEnd }])
+  // ===== UNDO / REDO =====
+  function snapshot() {
+    setHistory((h) => [...h.slice(-30), {
+      clips: clips.map((c) => ({ ...c })),
+      textOverlays: textOverlays.map((t) => ({ ...t })),
+    }])
     setFuture([])
+  }
+  function undo() {
+    if (history.length === 0) return
+    const prev = history[history.length - 1]
+    setFuture((f) => [...f, { clips: clips.map((c) => ({ ...c })), textOverlays: textOverlays.map((t) => ({ ...t })) }])
+    setHistory((h) => h.slice(0, -1))
+    setClips(prev.clips)
+    setTextOverlays(prev.textOverlays)
+  }
+  function redo() {
+    if (future.length === 0) return
+    const next = future[future.length - 1]
+    setHistory((h) => [...h, { clips: clips.map((c) => ({ ...c })), textOverlays: textOverlays.map((t) => ({ ...t })) }])
+    setFuture((f) => f.slice(0, -1))
+    setClips(next.clips)
+    setTextOverlays(next.textOverlays)
+  }
+
+  // ===== HANDLE DRAG on timeline =====
+  function onHandleDown(which, e) {
+    e.preventDefault(); e.stopPropagation()
+    if (!activeClip) return
+    setDragging(which)
+    snapshot()
   }
 
   useEffect(() => {
     if (!dragging) return
     const move = (e) => {
       const track = trackRef.current
-      if (!track) return
+      if (!track || !activeClip) return
       const rect = track.getBoundingClientRect()
       const t = e.touches?.[0] || e
       const pct = Math.max(0, Math.min(1, (t.clientX - rect.left) / rect.width))
-      const time = pct * duration
+      const time = pct * activeDuration
       if (dragging === "start") {
-        const maxStart = (trimEnd ?? duration) - 0.5
-        setTrimStart(Math.min(time, maxStart))
+        const maxStart = activeTrimEnd - 0.5
+        setClips((arr) => arr.map((c) => c.id === activeClip.id ? { ...c, trimStart: Math.min(time, maxStart) } : c))
       } else if (dragging === "end") {
-        const minEnd = trimStart + 0.5
-        setTrimEnd(Math.max(time, minEnd))
+        const minEnd = activeTrimStart + 0.5
+        setClips((arr) => arr.map((c) => c.id === activeClip.id ? { ...c, trimEnd: Math.max(time, minEnd) } : c))
       } else if (dragging === "playhead") {
         if (videoRef.current) videoRef.current.currentTime = time
         setCurrent(time)
@@ -133,7 +199,6 @@ export default function ReelTrim({ src, onCancel, onDone }) {
         const id = dragging.slice(5)
         const videoRect = videoRef.current?.getBoundingClientRect()
         if (!videoRect) return
-        const t = e.touches?.[0] || e
         const nx = Math.max(0, Math.min(1, (t.clientX - videoRect.left) / videoRect.width))
         const ny = Math.max(0, Math.min(1, (t.clientY - videoRect.top) / videoRect.height))
         setTextOverlays((arr) => arr.map((x) => (x.id === id ? { ...x, x: nx, y: ny } : x)))
@@ -150,69 +215,164 @@ export default function ReelTrim({ src, onCancel, onDone }) {
       window.removeEventListener("mouseup", up)
       window.removeEventListener("touchend", up)
     }
-  }, [dragging, duration, trimStart, trimEnd])
+  }, [dragging, activeClip, activeDuration, activeTrimStart, activeTrimEnd])
 
-  const undo = () => {
-    if (history.length === 0) return
-    const prev = history[history.length - 1]
-    setFuture((f) => [...f, { trimStart, trimEnd }])
-    setHistory((h) => h.slice(0, -1))
-    setTrimStart(prev.trimStart)
-    setTrimEnd(prev.trimEnd)
+  // ===== TOOLS =====
+
+  // Split current clip at playhead
+  function splitClip() {
+    if (!activeClip) return
+    const splitAt = videoRef.current?.currentTime || 0
+    if (splitAt <= activeTrimStart + 0.3 || splitAt >= activeTrimEnd - 0.3) return
+    snapshot()
+    const newId = "clip-" + crypto.randomUUID().slice(0, 8)
+    const before = { ...activeClip, trimEnd: splitAt }
+    const after = { ...activeClip, id: newId, trimStart: splitAt, trimEnd: activeTrimEnd, file: activeClip.file }
+    setClips((arr) => {
+      const idx = arr.findIndex((c) => c.id === activeClip.id)
+      const next = [...arr]
+      next.splice(idx, 1, before, after)
+      return next
+    })
+    setDurations((prev) => ({ ...prev, [newId]: activeDuration }))
+    // Move frames too
+    setFrames((prev) => ({ ...prev, [newId]: prev[activeClip.id] || [] }))
+    setSplitFlash(true)
+    setTimeout(() => setSplitFlash(false), 500)
   }
-  const redo = () => {
-    if (future.length === 0) return
-    const next = future[future.length - 1]
-    setHistory((h) => [...h, { trimStart, trimEnd }])
-    setFuture((f) => f.slice(0, -1))
-    setTrimStart(next.trimStart)
-    setTrimEnd(next.trimEnd)
+
+  // Replace active clip's file
+  function onReplaceFile(e) {
+    const f = e.target.files?.[0]
+    if (!f || !f.type.startsWith("video/")) return
+    snapshot()
+    const url = URL.createObjectURL(f)
+    setClips((arr) => arr.map((c) => c.id === activeClip.id ? { ...c, url, file: f, trimStart: 0, trimEnd: null } : c))
+    setDurations((prev) => ({ ...prev, [activeClip.id]: 0 }))
+    setFrames((prev) => ({ ...prev, [activeClip.id]: null }))
+    if (videoRef.current) videoRef.current.src = url
+    e.target.value = ""
   }
 
-  const playheadPct = duration > 0 ? (current / duration) * 100 : 0
-  const startPct = duration > 0 ? (trimStart / duration) * 100 : 0
-  const endPct = duration > 0 ? ((trimEnd ?? duration) / duration) * 100 : 100
+  // Add a new clip at the end
+  function onAddFile(e) {
+    const f = e.target.files?.[0]
+    if (!f || !f.type.startsWith("video/")) return
+    snapshot()
+    const id = "clip-" + crypto.randomUUID().slice(0, 8)
+    const url = URL.createObjectURL(f)
+    setClips((arr) => [...arr, { id, url, file: f, trimStart: 0, trimEnd: null }])
+    e.target.value = ""
+  }
 
+  // Delete active clip
+  function deleteClip() {
+    if (clips.length <= 1) return
+    snapshot()
+    setClips((arr) => arr.filter((c) => c.id !== activeClip.id))
+    setActiveClipIdx((i) => Math.max(0, Math.min(i, clips.length - 2)))
+  }
+
+  // ===== RENDER HELPERS =====
+  const startPct = activeDuration > 0 ? (activeTrimStart / activeDuration) * 100 : 0
+  const endPct = activeDuration > 0 ? (activeTrimEnd / activeDuration) * 100 : 100
+  const playheadPct = activeDuration > 0 ? (current / activeDuration) * 100 : 0
   const fmt = (s) => (s || 0).toFixed(1)
+
+  function handleDone() {
+    onDone({
+      clips: clips.map((c) => ({
+        id: c.id,
+        url: c.url,
+        file: c.file || null,
+        trimStart: c.trimStart || 0,
+        trimEnd: c.trimEnd || durations[c.id] || 0,
+      })),
+      mirrored,
+      aspectRatio,
+      textOverlays,
+    })
+  }
 
   return (
     <div className="fixed inset-0 z-[230] bg-black flex flex-col select-none"
          style={{ width: "100vw", height: "100dvh" }}>
+      <input ref={fileRef} type="file" accept="video/*" hidden onChange={(e) => {
+        if (splitFlash || dragging) return
+        // Route to replace or add based on which tool was tapped
+        const mode = fileRef.current?.dataset.mode
+        if (mode === "replace") onReplaceFile(e)
+        else onAddFile(e)
+      }} />
+
       {/* Header */}
       <header className="flex items-center justify-between px-3 py-3 z-20">
-        <button
-          onClick={onCancel}
-          className="h-10 px-4 rounded-xl bg-white/10 text-white font-semibold text-[14px]"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={() => onDone({ trimStart, trimEnd: trimEnd ?? duration, mirrored, aspectRatio, textOverlays })}
-          className="h-10 px-4 rounded-xl text-white font-bold text-[14px]"
-          style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
-        >
-          Done
-        </button>
+        <button onClick={onCancel} className="h-10 px-4 rounded-xl bg-white/10 text-white font-semibold text-[14px]">Cancel</button>
+        <button onClick={handleDone} className="h-10 px-4 rounded-xl text-white font-bold text-[14px]"
+                style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}>Done</button>
       </header>
+
+      {/* Clip selector strip (if multiple) */}
+      {clips.length > 1 && (
+        <div className="flex gap-2 px-4 pb-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+          {clips.map((c, i) => (
+            <button
+              key={c.id}
+              onClick={() => {
+                setActiveClipIdx(i)
+                if (videoRef.current) {
+                  videoRef.current.src = c.url
+                  videoRef.current.currentTime = c.trimStart || 0
+                }
+              }}
+              className="shrink-0 relative"
+              style={{
+                width: 56, height: 56, borderRadius: 12,
+                border: i === activeClipIdx ? "2px solid #EC4899" : "2px solid transparent",
+                overflow: "hidden",
+                background: "#222",
+              }}
+            >
+              {frames[c.id]?.[0] ? (
+                <img src={frames[c.id][0]} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-white/40 text-[10px]">…</span>
+              )}
+              <span className="absolute top-0.5 left-0.5 text-[9px] font-bold text-white bg-black/60 rounded px-1">
+                {i + 1}
+              </span>
+            </button>
+          ))}
+          <button
+            onClick={() => { fileRef.current.dataset.mode = "add"; fileRef.current.click() }}
+            className="shrink-0 grid place-items-center"
+            style={{ width: 56, height: 56, borderRadius: 12, border: "1px dashed rgba(255,255,255,0.4)" }}
+            aria-label="Add clip"
+          >
+            <Plus size={20} color="#fff" />
+          </button>
+        </div>
+      )}
 
       {/* Video preview */}
       <div className="flex-1 grid place-items-center overflow-hidden bg-black px-4">
         <div style={{ position: "relative", display: "inline-block", maxHeight: "55dvh" }}>
-          <video
-            ref={videoRef}
-            src={src}
-            muted={false}
-            playsInline
-            className="max-h-full object-contain"
-            style={{
-              maxHeight: "55dvh",
-              transform: mirrored ? "scaleX(-1)" : "none",
-              aspectRatio: aspectRatio.replace(":", "/"),
-              width: "auto",
-              maxWidth: "100%",
-              display: "block",
-            }}
-          />
+          {activeClip && (
+            <video
+              ref={videoRef}
+              src={activeClip.url}
+              playsInline
+              className="max-h-full object-contain"
+              style={{
+                maxHeight: "55dvh",
+                transform: mirrored ? "scaleX(-1)" : "none",
+                aspectRatio: aspectRatio.replace(":", "/"),
+                width: "auto",
+                maxWidth: "100%",
+                display: "block",
+              }}
+            />
+          )}
           {textOverlays.map((t) => (
             <button
               key={t.id}
@@ -242,57 +402,43 @@ export default function ReelTrim({ src, onCancel, onDone }) {
         </div>
       </div>
 
-      {/* Controls row: play + undo/redo + time */}
+      {/* Play + undo/redo */}
       <div className="px-4 pt-3">
         <div className="flex items-center justify-center gap-5 mb-2">
           <button onClick={togglePlay} aria-label={playing ? "Pause" : "Play"} className="text-white">
             {playing ? <Pause size={26} fill="#fff" /> : <Play size={26} fill="#fff" />}
           </button>
-          <button onClick={undo} disabled={history.length === 0} className="text-white disabled:opacity-30" aria-label="Undo">
-            <Undo2 size={24} />
-          </button>
-          <button onClick={redo} disabled={future.length === 0} className="text-white disabled:opacity-30" aria-label="Redo">
-            <Redo2 size={24} />
-          </button>
+          <button onClick={undo} disabled={history.length === 0} className="text-white disabled:opacity-30" aria-label="Undo"><Undo2 size={24} /></button>
+          <button onClick={redo} disabled={future.length === 0} className="text-white disabled:opacity-30" aria-label="Redo"><Redo2 size={24} /></button>
         </div>
         <div className="text-center text-white/80 text-[13px] font-semibold mb-3">
-          {fmt(current)} / {fmt(duration)}s
+          {fmt(current)} / {fmt(activeDuration)}s
+          {clips.length > 1 && <span className="ml-2 text-white/40">· clip {activeClipIdx + 1}/{clips.length}</span>}
         </div>
       </div>
 
-      {/* Yellow timeline with filmstrip + handles */}
+      {/* Yellow timeline */}
       <div className="px-4 pb-2">
-        <div
-          ref={trackRef}
-          className="relative w-full rounded-xl overflow-hidden"
-          style={{ height: 52, background: "#FFC107", border: "3px solid #FFC107" }}
-        >
-          {/* Filmstrip */}
+        <div ref={trackRef} className="relative w-full rounded-xl overflow-hidden"
+             style={{ height: 52, background: "#FFC107", border: "3px solid #FFC107" }}>
           <div className="absolute inset-0 flex">
-            {frames.length > 0 ? (
-              frames.map((f, i) => (
+            {frames[activeClip?.id]?.length ? (
+              frames[activeClip.id].map((f, i) => (
                 <div key={i} className="flex-1 h-full overflow-hidden" style={{ opacity: 0.9 }}>
                   {f && <img src={f} alt="" className="w-full h-full object-cover" />}
                 </div>
               ))
             ) : (
-              <div className="w-full h-full grid place-items-center text-black/40 text-[11px] font-bold">
-                Loading preview…
-              </div>
+              <div className="w-full h-full grid place-items-center text-black/40 text-[11px] font-bold">Loading preview…</div>
             )}
           </div>
 
-          {/* Dim the trimmed-out regions */}
           <div className="absolute inset-y-0 left-0 bg-black/65 pointer-events-none" style={{ width: startPct + "%" }} />
           <div className="absolute inset-y-0 right-0 bg-black/65 pointer-events-none" style={{ width: (100 - endPct) + "%" }} />
 
-          {/* Playhead line */}
-          <div
-            className="absolute inset-y-0 z-30 pointer-events-none"
-            style={{ left: playheadPct + "%", width: 2, background: "#fff", boxShadow: "0 0 6px rgba(255,255,255,0.8)" }}
-          />
+          <div className="absolute inset-y-0 z-30 pointer-events-none"
+               style={{ left: playheadPct + "%", width: 2, background: "#fff", boxShadow: "0 0 6px rgba(255,255,255,0.8)" }} />
 
-          {/* Start handle */}
           <button
             onMouseDown={(e) => onHandleDown("start", e)}
             onTouchStart={(e) => onHandleDown("start", e)}
@@ -302,8 +448,6 @@ export default function ReelTrim({ src, onCancel, onDone }) {
           >
             <span className="w-1.5 h-8 rounded-full bg-[#0B0B14]" />
           </button>
-
-          {/* End handle */}
           <button
             onMouseDown={(e) => onHandleDown("end", e)}
             onTouchStart={(e) => onHandleDown("end", e)}
@@ -315,59 +459,85 @@ export default function ReelTrim({ src, onCancel, onDone }) {
           </button>
         </div>
 
-        {/* Playhead scrub bar (thin) — tap/drag to move playhead */}
-        <div
-          className="relative w-full h-6 mt-1 cursor-pointer"
-          onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect()
-            const pct = (e.clientX - rect.left) / rect.width
-            const t = pct * duration
-            if (videoRef.current) videoRef.current.currentTime = t
-            setCurrent(t)
-          }}
-        />
+        <div className="relative w-full h-6 mt-1 cursor-pointer"
+             onClick={(e) => {
+               const rect = e.currentTarget.getBoundingClientRect()
+               const pct = (e.clientX - rect.left) / rect.width
+               const t = pct * activeDuration
+               if (videoRef.current) videoRef.current.currentTime = t
+               setCurrent(t)
+             }} />
       </div>
 
-      {/* Audio / Text quick buttons */}
+      {/* Audio / Text */}
       <div className="px-4 flex flex-col gap-2 mt-1">
         <button className="w-full h-10 rounded-xl border border-white/25 border-dashed text-white/85 font-medium text-[13.5px] inline-flex items-center justify-center gap-2">
           <Plus size={16} /> Audio
         </button>
         <button
-          onClick={() => {
-            setEditingTextId(null)
-            setTextDraft({ text: "", color: "#ffffff", size: 24 })
-            setTextSheetOpen(true)
-          }}
+          onClick={() => { setEditingTextId(null); setTextDraft({ text: "", color: "#ffffff", size: 24 }); setTextSheetOpen(true) }}
           className="w-full h-10 rounded-xl border border-white/25 border-dashed text-white/85 font-medium text-[13.5px] inline-flex items-center justify-center gap-2"
         >
           <Plus size={16} /> Text
         </button>
       </div>
 
-      {/* Bottom tool row */}
+      {/* Bottom tools */}
       <div className="flex items-center justify-around px-2 py-3 mb-2" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
-        {[
-          { icon: <Plus size={22} />, label: "Add", onClick: null },
-          { icon: <ImagePlus size={22} />, label: "Replace", onClick: null },
-          { icon: <Crop size={22} />, label: "Crop", onClick: () => setCropSheetOpen(true), active: aspectRatio !== "9:16" },
-          { icon: <FlipHorizontal size={22} />, label: "Mirror", onClick: () => setMirrored((m) => !m), active: mirrored },
-          { icon: <Scissors size={22} />, label: "Split", onClick: null },
-        ].map((b) => (
-          <button
-            key={b.label}
-            onClick={b.onClick || undefined}
-            disabled={!b.onClick}
-            className="flex flex-col items-center gap-1 text-white disabled:opacity-40"
-            style={{ color: b.active ? "#EC4899" : "#fff" }}
-          >
-            {b.icon}
-            <span className="text-[11px] font-medium">{b.label}</span>
-          </button>
-        ))}
+        <button
+          onClick={() => { fileRef.current.dataset.mode = "add"; fileRef.current.click() }}
+          className="flex flex-col items-center gap-1 text-white"
+        >
+          <Plus size={22} />
+          <span className="text-[11px] font-medium">Add</span>
+        </button>
+        <button
+          onClick={() => { fileRef.current.dataset.mode = "replace"; fileRef.current.click() }}
+          className="flex flex-col items-center gap-1 text-white"
+        >
+          <ImagePlus size={22} />
+          <span className="text-[11px] font-medium">Replace</span>
+        </button>
+        <button
+          onClick={() => setCropSheetOpen(true)}
+          className="flex flex-col items-center gap-1 text-white"
+          style={{ color: aspectRatio !== "9:16" ? "#EC4899" : "#fff" }}
+        >
+          <Crop size={22} />
+          <span className="text-[11px] font-medium">Crop</span>
+        </button>
+        <button
+          onClick={() => setMirrored((m) => !m)}
+          className="flex flex-col items-center gap-1"
+          style={{ color: mirrored ? "#EC4899" : "#fff" }}
+        >
+          <FlipHorizontal size={22} />
+          <span className="text-[11px] font-medium">Mirror</span>
+        </button>
+        <button
+          onClick={splitClip}
+          disabled={clips.length === 0}
+          className="flex flex-col items-center gap-1 text-white disabled:opacity-40"
+        >
+          <Scissors size={22} />
+          <span className="text-[11px] font-medium">Split</span>
+        </button>
       </div>
 
-      {/* Text overlay sheet */}
+      {/* Delete clip (only when >1) */}
+      {clips.length > 1 && (
+        <div className="absolute top-4 right-3 z-20">
+          <button
+            onClick={deleteClip}
+            className="w-9 h-9 rounded-full grid place-items-center bg-red-500/20 border border-red-500/40"
+            aria-label="Delete clip"
+          >
+            <X size={16} color="#fca5a5" />
+          </button>
+        </div>
+      )}
+
+      {/* Text sheet */}
       {textSheetOpen && (
         <div className="fixed inset-0 z-[240] flex items-end" onClick={() => setTextSheetOpen(false)}>
           <div className="absolute inset-0 bg-black/60" />
@@ -377,9 +547,7 @@ export default function ReelTrim({ src, onCancel, onDone }) {
             style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto" />
-            <h3 className="text-cream font-extrabold text-[16px]">
-              {editingTextId ? "Edit text" : "Add text"}
-            </h3>
+            <h3 className="text-cream font-extrabold text-[16px]">{editingTextId ? "Edit text" : "Add text"}</h3>
             <input
               value={textDraft.text}
               onChange={(e) => setTextDraft((d) => ({ ...d, text: e.target.value.slice(0, 100) }))}
@@ -389,39 +557,27 @@ export default function ReelTrim({ src, onCancel, onDone }) {
             />
             <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
               {["#ffffff", "#000000", "#EC4899", "#A855F7", "#F59E0B", "#22C55E", "#3B82F6", "#EF4444"].map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setTextDraft((d) => ({ ...d, color: c }))}
-                  className="shrink-0 w-8 h-8 rounded-full border-2"
-                  style={{ background: c, borderColor: textDraft.color === c ? "#fff" : "rgba(255,255,255,0.15)" }}
-                />
+                <button key={c} onClick={() => setTextDraft((d) => ({ ...d, color: c }))}
+                        className="shrink-0 w-8 h-8 rounded-full border-2"
+                        style={{ background: c, borderColor: textDraft.color === c ? "#fff" : "rgba(255,255,255,0.15)" }} />
               ))}
             </div>
             <div className="flex gap-2">
               {[16, 24, 36, 52].map((sz) => (
-                <button
-                  key={sz}
-                  onClick={() => setTextDraft((d) => ({ ...d, size: sz }))}
-                  className="flex-1 h-9 rounded-full text-white text-[12px] font-bold border"
-                  style={{
-                    borderColor: textDraft.size === sz ? "#fff" : "rgba(255,255,255,0.15)",
-                    background: textDraft.size === sz ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.06)",
-                  }}
-                >
+                <button key={sz} onClick={() => setTextDraft((d) => ({ ...d, size: sz }))}
+                        className="flex-1 h-9 rounded-full text-white text-[12px] font-bold border"
+                        style={{
+                          borderColor: textDraft.size === sz ? "#fff" : "rgba(255,255,255,0.15)",
+                          background: textDraft.size === sz ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.06)",
+                        }}>
                   {sz}
                 </button>
               ))}
             </div>
             <div className="flex gap-2 mt-1">
               {editingTextId && (
-                <button
-                  onClick={() => {
-                    setTextOverlays((arr) => arr.filter((x) => x.id !== editingTextId))
-                    setTextSheetOpen(false)
-                    setEditingTextId(null)
-                  }}
-                  className="flex-1 h-11 rounded-full bg-red-500/15 border border-red-500/40 text-red-300 font-bold text-[13.5px]"
-                >
+                <button onClick={() => { setTextOverlays((arr) => arr.filter((x) => x.id !== editingTextId)); setTextSheetOpen(false); setEditingTextId(null) }}
+                        className="flex-1 h-11 rounded-full bg-red-500/15 border border-red-500/40 text-red-300 font-bold text-[13.5px]">
                   Delete
                 </button>
               )}
@@ -435,8 +591,7 @@ export default function ReelTrim({ src, onCancel, onDone }) {
                     const id = crypto.randomUUID()
                     setTextOverlays((arr) => [...arr, { id, ...textDraft, text: clean, x: 0.5, y: 0.5 }])
                   }
-                  setTextSheetOpen(false)
-                  setEditingTextId(null)
+                  setTextSheetOpen(false); setEditingTextId(null)
                 }}
                 className="flex-1 h-11 rounded-full text-white font-bold text-[13.5px]"
                 style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
@@ -448,57 +603,35 @@ export default function ReelTrim({ src, onCancel, onDone }) {
         </div>
       )}
 
-      {/* Crop ratio sheet */}
+      {/* Crop sheet */}
       {cropSheetOpen && (
         <div className="fixed inset-0 z-[240] flex items-end" onClick={() => setCropSheetOpen(false)}>
           <div className="absolute inset-0 bg-black/60" />
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
-          >
+          <div onClick={(e) => e.stopPropagation()}
+               className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5"
+               style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-4" />
             <h3 className="text-cream font-extrabold text-[16px] mb-4">Crop aspect ratio</h3>
             <div className="grid grid-cols-4 gap-3">
-              {[
-                { id: "9:16", label: "9:16", w: 9, h: 16 },
-                { id: "1:1",  label: "1:1",  w: 1, h: 1 },
-                { id: "4:5",  label: "4:5",  w: 4, h: 5 },
-                { id: "16:9", label: "16:9", w: 16, h: 9 },
-              ].map((r) => (
-                <button
-                  key={r.id}
-                  onClick={() => { setAspectRatio(r.id); setCropSheetOpen(false) }}
-                  className="flex flex-col items-center gap-2"
-                >
-                  <span
-                    className="grid place-items-center rounded-xl border-2"
-                    style={{
-                      width: 56,
-                      height: 56,
-                      borderColor: aspectRatio === r.id ? "#EC4899" : "rgba(255,255,255,0.2)",
-                      background: aspectRatio === r.id ? "rgba(236,72,153,0.15)" : "rgba(255,255,255,0.03)",
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: r.w >= r.h ? 26 : 26 * (r.w / r.h),
-                        height: r.h >= r.w ? 26 : 26 * (r.h / r.w),
-                        border: "1.5px solid #fff",
-                        borderRadius: 3,
-                        opacity: 0.85,
-                      }}
-                    />
+              {[{ id: "9:16", w: 9, h: 16 }, { id: "1:1", w: 1, h: 1 }, { id: "4:5", w: 4, h: 5 }, { id: "16:9", w: 16, h: 9 }].map((r) => (
+                <button key={r.id} onClick={() => { setAspectRatio(r.id); setCropSheetOpen(false) }} className="flex flex-col items-center gap-2">
+                  <span className="grid place-items-center rounded-xl border-2"
+                        style={{ width: 56, height: 56, borderColor: aspectRatio === r.id ? "#EC4899" : "rgba(255,255,255,0.2)", background: aspectRatio === r.id ? "rgba(236,72,153,0.15)" : "rgba(255,255,255,0.03)" }}>
+                    <span style={{ width: r.w >= r.h ? 26 : 26 * (r.w / r.h), height: r.h >= r.w ? 26 : 26 * (r.h / r.w), border: "1.5px solid #fff", borderRadius: 3, opacity: 0.85 }} />
                   </span>
-                  <span
-                    className="text-[12px] font-semibold"
-                    style={{ color: aspectRatio === r.id ? "#EC4899" : "#888" }}
-                  >
-                    {r.label}
-                  </span>
+                  <span className="text-[12px] font-semibold" style={{ color: aspectRatio === r.id ? "#EC4899" : "#888" }}>{r.id}</span>
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Split flash */}
+      {splitFlash && (
+        <div className="absolute inset-0 z-[250] grid place-items-center pointer-events-none">
+          <div className="bg-black/70 rounded-2xl px-6 py-3 text-white font-bold text-[14px] inline-flex items-center gap-2">
+            <Check size={16} /> Split
           </div>
         </div>
       )}

@@ -28,6 +28,7 @@ export default function ReelComposer({ onClose, onDone }) {
   const [trimStart, setTrimStart] = useState(0)
   const [mirroredState, setMirroredState] = useState(false)
   const [textOverlaysState, setTextOverlaysState] = useState([])
+  const [clipsState, setClipsState] = useState([])
   const [aspectRatioState, setAspectRatioState] = useState("9:16")
   const [trimEnd, setTrimEnd] = useState(null)
 
@@ -147,20 +148,48 @@ export default function ReelComposer({ onClose, onDone }) {
   async function submit() {
     if (!file || !myId) return
     setBusy(true); setError(""); setProgress(0)
-    const ext = (file.name.split(".").pop() || "mp4").toLowerCase()
-    const path = myId + "/" + crypto.randomUUID() + "." + ext
-    const { error: upErr } = await supabase.storage.from("reels-media").upload(path, file, { upsert: false, contentType: file.type })
-    if (upErr) { setError(upErr.message); setBusy(false); return }
-    setProgress(70)
-    const { data: pub } = supabase.storage.from("reels-media").getPublicUrl(path)
-    const videoUrl = pub?.publicUrl
-    if (!videoUrl) { setError("Upload failed"); setBusy(false); return }
+
+    // Determine list of clips (fall back to the single file if the trim step was skipped)
+    const sourceClips = (clipsState && clipsState.length > 0)
+      ? clipsState
+      : [{ file, url: preview, trimStart: trimStart || 0, trimEnd: trimEnd || duration || 0 }]
+
+    const uploaded = []
+    const total = sourceClips.length
+
+    for (let i = 0; i < total; i++) {
+      const clip = sourceClips[i]
+      const cFile = clip.file || (i === 0 ? file : null)
+      if (!cFile) continue
+      const ext = (cFile.name.split(".").pop() || "mp4").toLowerCase()
+      const path = myId + "/" + crypto.randomUUID() + "." + ext
+      const { error: upErr } = await supabase.storage
+        .from("reels-media")
+        .upload(path, cFile, { upsert: false, contentType: cFile.type })
+      if (upErr) { setError(upErr.message); setBusy(false); return }
+      const { data: pub } = supabase.storage.from("reels-media").getPublicUrl(path)
+      if (!pub?.publicUrl) { setError("Upload failed"); setBusy(false); return }
+      uploaded.push({
+        url: pub.publicUrl,
+        trim_start: clip.trimStart || 0,
+        trim_end: clip.trimEnd || null,
+      })
+      setProgress(Math.round(((i + 1) / total) * 90))
+    }
+
+    if (uploaded.length === 0) { setError("Nothing to upload"); setBusy(false); return }
+
+    const firstUrl = uploaded[0].url
+    const totalDuration = uploaded.reduce((acc, c) => acc + ((c.trim_end || 0) - (c.trim_start || 0)), 0)
+
     const { error: insErr } = await supabase.from("reels").insert({
-      user_id: myId, video_url: videoUrl,
+      user_id: myId,
+      video_url: firstUrl,
+      clips: uploaded,
       caption: caption.trim() || null,
-      duration_sec: (trimEnd != null && trimStart != null) ? (trimEnd - trimStart) : (duration || null),
-      trim_start: trimStart || 0,
-      trim_end: trimEnd || null,
+      duration_sec: totalDuration || duration || null,
+      trim_start: uploaded[0].trim_start,
+      trim_end: uploaded[0].trim_end,
       mirrored: mirroredState,
       aspect_ratio: aspectRatioState,
       text_overlays: textOverlaysState,
@@ -182,6 +211,7 @@ export default function ReelComposer({ onClose, onDone }) {
     return (
       <ReelTrim
         src={preview}
+        initialFile={file}
         onCancel={() => {
           setTrimming(false)
           setFile(null)
@@ -197,6 +227,7 @@ export default function ReelComposer({ onClose, onDone }) {
           setMirroredState(!!trim.mirrored)
           setAspectRatioState(trim.aspectRatio || "9:16")
           setTextOverlaysState(trim.textOverlays || [])
+          setClipsState(trim.clips || [])
           setTrimming(false)
         }}
       />

@@ -28,13 +28,14 @@ export default function Reels() {
   const [hiddenIds, setHiddenIds] = useState(new Set())
   const containerRef = useRef(null)
   const videoRefs = useRef([])
+  const clipIdxRefs = useRef({})
 
   const load = useCallback(async () => {
     if (!myId) return
     setLoading(true)
     const { data: rows } = await supabase
       .from("reels")
-      .select("id, user_id, video_url, thumbnail_url, caption, duration_sec, trim_start, trim_end, mirrored, aspect_ratio, text_overlays, created_at")
+      .select("id, user_id, video_url, clips, thumbnail_url, caption, duration_sec, trim_start, trim_end, mirrored, aspect_ratio, text_overlays, created_at")
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .limit(50)
@@ -89,7 +90,8 @@ export default function Reels() {
       const v = videoRefs.current[i]
       if (!v) return
       if (i === currentIdx) {
-        v.currentTime = 0
+        const reel = reels[i]
+        if (reel) clipIdxRefs.current[reel.id] = clipIdxRefs.current[reel.id] || 0
         v.play().catch(() => {})
       } else {
         v.pause()
@@ -204,19 +206,48 @@ export default function Reels() {
               >
                 <video
                   ref={(el) => (videoRefs.current[idx] = el)}
-                  src={reel.video_url}
-                  loop
+                  src={(() => {
+                    const list = Array.isArray(reel.clips) && reel.clips.length > 0
+                      ? reel.clips
+                      : [{ url: reel.video_url, trim_start: reel.trim_start || 0, trim_end: reel.trim_end || null }]
+                    const ci = clipIdxRefs.current[reel.id] || 0
+                    return list[Math.min(ci, list.length - 1)].url
+                  })()}
+                  loop={false}
                   muted={muted}
                   playsInline
                   preload="metadata"
                   onLoadedMetadata={(e) => {
-                    if (reel.trim_start && e.target.currentTime < reel.trim_start) {
-                      e.target.currentTime = reel.trim_start
+                    const list = Array.isArray(reel.clips) && reel.clips.length > 0
+                      ? reel.clips
+                      : [{ url: reel.video_url, trim_start: reel.trim_start || 0, trim_end: reel.trim_end || null }]
+                    const ci = clipIdxRefs.current[reel.id] || 0
+                    const clip = list[Math.min(ci, list.length - 1)]
+                    if (clip.trim_start && e.target.currentTime < clip.trim_start) {
+                      e.target.currentTime = clip.trim_start
                     }
                   }}
                   onTimeUpdate={(e) => {
-                    if (reel.trim_end && e.target.currentTime >= reel.trim_end) {
-                      e.target.currentTime = reel.trim_start || 0
+                    const list = Array.isArray(reel.clips) && reel.clips.length > 0
+                      ? reel.clips
+                      : [{ url: reel.video_url, trim_start: reel.trim_start || 0, trim_end: reel.trim_end || null }]
+                    const ci = clipIdxRefs.current[reel.id] || 0
+                    const clip = list[Math.min(ci, list.length - 1)]
+                    if (!clip.trim_end) return
+                    if (e.target.currentTime >= clip.trim_end) {
+                      // Advance to next clip or loop back to first
+                      const nextCi = ci + 1 < list.length ? ci + 1 : 0
+                      const nextClip = list[nextCi]
+                      clipIdxRefs.current[reel.id] = nextCi
+                      const v = e.target
+                      v.src = nextClip.url
+                      v.load()
+                      const onReady = () => {
+                        v.currentTime = nextClip.trim_start || 0
+                        v.play().catch(() => {})
+                        v.removeEventListener("loadeddata", onReady)
+                      }
+                      v.addEventListener("loadeddata", onReady)
                     }
                   }}
                   onClick={() => {
