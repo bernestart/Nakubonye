@@ -5,7 +5,7 @@ import {
   Users, Plus, Smile, Check,
 } from "lucide-react"
 
-const COLORS = ["#ffffff", "#000000", "#EC4899", "#A855F7", "#F59E0B", "#22C55E", "#3B82F6", "#EF4444"]
+const COLORS = ["#ffffff", "#000000", "#EC4899", "#A855F7", "#F59E0B", "#22C55E", "#3B82F6", "#EF4444", "#06B6D4", "#8B5CF6", "#F97316", "#EAB308", "#84CC16", "#10B981", "#F43F5E", "#6366F1"]
 
 const FONTS = [
   { id: "sans",     name: "Bold",       css: "900 1em system-ui, -apple-system, sans-serif" },
@@ -43,6 +43,8 @@ export default function StoryEditor({ src, onCancel, onSave }) {
   const [mode, setMode] = useState("pen")
   const [strokeHistory, setStrokeHistory] = useState([])
   const [displaySrc, setDisplaySrc] = useState(src)
+  const colorInputRef = useRef(null)
+  const [customColorTarget, setCustomColorTarget] = useState(null)
   const [texts, setTexts] = useState([])
   const [stickers, setStickers] = useState([])
   const [activeId, setActiveId] = useState(null)
@@ -430,6 +432,20 @@ export default function StoryEditor({ src, onCancel, onSave }) {
   ]
 
   return (
+    <>
+    <input
+      ref={colorInputRef}
+      type="color"
+      style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 1, height: 1 }}
+      onChange={(e) => {
+        const c = e.target.value
+        if (customColorTarget === "text") {
+          setTexts((arr) => arr.map((x) => (x.id === activeId ? { ...x, color: c } : x)))
+        } else if (customColorTarget === "draw") {
+          setColor(c); setMode("pen")
+        }
+      }}
+    />
     <div
       ref={wrapRef}
       className="fixed inset-0 bg-black overflow-hidden select-none flex flex-col justify-between"
@@ -678,6 +694,13 @@ export default function StoryEditor({ src, onCancel, onSave }) {
                   style={{ background: c, borderColor: color === c && mode === "pen" ? "#fff" : "rgba(255,255,255,0.15)" }}
                 />
               ))}
+              <button
+                data-custom="draw"
+                onClick={() => { setCustomColorTarget("draw"); colorInputRef.current?.click() }}
+                aria-label="Custom color"
+                className="shrink-0 w-8 h-8 rounded-full border-2 border-white/25 grid place-items-center"
+                style={{ background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)" }}
+              />
             </div>
             <div className="flex gap-1.5">
               {[3, 6, 12].map((w) => (
@@ -787,6 +810,13 @@ export default function StoryEditor({ src, onCancel, onSave }) {
                 style={{ background: c, borderColor: texts.find((x) => x.id === activeId)?.color === c ? "#fff" : "rgba(255,255,255,0.15)" }}
               />
             ))}
+            <button
+              data-custom="text"
+              onClick={() => { setCustomColorTarget("text"); colorInputRef.current?.click() }}
+              aria-label="Custom color"
+              className="shrink-0 w-8 h-8 rounded-full border-2 border-white/25"
+              style={{ background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)" }}
+            />
             {[16, 24, 36, 52].map((sz) => (
               <button
                 key={sz}
@@ -932,5 +962,6 @@ export default function StoryEditor({ src, onCancel, onSave }) {
         </div>
       )}
     </div>
+    </>
   )
 }
