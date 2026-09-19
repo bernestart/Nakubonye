@@ -15,6 +15,9 @@ export default function ReelTrim({ src, onCancel, onDone }) {
   const [history, setHistory] = useState([])
   const [future, setFuture] = useState([])
   const [dragging, setDragging] = useState(null) // "start" | "end" | "playhead"
+  const [mirrored, setMirrored] = useState(false)
+  const [aspectRatio, setAspectRatio] = useState("9:16")
+  const [cropSheetOpen, setCropSheetOpen] = useState(false)
 
   const effectiveEnd = trimEnd ?? duration
 
@@ -172,7 +175,7 @@ export default function ReelTrim({ src, onCancel, onDone }) {
           Cancel
         </button>
         <button
-          onClick={() => onDone({ trimStart, trimEnd: trimEnd ?? duration })}
+          onClick={() => onDone({ trimStart, trimEnd: trimEnd ?? duration, mirrored, aspectRatio })}
           className="h-10 px-4 rounded-xl text-white font-bold text-[14px]"
           style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
         >
@@ -187,8 +190,14 @@ export default function ReelTrim({ src, onCancel, onDone }) {
           src={src}
           muted={false}
           playsInline
-          className="max-w-full max-h-full object-contain"
-          style={{ maxHeight: "55dvh" }}
+          className="max-h-full object-contain"
+          style={{
+            maxHeight: "55dvh",
+            transform: mirrored ? "scaleX(-1)" : "none",
+            aspectRatio: aspectRatio.replace(":", "/"),
+            width: "auto",
+            maxWidth: "100%",
+          }}
         />
       </div>
 
@@ -291,18 +300,79 @@ export default function ReelTrim({ src, onCancel, onDone }) {
       {/* Bottom tool row */}
       <div className="flex items-center justify-around px-2 py-3 mb-2" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
         {[
-          { icon: <Plus size={22} />, label: "Add" },
-          { icon: <ImagePlus size={22} />, label: "Replace" },
-          { icon: <Crop size={22} />, label: "Crop" },
-          { icon: <FlipHorizontal size={22} />, label: "Mirror" },
-          { icon: <Scissors size={22} />, label: "Split" },
+          { icon: <Plus size={22} />, label: "Add", onClick: null },
+          { icon: <ImagePlus size={22} />, label: "Replace", onClick: null },
+          { icon: <Crop size={22} />, label: "Crop", onClick: () => setCropSheetOpen(true), active: aspectRatio !== "9:16" },
+          { icon: <FlipHorizontal size={22} />, label: "Mirror", onClick: () => setMirrored((m) => !m), active: mirrored },
+          { icon: <Scissors size={22} />, label: "Split", onClick: null },
         ].map((b) => (
-          <button key={b.label} className="flex flex-col items-center gap-1 text-white">
+          <button
+            key={b.label}
+            onClick={b.onClick || undefined}
+            disabled={!b.onClick}
+            className="flex flex-col items-center gap-1 text-white disabled:opacity-40"
+            style={{ color: b.active ? "#EC4899" : "#fff" }}
+          >
             {b.icon}
             <span className="text-[11px] font-medium">{b.label}</span>
           </button>
         ))}
       </div>
+
+      {/* Crop ratio sheet */}
+      {cropSheetOpen && (
+        <div className="fixed inset-0 z-[240] flex items-end" onClick={() => setCropSheetOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5"
+            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+          >
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-4" />
+            <h3 className="text-cream font-extrabold text-[16px] mb-4">Crop aspect ratio</h3>
+            <div className="grid grid-cols-4 gap-3">
+              {[
+                { id: "9:16", label: "9:16", w: 9, h: 16 },
+                { id: "1:1",  label: "1:1",  w: 1, h: 1 },
+                { id: "4:5",  label: "4:5",  w: 4, h: 5 },
+                { id: "16:9", label: "16:9", w: 16, h: 9 },
+              ].map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => { setAspectRatio(r.id); setCropSheetOpen(false) }}
+                  className="flex flex-col items-center gap-2"
+                >
+                  <span
+                    className="grid place-items-center rounded-xl border-2"
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderColor: aspectRatio === r.id ? "#EC4899" : "rgba(255,255,255,0.2)",
+                      background: aspectRatio === r.id ? "rgba(236,72,153,0.15)" : "rgba(255,255,255,0.03)",
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: r.w >= r.h ? 26 : 26 * (r.w / r.h),
+                        height: r.h >= r.w ? 26 : 26 * (r.h / r.w),
+                        border: "1.5px solid #fff",
+                        borderRadius: 3,
+                        opacity: 0.85,
+                      }}
+                    />
+                  </span>
+                  <span
+                    className="text-[12px] font-semibold"
+                    style={{ color: aspectRatio === r.id ? "#EC4899" : "#888" }}
+                  >
+                    {r.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

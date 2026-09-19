@@ -34,7 +34,7 @@ export default function Reels() {
     setLoading(true)
     const { data: rows } = await supabase
       .from("reels")
-      .select("id, user_id, video_url, thumbnail_url, caption, duration_sec, trim_start, trim_end, created_at")
+      .select("id, user_id, video_url, thumbnail_url, caption, duration_sec, trim_start, trim_end, mirrored, aspect_ratio, created_at")
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .limit(50)
@@ -226,6 +226,7 @@ export default function Reels() {
                     else v.pause()
                   }}
                   className="w-full h-full object-cover"
+                  style={{ transform: reel.mirrored ? "scaleX(-1)" : "none" }}
                 />
 
                 {/* Dark gradient bottom for readability */}

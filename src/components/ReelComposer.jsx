@@ -26,6 +26,8 @@ export default function ReelComposer({ onClose, onDone }) {
   const [progress, setProgress] = useState(0)
   const [trimming, setTrimming] = useState(false)
   const [trimStart, setTrimStart] = useState(0)
+  const [mirroredState, setMirroredState] = useState(false)
+  const [aspectRatioState, setAspectRatioState] = useState("9:16")
   const [trimEnd, setTrimEnd] = useState(null)
 
   const [recording, setRecording] = useState(false)
@@ -158,6 +160,8 @@ export default function ReelComposer({ onClose, onDone }) {
       duration_sec: (trimEnd != null && trimStart != null) ? (trimEnd - trimStart) : (duration || null),
       trim_start: trimStart || 0,
       trim_end: trimEnd || null,
+      mirrored: mirroredState,
+      aspect_ratio: aspectRatioState,
     })
     if (insErr) { setError(insErr.message); setBusy(false); return }
     setProgress(100); setBusy(false); onDone?.()
@@ -188,6 +192,8 @@ export default function ReelComposer({ onClose, onDone }) {
         onDone={(trim) => {
           setTrimStart(trim.trimStart || 0)
           setTrimEnd(trim.trimEnd || null)
+          setMirroredState(!!trim.mirrored)
+          setAspectRatioState(trim.aspectRatio || "9:16")
           setTrimming(false)
         }}
       />
