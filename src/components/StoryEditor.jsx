@@ -45,6 +45,8 @@ export default function StoryEditor({ src, onCancel, onSave }) {
   const [displaySrc, setDisplaySrc] = useState(src)
   const colorInputRef = useRef(null)
   const [customColorTarget, setCustomColorTarget] = useState(null)
+  const [draftChecked, setDraftChecked] = useState(false)
+  const draftKey = "story_draft_v1"
   const [texts, setTexts] = useState([])
   const [stickers, setStickers] = useState([])
   const [activeId, setActiveId] = useState(null)
@@ -419,6 +421,7 @@ export default function StoryEditor({ src, onCancel, onSave }) {
       ctx.fillText(s.emoji, 0, 0)
       ctx.restore()
     })
+    try { localStorage.removeItem(draftKey) } catch {}
     out.toBlob((blob) => { if (blob) onSave(blob, { caption, audience }) }, "image/jpeg", 0.92)
   }
 
@@ -459,6 +462,14 @@ export default function StoryEditor({ src, onCancel, onSave }) {
         style={{ filter: filterCss }}
         draggable={false}
       />
+
+      {/* Draft indicator */}
+      <div
+        className="absolute top-4 left-1/2 -translate-x-1/2 text-white/45 text-[10.5px] font-semibold z-10 pointer-events-none"
+        style={{ letterSpacing: 0.5 }}
+      >
+        Autosaving draft
+      </div>
 
       {/* Drawing canvas overlay */}
       <canvas
