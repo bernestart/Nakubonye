@@ -17,6 +17,7 @@ export default function Preview() {
   const [interests, setInterests] = useState([])
   const [reels, setReels] = useState([])
   const [playingReel, setPlayingReel] = useState(null)
+  const [activeTab, setActiveTab] = useState("about")
   const [prompts, setPrompts] = useState([])
   const [loading, setLoading] = useState(true)
   const [activePhoto, setActivePhoto] = useState(0)
@@ -215,6 +216,33 @@ export default function Preview() {
               )}
             </div>
 
+            {/* Tabs */}
+            <div className="px-4 mt-5 flex gap-2">
+              {[
+                { id: "about", label: "About" },
+                { id: "reels", label: "Reels" + (reels.length ? " · " + reels.length : "") },
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setActiveTab(t.id)}
+                  className="flex-1 h-11 rounded-2xl font-bold text-[13.5px] transition-colors"
+                  style={{
+                    background: activeTab === t.id
+                      ? "linear-gradient(135deg, rgba(168,85,247,0.22) 0%, rgba(236,72,153,0.16) 100%)"
+                      : "rgba(255,255,255,0.04)",
+                    color: activeTab === t.id ? "#fff" : "#888",
+                    border: activeTab === t.id ? "1px solid rgba(196,181,253,0.4)" : "1px solid rgba(255,255,255,0.06)",
+                  }}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            {/* TABS_BAR_MARKER */}
+
+            {activeTab === "about" && (
+              <>
+
             {/* Bio */}
             {profile.bio && (
               <div className="px-5 mt-6">
@@ -258,6 +286,22 @@ export default function Preview() {
               </div>
             </div>
 
+            </>
+            )}
+            {/* REELS_WRAPPER_MARKER */}
+
+            {activeTab === "reels" && (
+              <>
+                {reels.length === 0 && (
+                  <div className="px-6 mt-10 text-center">
+                    <div className="w-14 h-14 rounded-2xl bg-purple-500/12 border border-purple-500/25 grid place-items-center mx-auto mb-3">
+                      <span className="text-[22px]">🎬</span>
+                    </div>
+                    <p className="text-cream font-bold text-[15px] mb-1">No reels yet</p>
+                    <p className="text-muted text-[13px]">Share your first reel from the Feed tab.</p>
+                  </div>
+                )}
+
             {/* Reels grid */}
             {reels.length > 0 && (
               <div className="px-5 mt-6">
@@ -286,6 +330,8 @@ export default function Preview() {
                   ))}
                 </div>
               </div>
+            )}
+              </>
             )}
 
             {/* Share */}
