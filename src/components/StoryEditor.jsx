@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
   X, Music, Image as ImageIcon, Sparkles, Type, Pencil, Wand2,
-  AtSign, Download, MoreHorizontal, Send, Undo2, Redo2, Trash2, Eraser,
+  AtSign, Download, MoreHorizontal, Send, Undo2, Redo2, Trash2, Eraser, Crop, RotateCw, RotateCcw, FlipHorizontal, FlipVertical,
   Users, Plus, Smile, Check,
 } from "lucide-react"
 
@@ -42,6 +42,7 @@ export default function StoryEditor({ src, onCancel, onSave }) {
   const [width, setWidth] = useState(6)
   const [mode, setMode] = useState("pen")
   const [strokeHistory, setStrokeHistory] = useState([])
+  const [displaySrc, setDisplaySrc] = useState(src)
   const [texts, setTexts] = useState([])
   const [stickers, setStickers] = useState([])
   const [activeId, setActiveId] = useState(null)
@@ -67,8 +68,8 @@ export default function StoryEditor({ src, onCancel, onSave }) {
       c.height = img.naturalHeight
       redraw()
     }
-    img.src = src
-  }, [src])
+    img.src = displaySrc
+  }, [displaySrc])
 
   function redraw() {
     const c = canvasRef.current
@@ -221,6 +222,68 @@ export default function StoryEditor({ src, onCancel, onSave }) {
   }
   function onDragEnd() { dragRef.current = null }
 
+  function transformAll({ rotate = 0, flip = null }) {
+    const img = baseImgRef.current
+    if (!img) return
+    const oldW = img.naturalWidth
+    const oldH = img.naturalHeight
+    let newW = oldW, newH = oldH
+    if (rotate === 90 || rotate === -90) { newW = oldH; newH = oldW }
+
+    // 1. Bake transform into new image
+    const c = document.createElement("canvas")
+    c.width = newW
+    c.height = newH
+    const ctx = c.getContext("2d")
+    ctx.translate(newW / 2, newH / 2)
+    if (rotate) ctx.rotate((rotate * Math.PI) / 180)
+    if (flip === "h") ctx.scale(-1, 1)
+    if (flip === "v") ctx.scale(1, -1)
+    ctx.drawImage(img, -oldW / 2, -oldH / 2)
+    const newSrc = c.toDataURL("image/jpeg", 0.95)
+
+    const newImg = new Image()
+    newImg.onload = () => {
+      baseImgRef.current = newImg
+      setDisplaySrc(newSrc)
+
+      const canvas = canvasRef.current
+      if (canvas) { canvas.width = newW; canvas.height = newH }
+
+      // 2. Transform strokes
+      const newStrokes = strokeHistory.map((st) => ({
+        ...st,
+        points: st.points.map((pt) => {
+          let x = pt.x, y = pt.y
+          if (rotate === 90) { const nx = oldH - y; const ny = x; x = nx; y = ny }
+          else if (rotate === -90) { const nx = y; const ny = oldW - x; x = nx; y = ny }
+          else if (rotate === 180) { x = oldW - x; y = oldH - y }
+          if (flip === "h") x = newW - x
+          if (flip === "v") y = newH - y
+          return { x, y }
+        }),
+      }))
+      setStrokeHistory(newStrokes)
+
+      // 3. Transform texts + stickers (fractions)
+      const remap = (item) => {
+        let x = item.x, y = item.y
+        let rotation = item.rotation || 0
+        if (rotate === 90) { const nx = 1 - y; const ny = x; x = nx; y = ny; rotation += 90 }
+        else if (rotate === -90) { const nx = y; const ny = 1 - x; x = nx; y = ny; rotation -= 90 }
+        else if (rotate === 180) { x = 1 - x; y = 1 - y; rotation += 180 }
+        if (flip === "h") { x = 1 - x; rotation = -rotation }
+        if (flip === "v") { y = 1 - y; rotation = -rotation }
+        return { ...item, x, y, rotation }
+      }
+      setTexts((arr) => arr.map(remap))
+      setStickers((arr) => arr.map(remap))
+
+      setTimeout(redraw, 0)
+    }
+    newImg.src = newSrc
+  }
+
   function snapshot() {
     historyRef.current.push({
       strokes: strokeHistory.map((x) => ({ ...x })),
@@ -360,6 +423,7 @@ export default function StoryEditor({ src, onCancel, onSave }) {
   const sidebarItems = [
     { label: "Stickers", icon: <Smile size={16} />,          on: () => setActiveTool("stickers") },
     { label: "Effects",  icon: <Wand2 size={16} />,          on: () => setActiveTool("filters") },
+    { label: "Crop",     icon: <Crop size={16} />,            on: () => setActiveTool("crop") },
     { label: "Mention",  icon: <AtSign size={16} />,         on: () => { setCaption((c) => (c + " @").slice(0, 200)); showToast("Added @ to caption") } },
     { label: "Save",     icon: <Download size={16} />,       on: save },
     { label: "More",     icon: <MoreHorizontal size={16} />, on: () => showToast("More options coming soon") },
@@ -373,7 +437,7 @@ export default function StoryEditor({ src, onCancel, onSave }) {
     >
       {/* Background media */}
       <img
-        src={src}
+        src={displaySrc}
         alt=""
         className="absolute inset-0 w-full h-full object-cover z-0 pointer-events-none"
         style={{ filter: filterCss }}
@@ -796,6 +860,45 @@ export default function StoryEditor({ src, onCancel, onSave }) {
               <Check size={14} strokeWidth={3} /> Done
             </button>
           </div>
+        </div>
+      )}
+
+      {activeTool === "crop" && (
+        <div className="absolute bottom-0 left-0 right-0 p-3 z-30 bg-black/70 backdrop-blur-md flex flex-col gap-2"
+             style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+          <p className="text-white/70 text-[11.5px] font-semibold text-center">Rotate · Flip</p>
+          <div className="flex justify-center gap-2">
+            <button
+              onClick={() => transformAll({ rotate: -90 })}
+              className="h-12 px-4 rounded-full bg-white/[0.08] text-white font-bold text-[13px] inline-flex items-center gap-2"
+            >
+              <RotateCcw size={16} /> Left
+            </button>
+            <button
+              onClick={() => transformAll({ rotate: 90 })}
+              className="h-12 px-4 rounded-full bg-white/[0.08] text-white font-bold text-[13px] inline-flex items-center gap-2"
+            >
+              <RotateCw size={16} /> Right
+            </button>
+            <button
+              onClick={() => transformAll({ flip: "h" })}
+              className="h-12 px-4 rounded-full bg-white/[0.08] text-white font-bold text-[13px] inline-flex items-center gap-2"
+            >
+              <FlipHorizontal size={16} /> Flip
+            </button>
+            <button
+              onClick={() => transformAll({ flip: "v" })}
+              className="h-12 px-4 rounded-full bg-white/[0.08] text-white font-bold text-[13px] inline-flex items-center gap-2"
+            >
+              <FlipVertical size={16} /> Flip V
+            </button>
+          </div>
+          <button
+            onClick={() => setActiveTool(null)}
+            className="self-center h-9 px-4 rounded-full bg-white/[0.08] text-white text-[13px] font-bold inline-flex items-center gap-1.5"
+          >
+            <Check size={14} strokeWidth={3} /> Done
+          </button>
         </div>
       )}
 
