@@ -20,6 +20,7 @@ export default function Admin() {
   const [stats, setStats] = useState(null)
   const [users, setUsers] = useState([])
   const [reports, setReports] = useState([])
+  const [reelReports, setReelReports] = useState([])
   const [maintenanceOn, setMaintenanceOn] = useState(false)
   const [maintenanceBusy, setMaintenanceBusy] = useState(false)
   const [search, setSearch] = useState('')
@@ -53,6 +54,9 @@ export default function Admin() {
     const { data: cfg } = await supabase.from("app_config").select("key, value").eq("key", "maintenance_mode").maybeSingle()
     setMaintenanceOn(cfg?.value === "true")
     setReports(r.data || [])
+
+    const { data: rr } = await supabase.rpc("admin_list_reel_reports", { p_status: "pending" })
+    setReelReports(rr || [])
     setUsers((u.data || []).map((x) => ({ ...x, photo_url: publicPhotoUrl(x.primary_photo) })))
     setLoading(false)
   }, [isAdmin, search])
@@ -209,6 +213,59 @@ export default function Admin() {
                           className="flex-1 h-9 rounded-full bg-red-500/20 border border-red-500/50 text-red-300 font-bold text-[12px] disabled:opacity-40"
                         >
                           Ban user
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Reported reels */}
+            {reelReports.length > 0 && (
+              <div className="mb-5">
+                <p className="text-red-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">
+                  Reported reels · {reelReports.length}
+                </p>
+                <div className="flex flex-col gap-2">
+                  {reelReports.slice(0, 10).map((r) => (
+                    <div key={r.id} className="rounded-2xl bg-red-500/8 border border-red-500/25 p-3 text-[12.5px]">
+                      <div className="flex gap-3 mb-2">
+                        <video
+                          src={r.video_url}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          className="w-16 h-24 rounded-lg object-cover bg-black shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-cream font-semibold mb-0.5 truncate">
+                            Owner: {r.reel_owner_name || "Unknown"}
+                          </p>
+                          <p className="text-muted text-[11.5px] mb-1 truncate">
+                            Reported by: {r.reporter_name || "Unknown"}
+                          </p>
+                          <p className="text-red-300 font-semibold text-[11.5px] mb-0.5">{r.reason}</p>
+                          {r.details && <p className="text-muted text-[11.5px] line-clamp-2">{r.details}</p>}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => run(() => supabase.rpc("admin_resolve_reel_report", { p_report_id: r.id, p_action: "dismissed", p_delete_reel: false }))}
+                          disabled={busy}
+                          className="flex-1 h-9 rounded-full bg-white/[0.06] border border-white/12 text-muted font-bold text-[12px] disabled:opacity-40"
+                        >
+                          Dismiss
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (!confirm("Hide this reel permanently? It will disappear from everyone's feed.")) return
+                            run(() => supabase.rpc("admin_resolve_reel_report", { p_report_id: r.id, p_action: "actioned", p_delete_reel: true }))
+                          }}
+                          disabled={busy}
+                          className="flex-1 h-9 rounded-full bg-red-500/20 border border-red-500/50 text-red-300 font-bold text-[12px] disabled:opacity-40"
+                        >
+                          Remove reel
                         </button>
                       </div>
                     </div>
