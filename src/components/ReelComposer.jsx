@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { X, Send, Circle, Square, RotateCcw, Mic, MicOff, Camera, Upload } from "lucide-react"
 import ReelTrim from "./ReelTrim"
+import ReelDecorate from "./ReelDecorate"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 
@@ -25,6 +26,7 @@ export default function ReelComposer({ onClose, onDone }) {
   const [error, setError] = useState("")
   const [progress, setProgress] = useState(0)
   const [trimming, setTrimming] = useState(false)
+  const [stage, setStage] = useState("capture") // capture | trim | decorate | publish
   const [trimStart, setTrimStart] = useState(0)
   const [mirroredState, setMirroredState] = useState(false)
   const [textOverlaysState, setTextOverlaysState] = useState([])
@@ -195,7 +197,7 @@ export default function ReelComposer({ onClose, onDone }) {
       text_overlays: textOverlaysState,
     })
     if (insErr) { setError(insErr.message); setBusy(false); return }
-    setProgress(100); setBusy(false); onDone?.()
+    setProgress(100); setBusy(false); setStage("capture"); onDone?.()
   }
 
   useEffect(() => () => { if (preview && preview.startsWith("blob:")) URL.revokeObjectURL(preview) }, [preview])
@@ -229,6 +231,21 @@ export default function ReelComposer({ onClose, onDone }) {
           setTextOverlaysState(trim.textOverlays || [])
           setClipsState(trim.clips || [])
           setTrimming(false)
+          setStage("decorate")
+        }}
+      />
+    )
+  }
+
+  if (stage === "decorate" && clipsState.length > 0) {
+    return (
+      <ReelDecorate
+        clips={clipsState}
+        initialOverlays={textOverlaysState}
+        onBack={() => setStage("trim")}
+        onNext={({ textOverlays }) => {
+          setTextOverlaysState(textOverlays || [])
+          setStage("publish")
         }}
       />
     )
