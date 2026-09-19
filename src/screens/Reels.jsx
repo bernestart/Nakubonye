@@ -34,7 +34,7 @@ export default function Reels() {
     setLoading(true)
     const { data: rows } = await supabase
       .from("reels")
-      .select("id, user_id, video_url, thumbnail_url, caption, duration_sec, created_at")
+      .select("id, user_id, video_url, thumbnail_url, caption, duration_sec, trim_start, trim_end, created_at")
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .limit(50)
@@ -209,6 +209,16 @@ export default function Reels() {
                   muted={muted}
                   playsInline
                   preload="metadata"
+                  onLoadedMetadata={(e) => {
+                    if (reel.trim_start && e.target.currentTime < reel.trim_start) {
+                      e.target.currentTime = reel.trim_start
+                    }
+                  }}
+                  onTimeUpdate={(e) => {
+                    if (reel.trim_end && e.target.currentTime >= reel.trim_end) {
+                      e.target.currentTime = reel.trim_start || 0
+                    }
+                  }}
                   onClick={() => {
                     const v = videoRefs.current[idx]
                     if (!v) return

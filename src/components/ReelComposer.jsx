@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { X, Send, Circle, Square, RotateCcw, Mic, MicOff, Camera, Upload } from "lucide-react"
+import ReelTrim from "./ReelTrim"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 
@@ -23,6 +24,9 @@ export default function ReelComposer({ onClose, onDone }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const [progress, setProgress] = useState(0)
+  const [trimming, setTrimming] = useState(false)
+  const [trimStart, setTrimStart] = useState(0)
+  const [trimEnd, setTrimEnd] = useState(null)
 
   const [recording, setRecording] = useState(false)
   const [recordSec, setRecordSec] = useState(0)
@@ -111,6 +115,7 @@ export default function ReelComposer({ onClose, onDone }) {
 
   function retake() {
     setFile(null); setPreview(""); setRecordSec(0); setDuration(0)
+    setTrimStart(0); setTrimEnd(null); setTrimming(false)
     startCamera(facing)
   }
 
@@ -149,13 +154,45 @@ export default function ReelComposer({ onClose, onDone }) {
     if (!videoUrl) { setError("Upload failed"); setBusy(false); return }
     const { error: insErr } = await supabase.from("reels").insert({
       user_id: myId, video_url: videoUrl,
-      caption: caption.trim() || null, duration_sec: duration || null,
+      caption: caption.trim() || null,
+      duration_sec: (trimEnd != null && trimStart != null) ? (trimEnd - trimStart) : (duration || null),
+      trim_start: trimStart || 0,
+      trim_end: trimEnd || null,
     })
     if (insErr) { setError(insErr.message); setBusy(false); return }
     setProgress(100); setBusy(false); onDone?.()
   }
 
   useEffect(() => () => { if (preview && preview.startsWith("blob:")) URL.revokeObjectURL(preview) }, [preview])
+
+  // When a new file is picked or recorded, open the trim screen automatically
+  useEffect(() => {
+    if (file && preview && !trimming && trimEnd === null) {
+      setTrimming(true)
+    }
+  }, [file, preview])
+
+  if (trimming && preview && file) {
+    return (
+      <ReelTrim
+        src={preview}
+        onCancel={() => {
+          setTrimming(false)
+          setFile(null)
+          setPreview("")
+          setTrimStart(0)
+          setTrimEnd(null)
+          setRecordSec(0)
+          setDuration(0)
+        }}
+        onDone={(trim) => {
+          setTrimStart(trim.trimStart || 0)
+          setTrimEnd(trim.trimEnd || null)
+          setTrimming(false)
+        }}
+      />
+    )
+  }
 
   if (preview && file) {
     return (
