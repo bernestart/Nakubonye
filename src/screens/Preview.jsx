@@ -17,6 +17,7 @@ export default function Preview() {
   const [interests, setInterests] = useState([])
   const [reels, setReels] = useState([])
   const [playingReel, setPlayingReel] = useState(null)
+  const [savedReels, setSavedReels] = useState([])
   const [activeTab, setActiveTab] = useState("about")
   const [prompts, setPrompts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -67,6 +68,25 @@ export default function Preview() {
       .order("created_at", { ascending: false })
       .limit(30)
     setReels(reelRows || [])
+
+    // Load saved reels
+    const { data: saveRows } = await supabase
+      .from("reel_saves")
+      .select("reel_id")
+      .eq("user_id", myId)
+    const savedIds = (saveRows || []).map((r) => r.reel_id)
+    if (savedIds.length > 0) {
+      const { data: savedData } = await supabase
+        .from("reels")
+        .select("id, video_url, thumbnail_url, caption, created_at")
+        .in("id", savedIds)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(30)
+      setSavedReels(savedData || [])
+    } else {
+      setSavedReels([])
+    }
 
     setLoading(false)
   }, [myId])
@@ -221,6 +241,7 @@ export default function Preview() {
               {[
                 { id: "about", label: "About" },
                 { id: "reels", label: "Reels" + (reels.length ? " · " + reels.length : "") },
+                { id: "saved", label: "Saved" + (savedReels.length ? " · " + savedReels.length : "") },
               ].map((t) => (
                 <button
                   key={t.id}
@@ -331,6 +352,44 @@ export default function Preview() {
                 </div>
               </div>
             )}
+              </>
+            )}
+
+            {activeTab === "saved" && (
+              <>
+                {savedReels.length === 0 ? (
+                  <div className="px-6 mt-10 text-center">
+                    <div className="w-14 h-14 rounded-2xl bg-amber-500/12 border border-amber-500/25 grid place-items-center mx-auto mb-3">
+                      <span className="text-[22px]">🔖</span>
+                    </div>
+                    <p className="text-cream font-bold text-[15px] mb-1">Nothing saved yet</p>
+                    <p className="text-muted text-[13px]">Tap the bookmark on any reel to save it here.</p>
+                  </div>
+                ) : (
+                  <div className="px-5 mt-4">
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {savedReels.map((r) => (
+                        <button
+                          key={r.id}
+                          onClick={() => setPlayingReel(r)}
+                          className="aspect-[9/16] rounded-xl overflow-hidden bg-black relative"
+                          aria-label="Play saved reel"
+                        >
+                          <video
+                            src={r.video_url}
+                            muted
+                            playsInline
+                            preload="metadata"
+                            className="w-full h-full object-cover"
+                          />
+                          <span className="absolute bottom-1 left-1 text-white text-[10px] font-bold bg-black/60 rounded px-1.5 py-0.5">
+                            ▶
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             )}
 

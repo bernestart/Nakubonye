@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Heart, MessageCircle, Share2, Plus, Volume2, VolumeX, ArrowLeft, MoreVertical } from "lucide-react"
+import { Heart, MessageCircle, Share2, Plus, Volume2, VolumeX, ArrowLeft, MoreVertical, Bookmark } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
@@ -27,6 +27,7 @@ export default function Reels() {
   const [commentsFor, setCommentsFor] = useState(null)
   const [actionsFor, setActionsFor] = useState(null)
   const [hiddenIds, setHiddenIds] = useState(new Set())
+  const [savedIds, setSavedIds] = useState(new Set())
   const [matchSet, setMatchSet] = useState(new Set())
   const containerRef = useRef(null)
   const videoRefs = useRef([])
@@ -58,6 +59,13 @@ export default function Reels() {
     const vc = new Map()
     list.forEach((r) => vc.set(r.id, Number(r.view_count) || 0))
     setViewCounts(vc)
+
+    // Load my saved reels
+    const { data: saveRows } = await supabase
+      .from("reel_saves")
+      .select("reel_id")
+      .eq("user_id", myId)
+    setSavedIds(new Set((saveRows || []).map((r) => r.reel_id)))
 
     // Load hidden reel ids for this user
     const { data: hideRows } = await supabase.from("reel_hides").select("reel_id").eq("user_id", myId)
@@ -165,6 +173,22 @@ export default function Reels() {
     el.addEventListener("scroll", onScroll, { passive: true })
     return () => el.removeEventListener("scroll", onScroll)
   }, [currentIdx, reels.length])
+
+  async function toggleSave(reelId) {
+    if (!myId) return
+    tap("light")
+    const isSaved = savedIds.has(reelId)
+    const next = new Set(savedIds)
+    if (isSaved) {
+      next.delete(reelId)
+      setSavedIds(next)
+      await supabase.from("reel_saves").delete().eq("reel_id", reelId).eq("user_id", myId)
+    } else {
+      next.add(reelId)
+      setSavedIds(next)
+      await supabase.from("reel_saves").insert({ reel_id: reelId, user_id: myId })
+    }
+  }
 
   async function toggleLike(reelId) {
     if (!myId) return
@@ -422,6 +446,25 @@ export default function Reels() {
                       <Share2 size={22} strokeWidth={2.4} color="#fff" />
                     </span>
                     <span className="text-white text-[11px] font-bold">Share</span>
+                  </button>
+
+                  <button
+                    onClick={() => toggleSave(reel.id)}
+                    className="flex flex-col items-center gap-1"
+                    aria-label="Save"
+                  >
+                    <span
+                      className="w-12 h-12 rounded-full grid place-items-center"
+                      style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(10px)" }}
+                    >
+                      <Bookmark
+                        size={22}
+                        strokeWidth={2.4}
+                        color={savedIds.has(reel.id) ? "#F59E0B" : "#fff"}
+                        fill={savedIds.has(reel.id) ? "#F59E0B" : "none"}
+                      />
+                    </span>
+                    <span className="text-white text-[11px] font-bold">Save</span>
                   </button>
 
                   <button
