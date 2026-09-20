@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { X, Send, Circle, Square, RotateCcw, Mic, MicOff, Camera, Upload } from "lucide-react"
 import ReelTrim from "./ReelTrim"
 import ReelDecorate from "./ReelDecorate"
+import TagPicker from "./TagPicker"
 import { supabase } from "../lib/supabase"
 import { getReelDraft, clearReelDraft } from "../lib/draftStore"
 import { useAuth } from "../lib/auth"
@@ -40,6 +41,8 @@ export default function ReelComposer({ onClose, onDone }) {
   const [allowRemix, setAllowRemix] = useState(true)
   const [locationState, setLocationState] = useState("")
   const [coverTime, setCoverTime] = useState(0)
+  const [taggedUsers, setTaggedUsers] = useState([])
+  const [tagPickerOpen, setTagPickerOpen] = useState(false)
   const [aspectRatioState, setAspectRatioState] = useState("9:16")
   const [trimEnd, setTrimEnd] = useState(null)
 
@@ -211,6 +214,7 @@ export default function ReelComposer({ onClose, onDone }) {
       allow_remix: allowRemix,
       location: locationState.trim() || null,
       cover_frame_time: coverTime || 0,
+      tagged_user_ids: taggedUsers.map((u) => u.id),
     })
     if (insErr) { setError(insErr.message); setBusy(false); return }
     setProgress(100); setBusy(false); setStage("capture"); onDone?.()
@@ -459,6 +463,27 @@ export default function ReelComposer({ onClose, onDone }) {
             />
           </div>
 
+          {/* Tag people */}
+          <div className="px-3 mt-4">
+            <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">
+              Tag people
+            </p>
+            <button
+              onClick={() => setTagPickerOpen(true)}
+              className="w-full min-h-11 rounded-xl bg-white/[0.06] border border-white/10 px-4 py-2.5 flex flex-wrap items-center gap-1.5 text-left"
+            >
+              {taggedUsers.length === 0 ? (
+                <span className="text-white/45 text-[13.5px]">Tag people (optional)</span>
+              ) : (
+                taggedUsers.map((u) => (
+                  <span key={u.id} className="text-purple-200 text-[12.5px] font-semibold">
+                    @{u.username || u.display_name}
+                  </span>
+                ))
+              )}
+            </button>
+          </div>
+
           {error && <p className="text-red-400 text-[12.5px] text-center px-3 mt-3">{error}</p>}
 
           {busy && progress > 0 && (
@@ -476,6 +501,14 @@ export default function ReelComposer({ onClose, onDone }) {
             </button>
           </div>
         </div>
+
+        {tagPickerOpen && (
+          <TagPicker
+            initial={taggedUsers}
+            onClose={() => setTagPickerOpen(false)}
+            onSave={(users) => setTaggedUsers(users)}
+          />
+        )}
       </div>
     )
   }
