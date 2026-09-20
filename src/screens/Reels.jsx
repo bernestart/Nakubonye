@@ -22,6 +22,7 @@ export default function Reels() {
   const [composerOpen, setComposerOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [currentIdx, setCurrentIdx] = useState(0)
+  const [viewCounts, setViewCounts] = useState(new Map())
   const [commentCounts, setCommentCounts] = useState(new Map())
   const [commentsFor, setCommentsFor] = useState(null)
   const [actionsFor, setActionsFor] = useState(null)
@@ -30,13 +31,14 @@ export default function Reels() {
   const containerRef = useRef(null)
   const videoRefs = useRef([])
   const clipIdxRefs = useRef({})
+  const viewedThisSession = useRef(new Set())
 
   const load = useCallback(async () => {
     if (!myId) return
     setLoading(true)
     const { data: rows } = await supabase
       .from("reels")
-      .select("id, user_id, video_url, clips, thumbnail_url, caption, duration_sec, trim_start, trim_end, mirrored, aspect_ratio, text_overlays, audience, allow_comments, allow_remix, location, cover_frame_time, created_at")
+      .select("id, user_id, video_url, clips, thumbnail_url, caption, duration_sec, trim_start, trim_end, mirrored, aspect_ratio, text_overlays, audience, allow_comments, allow_remix, location, cover_frame_time, view_count, created_at")
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .limit(50)
@@ -51,6 +53,11 @@ export default function Reels() {
       return true
     })
     setReels(list)
+
+    // viewCounts from DB
+    const vc = new Map()
+    list.forEach((r) => vc.set(r.id, Number(r.view_count) || 0))
+    setViewCounts(vc)
 
     // Load hidden reel ids for this user
     const { data: hideRows } = await supabase.from("reel_hides").select("reel_id").eq("user_id", myId)
@@ -105,6 +112,34 @@ export default function Reels() {
   useEffect(() => { load() }, [load])
 
   // Autoplay the currently visible video, pause others
+  // Count a view when a reel stays visible for 3+ seconds
+  useEffect(() => {
+    if (!myId) return
+    const visible = reels.filter((r) => !hiddenIds.has(r.id))
+    const reel = visible[currentIdx]
+    if (!reel) return
+    if (viewedThisSession.current.has(reel.id)) return
+
+    const timer = setTimeout(async () => {
+      viewedThisSession.current.add(reel.id)
+      try {
+        await supabase.from("reel_views").insert({
+          reel_id: reel.id,
+          user_id: myId,
+          watch_seconds: 3,
+        })
+        // Optimistically bump the counter in UI
+        setViewCounts((prev) => {
+          const next = new Map(prev)
+          next.set(reel.id, (next.get(reel.id) || 0) + 1)
+          return next
+        })
+      } catch {}
+    }, 3000)
+
+    return () => clearTimeout(timer)
+  }, [currentIdx, reels, hiddenIds, myId])
+
   useEffect(() => {
     reels.forEach((_, i) => {
       const v = videoRefs.current[i]
