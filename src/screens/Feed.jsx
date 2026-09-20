@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { ImagePlus, Heart, Send, X, Users } from "lucide-react"
+import { ImagePlus, Heart, Send, X, Users, Play, Camera, PenSquare, Video, Image as ImageIcon } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
@@ -19,6 +19,7 @@ export default function Feed() {
   const [photos, setPhotos] = useState(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [reelsRail, setReelsRail] = useState([])
 
   const load = useCallback(async () => {
     if (!myId) return
@@ -76,6 +77,16 @@ export default function Feed() {
       setPhotos(pm)
     }
 
+    // 5. Recent reels for the rail
+    const { data: reelRows } = await supabase
+      .from("reels")
+      .select("id, video_url, thumbnail_url, caption, mirrored, cover_frame_time, created_at")
+      .eq("is_active", true)
+      .eq("audience", "public")
+      .order("created_at", { ascending: false })
+      .limit(8)
+    setReelsRail(reelRows || [])
+
     setLoading(false)
   }, [myId])
 
@@ -130,6 +141,78 @@ export default function Feed() {
           <div className="mb-3 text-red-400 text-[12.5px] bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2">
             {error}
           </div>
+        )}
+
+        {!loading && (
+          <>
+            {/* Composer card */}
+            <button
+              onClick={() => { tap("light"); nav("/reels") }}
+              className="w-full mb-3 flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/8 text-left active:scale-[0.99] transition-transform"
+            >
+              <span
+                className="w-10 h-10 rounded-full grid place-items-center shrink-0"
+                style={{ background: "linear-gradient(135deg, #C084FC 0%, #EC4899 100%)" }}
+              >
+                <PenSquare size={18} color="#fff" />
+              </span>
+              <span className="flex-1 text-muted text-[14px]">What's on your mind?</span>
+              <span className="flex items-center gap-1">
+                <span className="w-8 h-8 rounded-full grid place-items-center bg-white/[0.06] border border-white/10">
+                  <ImageIcon size={14} className="text-purple-300" />
+                </span>
+                <span className="w-8 h-8 rounded-full grid place-items-center bg-white/[0.06] border border-white/10">
+                  <Video size={14} className="text-pink-300" />
+                </span>
+              </span>
+            </button>
+
+            {/* Reels rail */}
+            {reelsRail.length > 0 && (
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase">
+                    Reels
+                  </p>
+                  <button
+                    onClick={() => { tap("light"); nav("/reels") }}
+                    className="text-purple-300 text-[12px] font-bold"
+                  >
+                    See all →
+                  </button>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                  {reelsRail.map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => { tap("light"); nav("/reels") }}
+                      className="shrink-0 relative rounded-xl overflow-hidden bg-black"
+                      style={{ width: 104, height: 156 }}
+                    >
+                      <video
+                        src={r.video_url}
+                        muted
+                        playsInline
+                        preload="metadata"
+                        className="w-full h-full object-cover"
+                        style={{ transform: r.mirrored ? "scaleX(-1)" : "none" }}
+                      />
+                      <span className="absolute inset-0 grid place-items-center bg-black/20">
+                        <span className="w-10 h-10 rounded-full grid place-items-center bg-black/45 backdrop-blur-md border border-white/20">
+                          <Play size={16} fill="#fff" color="#fff" />
+                        </span>
+                      </span>
+                      {r.caption && (
+                        <span className="absolute left-1.5 right-1.5 bottom-1.5 text-white text-[10px] font-semibold line-clamp-2 leading-tight drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] text-left">
+                          {r.caption.slice(0, 40)}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {loading ? (
