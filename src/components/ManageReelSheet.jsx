@@ -1,5 +1,6 @@
 import { useState } from "react"
-import { X, Pencil, Users, MessageSquare, Trash2, Eye, MapPin } from "lucide-react"
+import { X, Pencil, Users, MessageSquare, Trash2, Eye, MapPin, BarChart3 } from "lucide-react"
+import ReelInsights from "./ReelInsights"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
@@ -14,6 +15,7 @@ export default function ManageReelSheet({ reel, onClose, onUpdated, onDeleted })
   const { session } = useAuth()
   const myId = session?.user?.id
   const [screen, setScreen] = useState("menu") // menu | caption | audience
+  const [insightsOpen, setInsightsOpen] = useState(false)
   const [caption, setCaption] = useState(reel.caption || "")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
@@ -91,6 +93,19 @@ export default function ManageReelSheet({ reel, onClose, onUpdated, onDeleted })
                   <p className="text-muted text-[12px] truncate">
                     {reel.caption ? reel.caption.slice(0, 40) + (reel.caption.length > 40 ? "…" : "") : "No caption"}
                   </p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setInsightsOpen(true)}
+                className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left"
+              >
+                <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
+                  <BarChart3 size={17} className="text-purple-300" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-cream font-semibold text-[14.5px]">View insights</p>
+                  <p className="text-muted text-[12px]">Views, likes, watch time</p>
                 </div>
               </button>
 
@@ -213,6 +228,10 @@ export default function ManageReelSheet({ reel, onClose, onUpdated, onDeleted })
           </>
         )}
       </div>
+
+      {insightsOpen && (
+        <ReelInsights reel={reel} onClose={() => setInsightsOpen(false)} />
+      )}
     </div>
   )
 }
