@@ -3,6 +3,7 @@ import { X, Send, Circle, Square, RotateCcw, Mic, MicOff, Camera, Upload } from 
 import ReelTrim from "./ReelTrim"
 import ReelDecorate from "./ReelDecorate"
 import { supabase } from "../lib/supabase"
+import { getReelDraft, clearReelDraft } from "../lib/draftStore"
 import { useAuth } from "../lib/auth"
 
 const MAX_RECORD_SECONDS = 60
@@ -26,7 +27,8 @@ export default function ReelComposer({ onClose, onDone }) {
   const [error, setError] = useState("")
   const [progress, setProgress] = useState(0)
   const [trimming, setTrimming] = useState(false)
-  const [stage, setStage] = useState("capture") // capture | trim | decorate | publish
+  const [stage, setStage] = useState("capture")
+  const [draftPrompt, setDraftPrompt] = useState(null) // { savedAt, clips, textOverlays, stickerOverlays, filterId } // capture | trim | decorate | publish
   const [trimStart, setTrimStart] = useState(0)
   const [mirroredState, setMirroredState] = useState(false)
   const [textOverlaysState, setTextOverlaysState] = useState([])
@@ -216,6 +218,39 @@ export default function ReelComposer({ onClose, onDone }) {
 
   useEffect(() => () => { if (preview && preview.startsWith("blob:")) URL.revokeObjectURL(preview) }, [preview])
 
+  // On mount: check for an existing draft
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const d = await getReelDraft()
+        if (cancelled || !d) return
+        const age = Date.now() - (d.savedAt || 0)
+        if (age < 24 * 60 * 60 * 1000 && (d.clips?.length > 0)) {
+          setDraftPrompt(d)
+        } else {
+          await clearReelDraft()
+        }
+      } catch {}
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  function restoreDraft() {
+    if (!draftPrompt) return
+    setClipsState(draftPrompt.clips || [])
+    setTextOverlaysState(draftPrompt.textOverlays || [])
+    setStickerOverlaysState(draftPrompt.stickerOverlays || [])
+    setFilterIdState(draftPrompt.filterId || "none")
+    setStage("decorate")
+    setDraftPrompt(null)
+  }
+
+  async function discardDraft() {
+    await clearReelDraft()
+    setDraftPrompt(null)
+  }
+
   // When a new file is picked or recorded, open the trim screen automatically
   useEffect(() => {
     if (file && preview && !trimming && trimEnd === null) {
@@ -248,6 +283,43 @@ export default function ReelComposer({ onClose, onDone }) {
           setStage("decorate")
         }}
       />
+    )
+  }
+
+  if (draftPrompt) {
+    return (
+      <div className="fixed inset-0 z-[230] bg-black/85 flex items-center justify-center p-5">
+        <div className="w-full max-w-[380px] bg-[#0B0B14] rounded-[24px] border border-white/10 p-5 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-purple-500/15 border border-purple-500/30 grid place-items-center mx-auto mb-4">
+            <span className="text-2xl">📝</span>
+          </div>
+          <h2 className="text-cream font-extrabold text-[18px] mb-1.5">You have a draft</h2>
+          <p className="text-muted text-[13px] leading-relaxed mb-5">
+            Saved {new Date(draftPrompt.savedAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+            <br />
+            {draftPrompt.clips?.length || 0} clip{(draftPrompt.clips?.length || 0) > 1 ? "s" : ""} · restore it?
+          </p>
+          <button
+            onClick={restoreDraft}
+            className="w-full h-12 rounded-full text-white font-bold text-[14.5px] mb-2"
+            style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
+          >
+            Restore draft
+          </button>
+          <button
+            onClick={discardDraft}
+            className="w-full h-11 rounded-full bg-white/[0.06] border border-white/12 text-muted font-semibold text-[13.5px]"
+          >
+            Discard
+          </button>
+          <button
+            onClick={() => setDraftPrompt(null)}
+            className="w-full h-10 text-subtle text-[12.5px] mt-1"
+          >
+            Keep for later
+          </button>
+        </div>
+      </div>
     )
   }
 

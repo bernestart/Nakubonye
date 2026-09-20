@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { ChevronLeft, ChevronRight, Music, Type, Sparkles, Smile, Download } from "lucide-react"
+import { saveReelDraft } from "../lib/draftStore"
 
 const STICKER_LIB = ["❤️","😂","😍","🥰","🔥","✨","💯","👏","🙌","😎","🤩","😘","💜","💕","🌸","🌈","☀️","⭐","🎉","🎈","🍀","🌹","🦋","🍕","☕","🎶","⚡","💫","🌙","👑"]
 const FILTERS = [
@@ -89,15 +90,25 @@ export default function ReelDecorate({ clips, onBack, onNext, initialOverlays })
     }
   }, [dragging])
 
-  function saveAsDraft() {
+  async function saveAsDraft() {
     try {
-      localStorage.setItem("reel_draft_v1", JSON.stringify({
-        savedAt: Date.now(),
-        clips: list.map((c) => ({ url: c.url, trimStart: c.trimStart, trimEnd: c.trimEnd })),
-        textOverlays,
+      const serializableClips = list.map((c) => ({
+        id: c.id,
+        file: c.file || null,
+        url: c.url,
+        trimStart: c.trimStart,
+        trimEnd: c.trimEnd,
       }))
+      await saveReelDraft({
+        savedAt: Date.now(),
+        clips: serializableClips,
+        textOverlays,
+        stickerOverlays,
+        filterId,
+      })
       showToast("Draft saved")
-    } catch {
+    } catch (e) {
+      console.error(e)
       showToast("Could not save draft")
     }
   }
