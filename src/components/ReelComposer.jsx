@@ -30,6 +30,8 @@ export default function ReelComposer({ onClose, onDone }) {
   const [trimStart, setTrimStart] = useState(0)
   const [mirroredState, setMirroredState] = useState(false)
   const [textOverlaysState, setTextOverlaysState] = useState([])
+  const [stickerOverlaysState, setStickerOverlaysState] = useState([])
+  const [filterIdState, setFilterIdState] = useState("none")
   const [clipsState, setClipsState] = useState([])
   const [audienceState, setAudienceState] = useState("public")
   const [allowComments, setAllowComments] = useState(true)
@@ -200,6 +202,8 @@ export default function ReelComposer({ onClose, onDone }) {
       mirrored: mirroredState,
       aspect_ratio: aspectRatioState,
       text_overlays: textOverlaysState,
+      sticker_overlays: stickerOverlaysState,
+      filter_id: filterIdState,
       audience: audienceState,
       allow_comments: allowComments,
       allow_remix: allowRemix,
@@ -253,8 +257,10 @@ export default function ReelComposer({ onClose, onDone }) {
         clips={clipsState}
         initialOverlays={textOverlaysState}
         onBack={() => setStage("trim")}
-        onNext={({ textOverlays }) => {
+        onNext={({ textOverlays, stickerOverlays, filterId }) => {
           setTextOverlaysState(textOverlays || [])
+          setStickerOverlaysState(stickerOverlays || [])
+          setFilterIdState(filterId || "none")
           setStage("publish")
         }}
       />

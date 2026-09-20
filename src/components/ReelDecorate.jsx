@@ -1,6 +1,18 @@
 import { useEffect, useRef, useState } from "react"
 import { ChevronLeft, ChevronRight, Music, Type, Sparkles, Smile, Download } from "lucide-react"
 
+const STICKER_LIB = ["❤️","😂","😍","🥰","🔥","✨","💯","👏","🙌","😎","🤩","😘","💜","💕","🌸","🌈","☀️","⭐","🎉","🎈","🍀","🌹","🦋","🍕","☕","🎶","⚡","💫","🌙","👑"]
+const FILTERS = [
+  { id: "none",    name: "Original", css: "none" },
+  { id: "warm",    name: "Warm",     css: "sepia(0.35) saturate(1.3) brightness(1.05)" },
+  { id: "cool",    name: "Cool",     css: "hue-rotate(180deg) saturate(1.1) brightness(1.05)" },
+  { id: "mono",    name: "Mono",     css: "grayscale(1) contrast(1.1)" },
+  { id: "vivid",   name: "Vivid",    css: "saturate(1.8) contrast(1.1)" },
+  { id: "fade",    name: "Fade",     css: "saturate(0.7) brightness(1.15) contrast(0.9)" },
+  { id: "vintage", name: "Vintage",  css: "sepia(0.55) saturate(1.1) contrast(1.05)" },
+  { id: "noir",    name: "Noir",     css: "grayscale(1) contrast(1.3) brightness(0.95)" },
+]
+
 export default function ReelDecorate({ clips, onBack, onNext, initialOverlays }) {
   const videoRef = useRef(null)
   const [clipIdx, setClipIdx] = useState(0)
@@ -10,6 +22,11 @@ export default function ReelDecorate({ clips, onBack, onNext, initialOverlays })
   const [textDraft, setTextDraft] = useState({ text: "", color: "#ffffff", size: 28 })
   const [dragging, setDragging] = useState(null)
   const [toast, setToast] = useState("")
+  const [stickerOverlays, setStickerOverlays] = useState([])
+  const [activeStickerId, setActiveStickerId] = useState(null)
+  const [stickerSheetOpen, setStickerSheetOpen] = useState(false)
+  const [filterId, setFilterId] = useState("none")
+  const [filterCarouselOpen, setFilterCarouselOpen] = useState(false)
 
   const list = Array.isArray(clips) && clips.length > 0 ? clips : []
   const activeClip = list[clipIdx]
@@ -52,7 +69,12 @@ export default function ReelDecorate({ clips, onBack, onNext, initialOverlays })
       const t = e.touches?.[0] || e
       const nx = Math.max(0, Math.min(1, (t.clientX - rect.left) / rect.width))
       const ny = Math.max(0, Math.min(1, (t.clientY - rect.top) / rect.height))
-      setTextOverlays((arr) => arr.map((x) => x.id === dragging ? { ...x, x: nx, y: ny } : x))
+      if (dragging.startsWith("sticker-")) {
+        const id = dragging.slice(8)
+        setStickerOverlays((arr) => arr.map((x) => x.id === id ? { ...x, x: nx, y: ny } : x))
+      } else {
+        setTextOverlays((arr) => arr.map((x) => x.id === dragging ? { ...x, x: nx, y: ny } : x))
+      }
     }
     const up = () => setDragging(null)
     window.addEventListener("mousemove", move)
@@ -100,8 +122,8 @@ export default function ReelDecorate({ clips, onBack, onNext, initialOverlays })
         {[
           { label: "Audio",    icon: <Music size={18} />,      onClick: () => showToast("Audio coming soon") },
           { label: "Text",     icon: <Type size={18} />,       onClick: () => { setActiveTextId(null); setTextDraft({ text: "", color: "#ffffff", size: 28 }); setTextSheetOpen(true) } },
-          { label: "Effects",  icon: <Sparkles size={18} />,   onClick: () => showToast("Effects coming soon") },
-          { label: "Stickers", icon: <Smile size={18} />,      onClick: () => showToast("Stickers coming soon") },
+          { label: "Effects",  icon: <Sparkles size={18} />,   onClick: () => setFilterCarouselOpen(true) },
+          { label: "Stickers", icon: <Smile size={18} />,      onClick: () => setStickerSheetOpen(true) },
           { label: "Save",     icon: <Download size={18} />,   onClick: saveAsDraft },
         ].map((b) => (
           <button key={b.label} onClick={b.onClick} className="flex items-center gap-2.5">
@@ -123,8 +145,35 @@ export default function ReelDecorate({ clips, onBack, onNext, initialOverlays })
             playsInline
             muted={false}
             className="max-h-full object-contain"
-            style={{ maxHeight: "100dvh", width: "auto", maxWidth: "100vw", display: "block" }}
+            style={{
+              maxHeight: "100dvh",
+              width: "auto",
+              maxWidth: "100vw",
+              display: "block",
+              filter: (FILTERS.find((f) => f.id === filterId)?.css) || "none",
+            }}
           />
+          {stickerOverlays.map((st) => (
+            <button
+              key={st.id}
+              onMouseDown={(e) => { e.preventDefault(); setActiveStickerId(st.id); setDragging("sticker-" + st.id) }}
+              onTouchStart={(e) => { e.preventDefault(); setActiveStickerId(st.id); setDragging("sticker-" + st.id) }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: "absolute",
+                left: st.x * 100 + "%",
+                top: st.y * 100 + "%",
+                transform: "translate(-50%, -50%)",
+                fontSize: st.size,
+                zIndex: 6,
+                padding: 4,
+                border: activeStickerId === st.id ? "1px dashed rgba(255,255,255,0.7)" : "none",
+                touchAction: "none",
+              }}
+            >
+              {st.emoji}
+            </button>
+          ))}
           {textOverlays.map((t) => (
             <button
               key={t.id}
@@ -169,7 +218,7 @@ export default function ReelDecorate({ clips, onBack, onNext, initialOverlays })
           Edit reel
         </button>
         <button
-          onClick={() => onNext({ textOverlays })}
+          onClick={() => onNext({ textOverlays, stickerOverlays, filterId })}
           className="h-11 px-5 rounded-full bg-[#0866FF] text-white font-bold text-[14px] inline-flex items-center gap-2"
         >
           Next <ChevronRight size={18} strokeWidth={2.6} />
@@ -239,6 +288,81 @@ export default function ReelDecorate({ clips, onBack, onNext, initialOverlays })
               >
                 {activeTextId ? "Update" : "Add"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sticker picker */}
+      {stickerSheetOpen && (
+        <div className="fixed inset-0 z-[240] flex items-end" onClick={() => setStickerSheetOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div onClick={(e) => e.stopPropagation()}
+               className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-3"
+               style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto" />
+            <h3 className="text-cream font-extrabold text-[16px]">Add sticker</h3>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {STICKER_LIB.map((e) => (
+                <button
+                  key={e}
+                  onClick={() => {
+                    const id = crypto.randomUUID()
+                    setStickerOverlays((arr) => [...arr, { id, emoji: e, x: 0.5, y: 0.5, size: 56 }])
+                    setActiveStickerId(id)
+                    setStickerSheetOpen(false)
+                  }}
+                  className="w-11 h-11 rounded-full grid place-items-center text-2xl"
+                  style={{ background: "rgba(255,255,255,0.06)" }}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+            {activeStickerId && (
+              <div className="flex items-center gap-2 mt-2">
+                {[32, 48, 64, 88].map((sz) => (
+                  <button
+                    key={sz}
+                    onClick={() => setStickerOverlays((arr) => arr.map((x) => x.id === activeStickerId ? { ...x, size: sz } : x))}
+                    className="flex-1 h-9 rounded-full text-white text-[12px] font-bold border border-white/15 bg-white/[0.06]"
+                  >
+                    {sz}
+                  </button>
+                ))}
+                <button
+                  onClick={() => { setStickerOverlays((arr) => arr.filter((x) => x.id !== activeStickerId)); setActiveStickerId(null) }}
+                  className="h-9 px-4 rounded-full bg-red-500/20 border border-red-500/40 text-red-300 text-[12px] font-bold"
+                >
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Filter carousel */}
+      {filterCarouselOpen && (
+        <div className="fixed inset-0 z-[240] flex items-end" onClick={() => setFilterCarouselOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div onClick={(e) => e.stopPropagation()}
+               className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5"
+               style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-4" />
+            <h3 className="text-cream font-extrabold text-[16px] mb-4">Effects</h3>
+            <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+              {FILTERS.map((f) => (
+                <button key={f.id} onClick={() => { setFilterId(f.id); setFilterCarouselOpen(false) }} className="shrink-0 flex flex-col items-center gap-1.5">
+                  <span className="w-16 h-16 rounded-2xl border-2 overflow-hidden grid place-items-center text-white text-[11px] font-bold"
+                        style={{ borderColor: filterId === f.id ? "#fff" : "rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)" }}>
+                    <span style={{ filter: f.css, width: "100%", height: "100%", display: "grid", placeItems: "center", background: "linear-gradient(135deg, #C084FC, #EC4899)" }}>
+                      Aa
+                    </span>
+                  </span>
+                  <span className="text-white text-[11px] font-semibold">{f.name}</span>
+                </button>
+              ))}
             </div>
           </div>
         </div>

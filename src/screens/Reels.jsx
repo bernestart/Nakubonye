@@ -38,7 +38,7 @@ export default function Reels() {
     setLoading(true)
     const { data: rows } = await supabase
       .from("reels")
-      .select("id, user_id, video_url, clips, thumbnail_url, caption, duration_sec, trim_start, trim_end, mirrored, aspect_ratio, text_overlays, audience, allow_comments, allow_remix, location, cover_frame_time, view_count, created_at")
+      .select("id, user_id, video_url, clips, thumbnail_url, caption, duration_sec, trim_start, trim_end, mirrored, aspect_ratio, text_overlays, sticker_overlays, filter_id, audience, allow_comments, allow_remix, location, cover_frame_time, view_count, created_at")
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .limit(50)
@@ -312,7 +312,20 @@ export default function Reels() {
                     else v.pause()
                   }}
                   className="w-full h-full object-cover"
-                  style={{ transform: reel.mirrored ? "scaleX(-1)" : "none" }}
+                  style={{
+                    transform: reel.mirrored ? "scaleX(-1)" : "none",
+                    filter: (() => {
+                      const f = reel.filter_id || "none"
+                      if (f === "warm") return "sepia(0.35) saturate(1.3) brightness(1.05)"
+                      if (f === "cool") return "hue-rotate(180deg) saturate(1.1) brightness(1.05)"
+                      if (f === "mono") return "grayscale(1) contrast(1.1)"
+                      if (f === "vivid") return "saturate(1.8) contrast(1.1)"
+                      if (f === "fade") return "saturate(0.7) brightness(1.15) contrast(0.9)"
+                      if (f === "vintage") return "sepia(0.55) saturate(1.1) contrast(1.05)"
+                      if (f === "noir") return "grayscale(1) contrast(1.3) brightness(0.95)"
+                      return "none"
+                    })(),
+                  }}
                 />
 
                 {/* Text overlays baked on top */}
@@ -336,6 +349,23 @@ export default function Reels() {
                     }}
                   >
                     {t.text}
+                  </div>
+                ))}
+
+                {Array.isArray(reel.sticker_overlays) && reel.sticker_overlays.map((st) => (
+                  <div
+                    key={st.id}
+                    style={{
+                      position: "absolute",
+                      left: st.x * 100 + "%",
+                      top: st.y * 100 + "%",
+                      transform: "translate(-50%, -50%)",
+                      fontSize: st.size || 56,
+                      zIndex: 16,
+                      pointerEvents: "none",
+                    }}
+                  >
+                    {st.emoji}
                   </div>
                 ))}
 
