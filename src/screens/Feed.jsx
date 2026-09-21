@@ -7,6 +7,7 @@ import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 import BottomNav from "../components/BottomNav"
 import NotificationBell from "../components/NotificationBell"
+import AppHeader from "../components/AppHeader"
 import StoriesRow from "../components/StoriesRow"
 import PostCommentsSheet from "../components/PostCommentsSheet"
 import BrandGlow from "../components/BrandGlow"
@@ -295,20 +296,7 @@ export default function Feed() {
       background: "#0B0B14", overflow: "hidden",
     }}>
       <BrandGlow />
-      <header style={{ height: 48, flexShrink: 0 }} className="px-4 flex items-center justify-between">
-        <div
-          className="w-9 h-9 rounded-xl grid place-items-center"
-          style={{
-            background: "linear-gradient(135deg, #C084FC 0%, #A855F7 50%, #EC4899 100%)",
-            boxShadow: "0 6px 18px rgba(168,85,247,0.45)",
-          }}
-        >
-          <span className="text-white font-black text-[17px] leading-none">N</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <NotificationBell />
-        </div>
-      </header>
+      <AppHeader />
 
       <div className="flex-1 overflow-y-auto px-3 py-3 pb-24">
         {error && (

@@ -27,6 +27,8 @@ import Verify from './screens/Verify'
 import Roadmap from './screens/Roadmap'
 import Feed from './screens/Feed'
 import Reels from './screens/Reels'
+import Search from './screens/Search'
+import Online from './screens/Online'
 import Boost from './screens/Boost'
 import AdminVerifications from './screens/AdminVerifications'
 import Likes from './screens/Likes'
@@ -163,6 +165,8 @@ export default function App() {
         <Route path="/onboarding" element={<Guard><Onboarding /></Guard>} />
         <Route path="/feed" element={<Guard><Feed /></Guard>} />
         <Route path="/reels" element={<Guard><Reels /></Guard>} />
+        <Route path="/search" element={<Guard><Search /></Guard>} />
+        <Route path="/online" element={<Guard><Online /></Guard>} />
         <Route path="/roadmap" element={<Roadmap />} />
         <Route path="/discover" element={<Guard><Discover /></Guard>} />
         <Route path="/stories" element={<Guard><Stories /></Guard>} />
