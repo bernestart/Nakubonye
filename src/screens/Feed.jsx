@@ -93,7 +93,7 @@ export default function Feed() {
     // Recent public reels for home rail
     const { data: reelRows } = await supabase
       .from("reels")
-      .select("id, video_url, thumbnail_url, caption, mirrored, created_at")
+      .select("id, video_url, thumbnail_url, caption, mirrored, cover_frame_time, created_at")
       .eq("is_active", true)
       .eq("audience", "public")
       .order("created_at", { ascending: false })
@@ -370,6 +370,11 @@ export default function Feed() {
                       <video
                         src={r.video_url}
                         muted playsInline preload="metadata"
+                        poster={r.thumbnail_url || undefined}
+                        onLoadedMetadata={(e) => {
+                          const t = Number(r.cover_frame_time) || 0.1
+                          try { e.target.currentTime = t } catch {}
+                        }}
                         className="w-full h-full object-cover"
                         style={{ transform: r.mirrored ? "scaleX(-1)" : "none" }}
                       />
