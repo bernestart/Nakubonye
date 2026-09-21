@@ -307,6 +307,22 @@ export default function Feed() {
 
         {!loading && (
           <>
+            {/* Stories row */}
+            <div className="mb-3 -mx-3">
+              <div className="flex items-center justify-between mb-1 px-4">
+                <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase">
+                  Stories
+                </p>
+                <button
+                  onClick={() => { tap("light"); nav("/stories") }}
+                  className="text-purple-300 text-[12px] font-bold"
+                >
+                  See all →
+                </button>
+              </div>
+              <StoriesRow />
+            </div>
+
             {/* Composer card */}
             <button
               onClick={() => { tap("light"); nav("/reels") }}
@@ -353,70 +369,20 @@ export default function Feed() {
                     >
                       <video
                         src={r.video_url}
-                        muted
-                        playsInline
-                        preload="metadata"
+                        muted playsInline preload="metadata"
                         className="w-full h-full object-cover"
                         style={{ transform: r.mirrored ? "scaleX(-1)" : "none" }}
                       />
-                      <span className="absolute inset-0 grid place-items-center bg-black/20">
+                      <span className="absolute inset-0 grid place-items-center bg-black/25">
                         <span className="w-10 h-10 rounded-full grid place-items-center bg-black/45 backdrop-blur-md border border-white/20">
                           <Play size={16} fill="#fff" color="#fff" />
                         </span>
                       </span>
-                      {r.caption && (
-                        <span className="absolute left-1.5 right-1.5 bottom-1.5 text-white text-[10px] font-semibold line-clamp-2 leading-tight drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] text-left">
-                          {r.caption.slice(0, 40)}
-                        </span>
-                      )}
                     </button>
                   ))}
                 </div>
               </div>
             )}
-          </>
-        )}
-
-        {!loading && (
-          <>
-            {/* Stories row */}
-            <div className="mb-2 -mx-3">
-              <div className="flex items-center justify-between mb-1 px-4">
-                <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase">
-                  Stories
-                </p>
-                <button
-                  onClick={() => { tap("light"); nav("/stories") }}
-                  className="text-purple-300 text-[12px] font-bold"
-                >
-                  See all →
-                </button>
-              </div>
-              <StoriesRow />
-            </div>
-
-            {/* Composer card */}
-            <button
-              onClick={() => { tap("light"); nav("/reels") }}
-              className="w-full mb-3 flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/8 text-left active:scale-[0.99] transition-transform"
-            >
-              <span
-                className="w-10 h-10 rounded-full grid place-items-center shrink-0"
-                style={{ background: "linear-gradient(135deg, #C084FC 0%, #EC4899 100%)" }}
-              >
-                <PenSquare size={18} color="#fff" />
-              </span>
-              <span className="flex-1 text-muted text-[14px]">Share something real</span>
-              <span className="flex items-center gap-1">
-                <span className="w-8 h-8 rounded-full grid place-items-center bg-white/[0.06] border border-white/10">
-                  <ImageIcon size={14} className="text-purple-300" />
-                </span>
-                <span className="w-8 h-8 rounded-full grid place-items-center bg-white/[0.06] border border-white/10">
-                  <Video size={14} className="text-pink-300" />
-                </span>
-              </span>
-            </button>
-
           </>
         )}
 
