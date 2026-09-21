@@ -299,39 +299,6 @@ export default function Feed() {
               </span>
             </button>
 
-            {/* Reels rail */}
-            {reelsRail.length > 0 && (
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-2 px-1">
-                  <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase">Reels</p>
-                  <button onClick={() => { tap("light"); nav("/reels") }} className="text-purple-300 text-[12px] font-bold">
-                    See all →
-                  </button>
-                </div>
-                <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-                  {reelsRail.map((r) => (
-                    <button
-                      key={r.id}
-                      onClick={() => { tap("light"); nav("/reels") }}
-                      className="shrink-0 relative rounded-xl overflow-hidden bg-black"
-                      style={{ width: 104, height: 156 }}
-                    >
-                      <video
-                        src={r.video_url}
-                        muted playsInline preload="metadata"
-                        className="w-full h-full object-cover"
-                        style={{ transform: r.mirrored ? "scaleX(-1)" : "none" }}
-                      />
-                      <span className="absolute inset-0 grid place-items-center bg-black/25">
-                        <span className="w-10 h-10 rounded-full grid place-items-center bg-black/45 backdrop-blur-md border border-white/20">
-                          <Play size={16} fill="#fff" color="#fff" />
-                        </span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
           </>
         )}
 
