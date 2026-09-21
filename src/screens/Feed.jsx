@@ -470,6 +470,19 @@ export default function Feed() {
             )
           })
         )}
+
+        {/* Infinite scroll sentinel */}
+        {loadingMore && (
+          <div className="grid place-items-center py-6">
+            <div className="w-7 h-7 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
+          </div>
+        )}
+        {!hasMore && posts.length > 0 && (
+          <p className="text-center text-subtle text-[12px] py-6">
+            You're all caught up ✨
+          </p>
+        )}
+        <div ref={sentinelRef} data-sentinel style={{ height: 1 }} />
       </div>
 
       {commentsFor && (
