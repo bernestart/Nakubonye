@@ -94,6 +94,23 @@ export default function Feed() {
       .limit(8)
     setReelsRail(reelRows || [])
 
+    // Suggested people
+    const { data: sug } = await supabase.rpc("get_discover_profiles", {
+      p_limit: 10,
+      p_same_city: false,
+      p_shared_interests: false,
+      p_same_country: false,
+      p_verified_only: false,
+      p_online_only: false,
+      p_community_id: null,
+    })
+    setSuggested((sug || []).slice(0, 10).map((r) => ({
+      id: r.id,
+      display_name: r.display_name,
+      username: r.username,
+      photo_url: publicPhotoUrl(r.primary_photo),
+    })))
+
     // Reactions + comment counts
     const postIds = list.map((r) => r.id)
     if (postIds.length > 0) {
@@ -329,14 +346,15 @@ export default function Feed() {
             </div>
           </div>
         ) : (
-          posts.map((p) => {
+          posts.map((p, idx) => {
             const prof = profiles.get(p.author_id)
             const comm = communities.get(p.community_id)
             const photoPath = photos.get(p.author_id)
             const name = prof?.display_name || prof?.username || "Someone"
             const imageUrl = p.image_path ? supabase.storage.from("community-media").getPublicUrl(p.image_path).data?.publicUrl : null
             return (
-              <article key={p.id} className="mb-4 rounded-2xl bg-white/[0.03] border border-white/8 overflow-hidden">
+              <Fragment key={p.id}>
+              <article className="mb-4 rounded-2xl bg-white/[0.03] border border-white/8 overflow-hidden">
                 {/* Community badge */}
                 {comm && (
                   <button
@@ -416,6 +434,39 @@ export default function Feed() {
                   </button>
                 </div>
               </article>
+
+              {(idx + 1) % 4 === 0 && suggested.length > 0 && (
+                <div className="mb-4 rounded-2xl bg-white/[0.03] border border-white/8 overflow-hidden">
+                  <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase px-3 pt-3 mb-2">
+                    People you may know
+                  </p>
+                  <div className="flex gap-3 overflow-x-auto px-3 pb-3" style={{ scrollbarWidth: "none" }}>
+                    {suggested.slice(0, 6).map((u) => (
+                      <button
+                        key={u.id}
+                        onClick={() => { tap("light"); nav("/profile/" + u.id) }}
+                        className="shrink-0 flex flex-col items-center gap-1.5"
+                        style={{ width: 92 }}
+                      >
+                        <span className="w-[72px] h-[72px] rounded-full overflow-hidden bg-elevated border-2 border-white/10">
+                          {u.photo_url ? (
+                            <img src={u.photo_url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="w-full h-full grid place-items-center text-purple-400 font-black text-xl">
+                              {(u.display_name || "?")[0]}
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-cream text-[12px] font-semibold truncate w-full text-center">
+                          {u.display_name || u.username}
+                        </span>
+                        <span className="text-purple-300 text-[11px] font-bold">View</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              </Fragment>
             )
           })
         )}
