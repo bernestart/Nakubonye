@@ -27,6 +27,7 @@ export default function Feed() {
   const [commentCounts, setCommentCounts] = useState(new Map())
   const [commentsFor, setCommentsFor] = useState(null)
   const [suggested, setSuggested] = useState([])
+  const [myPhotoUrl, setMyPhotoUrl] = useState(null)
   const [cursor, setCursor] = useState(null)
   const [hasMore, setHasMore] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -110,6 +111,17 @@ export default function Feed() {
       p_online_only: false,
       p_community_id: null,
     })
+    // Load my avatar for composer pill
+    const { data: myProfilePhoto } = await supabase
+      .from("profile_photos")
+      .select("storage_path")
+      .eq("user_id", myId)
+      .order("is_primary", { ascending: false })
+      .order("display_order", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    setMyPhotoUrl(myProfilePhoto?.storage_path ? publicPhotoUrl(myProfilePhoto.storage_path) : null)
+
     setSuggested((sug || []).slice(0, 10).map((r) => ({
       id: r.id,
       display_name: r.display_name,
@@ -323,25 +335,26 @@ export default function Feed() {
               <StoriesRow />
             </div>
 
-            {/* Composer card */}
+            {/* Composer pill */}
             <button
               onClick={() => { tap("light"); nav("/reels") }}
-              className="w-full mb-3 flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/8 text-left active:scale-[0.99] transition-transform"
+              className="w-full mb-3 flex items-center gap-2.5 active:scale-[0.99] transition-transform"
             >
-              <span
-                className="w-10 h-10 rounded-full grid place-items-center shrink-0"
-                style={{ background: "linear-gradient(135deg, #C084FC 0%, #EC4899 100%)" }}
-              >
-                <PenSquare size={18} color="#fff" />
+              <span className="w-9 h-9 rounded-full overflow-hidden bg-elevated border border-white/10 shrink-0">
+                {myPhotoUrl ? (
+                  <img src={myPhotoUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="w-full h-full grid place-items-center text-purple-300 font-black text-sm">Y</span>
+                )}
               </span>
-              <span className="flex-1 text-muted text-[14px]">Share something real</span>
-              <span className="flex items-center gap-1">
-                <span className="w-8 h-8 rounded-full grid place-items-center bg-white/[0.06] border border-white/10">
-                  <ImageIcon size={14} className="text-purple-300" />
-                </span>
-                <span className="w-8 h-8 rounded-full grid place-items-center bg-white/[0.06] border border-white/10">
-                  <Video size={14} className="text-pink-300" />
-                </span>
+              <span className="flex-1 h-10 rounded-full bg-white/[0.04] border border-white/8 px-4 flex items-center text-muted text-[13.5px]">
+                Share something real
+              </span>
+              <span className="w-9 h-9 rounded-full grid place-items-center bg-white/[0.04] border border-white/8 shrink-0">
+                <ImageIcon size={15} className="text-purple-300" />
+              </span>
+              <span className="w-9 h-9 rounded-full grid place-items-center bg-white/[0.04] border border-white/8 shrink-0">
+                <Video size={15} className="text-pink-300" />
               </span>
             </button>
 
