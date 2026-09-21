@@ -18,6 +18,10 @@ export default function StoriesRow() {
   const [myPhoto, setMyPhoto] = useState(null)
   const [composerOpen, setComposerOpen] = useState(false)
   const [viewerState, setViewerState] = useState(null)
+  const [storiesCursor, setStoriesCursor] = useState(null)
+  const [storiesHasMore, setStoriesHasMore] = useState(true)
+  const [storiesLoadingMore, setStoriesLoadingMore] = useState(false)
+  const stripRef = useRef(null)
   const [viewed, setViewed] = useState(() => {
     try { return JSON.parse(localStorage.getItem("story_views") || "{}") } catch { return {} }
   })
@@ -41,7 +45,7 @@ export default function StoriesRow() {
       .select("id, user_id, media_url, media_type, caption, created_at, expires_at")
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: false })
-      .limit(200)
+      .limit(30)
 
     if (!rows) return
 
@@ -92,9 +96,101 @@ export default function StoriesRow() {
 
     setMyStory(mine || null)
     setGroups(others)
+    // Cursor for pagination — oldest story loaded
+    const oldest = rows[rows.length - 1]?.created_at || null
+    setStoriesCursor(oldest)
+    setStoriesHasMore(rows.length === 30)
   }, [myId, viewed])
 
   useEffect(() => { load() }, [load])
+
+  async function loadMoreStories() {
+    if (!myId || storiesLoadingMore || !storiesHasMore || !storiesCursor) return
+    setStoriesLoadingMore(true)
+
+    const { data: rows } = await supabase
+      .from("stories")
+      .select("id, user_id, media_url, media_type, caption, created_at, expires_at")
+      .gt("expires_at", new Date().toISOString())
+      .lt("created_at", storiesCursor)
+      .order("created_at", { ascending: false })
+      .limit(30)
+
+    if (!rows || rows.length === 0) {
+      setStoriesHasMore(false)
+      setStoriesLoadingMore(false)
+      return
+    }
+
+    // Filter out stories already present by user_id (avoid duplicates)
+    const existingUserIds = new Set([...groups.map((g) => g.user_id), ...(myStory ? [myStory.user_id] : [])])
+    const newRows = rows.filter((r) => !existingUserIds.has(r.user_id))
+
+    if (newRows.length === 0) {
+      setStoriesHasMore(rows.length === 30)
+      setStoriesLoadingMore(false)
+      if (rows.length === 30) {
+        // recurse — this page was all already-known users
+        return loadMoreStories()
+      }
+      return
+    }
+
+    // Group new stories by user
+    const byUser = new Map()
+    newRows.forEach((st) => {
+      if (!byUser.has(st.user_id)) byUser.set(st.user_id, [])
+      byUser.get(st.user_id).push(st)
+    })
+
+    const userIds = [...byUser.keys()]
+    if (userIds.length > 0) {
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("id, display_name, username")
+        .in("id", userIds)
+      const pMap = new Map((profs || []).map((p) => [p.id, p]))
+
+      const { data: photos } = await supabase
+        .from("profile_photos")
+        .select("user_id, storage_path, is_primary, display_order")
+        .in("user_id", userIds)
+        .order("is_primary", { ascending: false })
+        .order("display_order", { ascending: true })
+      const photoMap = new Map()
+      ;(photos || []).forEach((pp) => {
+        if (!photoMap.has(pp.user_id)) photoMap.set(pp.user_id, pp.storage_path)
+      })
+
+      const list = userIds.map((uid) => {
+        const prof = pMap.get(uid)
+        const sorted = byUser.get(uid).slice().reverse()
+        return {
+          user_id: uid,
+          display_name: prof?.display_name || prof?.username || "Someone",
+          avatar_path: photoMap.get(uid),
+          stories: sorted,
+        }
+      })
+
+      setGroups((prev) => [...prev, ...list])
+    }
+
+    setStoriesCursor(rows[rows.length - 1].created_at)
+    setStoriesHasMore(rows.length === 30)
+    setStoriesLoadingMore(false)
+  }
+
+  // Watch scroll on the strip — load more when near the end
+  useEffect(() => {
+    const el = stripRef.current
+    if (!el) return
+    const onScroll = () => {
+      if (el.scrollLeft + el.clientWidth >= el.scrollWidth - 300) loadMoreStories()
+    }
+    el.addEventListener("scroll", onScroll, { passive: true })
+    return () => el.removeEventListener("scroll", onScroll)
+  }, [loadMoreStories])
 
   useEffect(() => {
     if (!myId) return
@@ -132,7 +228,7 @@ export default function StoriesRow() {
 
   return (
     <>
-      <div className="flex gap-2.5 overflow-x-auto px-3 py-2.5" style={{ scrollbarWidth: "none" }}>
+      <div ref={stripRef} className="flex gap-2.5 overflow-x-auto px-3 py-2.5" style={{ scrollbarWidth: "none" }}>
         {/* My story tile */}
         <button
           onClick={() => { tap("light"); myStory ? setViewerState({ startIndex: 0 }) : setComposerOpen(true) }}
