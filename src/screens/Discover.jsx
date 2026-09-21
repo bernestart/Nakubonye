@@ -10,6 +10,7 @@ import { publicPhotoUrl, calcAge } from '../lib/photo'
 import { tap } from '../lib/haptic'
 import { useWallet } from '../lib/wallet'
 import BottomNav from '../components/BottomNav'
+import AppHeader from '../components/AppHeader'
 import SuperRequestModal from '../components/SuperRequestModal'
 import MatchModal from '../components/MatchModal'
 import BrandGlow from '../components/BrandGlow'
@@ -205,40 +206,25 @@ export default function Discover() {
       }}
     >
       <BrandGlow />
-      <header
-        style={{ height: 48, flexShrink: 0 }}
-        className="px-4 flex items-center justify-between"
+      <AppHeader />
+
+      {/* Floating filter button */}
+      <button
+        onClick={() => { tap('light'); nav('/filters') }}
+        className="fixed top-16 right-4 z-30 w-10 h-10 rounded-full grid place-items-center"
+        style={{
+          background: 'rgba(20,20,31,0.85)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          backdropFilter: 'blur(10px)',
+          boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
+        }}
+        aria-label="Filters"
       >
-        <div
-          className="w-9 h-9 rounded-xl grid place-items-center"
-          style={{
-            background: 'linear-gradient(135deg, #C084FC 0%, #A855F7 50%, #EC4899 100%)',
-            boxShadow: '0 6px 18px rgba(168,85,247,0.45)',
-          }}
-          aria-label="Nakubonye"
-        >
-          <span className="text-white font-black text-[17px] leading-none">N</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => { tap('light'); nav('/stories') }}
-            className="h-9 px-3 rounded-full text-cream font-bold text-[13px] bg-white/[0.06] border border-white/12"
-          >
-            Stories
-          </button>
-          <NotificationBell />
-          <button
-            onClick={() => { tap('light'); nav('/filters') }}
-            className="w-9 h-9 rounded-full grid place-items-center text-muted relative"
-            aria-label="Filters"
-          >
-            <SlidersHorizontal size={18} strokeWidth={2.2} />
-            {(sameCity || sharedInterests || sharedInterests || verifiedOnly || onlineOnly) && (
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-purple-500" />
-            )}
-          </button>
-        </div>
-      </header>
+        <SlidersHorizontal size={18} strokeWidth={2.2} className="text-cream" />
+        {(sameCity || sharedInterests || sameCountry || verifiedOnly || onlineOnly) && (
+          <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-purple-500" />
+        )}
+      </button>
 
       {error && (
         <div className="mx-3 mb-2 text-danger text-[12px] bg-danger/10 border border-danger/30 rounded-lg px-3 py-2 shrink-0">
