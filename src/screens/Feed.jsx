@@ -22,6 +22,11 @@ export default function Feed() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [reelsRail, setReelsRail] = useState([])
+  const [myReactions, setMyReactions] = useState(new Set())
+  const [reactionCounts, setReactionCounts] = useState(new Map())
+  const [commentCounts, setCommentCounts] = useState(new Map())
+  const [commentsFor, setCommentsFor] = useState(null)
+  const [suggested, setSuggested] = useState([])
 
   const load = useCallback(async () => {
     if (!myId) return
