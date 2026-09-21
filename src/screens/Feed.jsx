@@ -483,7 +483,12 @@ export default function Feed() {
                   <div className="flex items-center justify-between px-3 pt-2.5 pb-1 border-t border-white/5">
                     <span className="flex items-center gap-1.5 text-muted text-[12px]">
                       {myReactions.has(p.id) ? (
-                        <>You and <strong className="text-cream">{Math.max(0, (reactionCounts.get(p.id) || 1) - 1)}</strong> others</>
+                        <>{(() => {
+                          const total = reactionCounts.get(p.id) || 0
+                          if (total === 1) return <>You liked this</>
+                          if (total === 2) return <>You and <strong className="text-cream">1</strong> other</>
+                          return <>You and <strong className="text-cream">{total - 1}</strong> others</>
+                        })()}</>
                       ) : (
                         <><strong className="text-cream">{reactionCounts.get(p.id) || 0}</strong> {reactionCounts.get(p.id) === 1 ? "reaction" : "reactions"}</>
                       )}
