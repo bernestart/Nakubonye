@@ -309,17 +309,6 @@ export default function Feed() {
           <>
             {/* Stories row */}
             <div className="mb-3 -mx-3">
-              <div className="flex items-center justify-between mb-1 px-4">
-                <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase">
-                  Stories
-                </p>
-                <button
-                  onClick={() => { tap("light"); nav("/stories") }}
-                  className="text-purple-300 text-[12px] font-bold"
-                >
-                  See all →
-                </button>
-              </div>
               <StoriesRow />
             </div>
 
