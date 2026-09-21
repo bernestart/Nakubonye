@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { ImagePlus, Heart, Send, X, Users, Play, Camera, PenSquare, Video, Image as ImageIcon } from "lucide-react"
+import { ImagePlus, Heart, Send, X, Users, Play, Camera, PenSquare, Video, Image as ImageIcon, MessageCircle, Share2 } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 import BottomNav from "../components/BottomNav"
 import NotificationBell from "../components/NotificationBell"
+import StoriesRow from "../components/StoriesRow"
+import PostCommentsSheet from "../components/PostCommentsSheet"
 import BrandGlow from "../components/BrandGlow"
 
 export default function Feed() {
@@ -77,15 +79,40 @@ export default function Feed() {
       setPhotos(pm)
     }
 
-    // 5. Recent reels for the rail
+    // Recent public reels for home rail
     const { data: reelRows } = await supabase
       .from("reels")
-      .select("id, video_url, thumbnail_url, caption, mirrored, cover_frame_time, created_at")
+      .select("id, video_url, thumbnail_url, caption, mirrored, created_at")
       .eq("is_active", true)
       .eq("audience", "public")
       .order("created_at", { ascending: false })
       .limit(8)
     setReelsRail(reelRows || [])
+
+    // Reactions + comment counts
+    const postIds = list.map((r) => r.id)
+    if (postIds.length > 0) {
+      const { data: reactRows } = await supabase
+        .from("community_post_reactions")
+        .select("post_id, user_id")
+        .in("post_id", postIds)
+      const mine = new Set()
+      const counts = new Map()
+      ;(reactRows || []).forEach((r) => {
+        counts.set(r.post_id, (counts.get(r.post_id) || 0) + 1)
+        if (r.user_id === myId) mine.add(r.post_id)
+      })
+      setMyReactions(mine)
+      setReactionCounts(counts)
+
+      const { data: commentRows } = await supabase
+        .from("community_post_comments")
+        .select("post_id")
+        .in("post_id", postIds)
+      const cc = new Map()
+      ;(commentRows || []).forEach((c) => cc.set(c.post_id, (cc.get(c.post_id) || 0) + 1))
+      setCommentCounts(cc)
+    }
 
     setLoading(false)
   }, [myId])
@@ -100,6 +127,35 @@ export default function Feed() {
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [myId, load])
+
+  async function toggleLike(postId) {
+    if (!myId) return
+    tap("light")
+    const isLiked = myReactions.has(postId)
+    const nextMine = new Set(myReactions)
+    const nextCounts = new Map(reactionCounts)
+    if (isLiked) {
+      nextMine.delete(postId)
+      nextCounts.set(postId, Math.max(0, (nextCounts.get(postId) || 1) - 1))
+      setMyReactions(nextMine); setReactionCounts(nextCounts)
+      await supabase.from("community_post_reactions").delete().eq("post_id", postId).eq("user_id", myId)
+    } else {
+      nextMine.add(postId)
+      nextCounts.set(postId, (nextCounts.get(postId) || 0) + 1)
+      setMyReactions(nextMine); setReactionCounts(nextCounts)
+      await supabase.from("community_post_reactions").insert({ post_id: postId, user_id: myId, reaction: "❤️" })
+    }
+  }
+
+  async function sharePost(p) {
+    tap("light")
+    const url = window.location.origin + "/communities/" + p.community_id
+    if (navigator.share) {
+      try { await navigator.share({ title: "Nakubonye", url }) } catch {}
+    } else {
+      try { await navigator.clipboard.writeText(url); alert("Link copied!") } catch {}
+    }
+  }
 
   return (
     <div style={{
@@ -120,18 +176,6 @@ export default function Feed() {
           <span className="text-white font-black text-[17px] leading-none">N</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => { tap("light"); nav("/stories") }}
-            className="h-9 px-3 rounded-full text-cream font-bold text-[13px] bg-white/[0.06] border border-white/12"
-          >
-            Stories
-          </button>
-          <button
-            onClick={() => { tap("light"); nav("/reels") }}
-            className="h-9 px-3 rounded-full text-cream font-bold text-[13px] bg-white/[0.06] border border-white/12"
-          >
-            Reels
-          </button>
           <NotificationBell />
         </div>
       </header>
@@ -207,6 +251,82 @@ export default function Feed() {
                           {r.caption.slice(0, 40)}
                         </span>
                       )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {!loading && (
+          <>
+            {/* Stories row */}
+            <div className="mb-2 -mx-3">
+              <div className="flex items-center justify-between mb-1 px-4">
+                <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase">
+                  Stories
+                </p>
+                <button
+                  onClick={() => { tap("light"); nav("/stories") }}
+                  className="text-purple-300 text-[12px] font-bold"
+                >
+                  See all →
+                </button>
+              </div>
+              <StoriesRow />
+            </div>
+
+            {/* Composer card */}
+            <button
+              onClick={() => { tap("light"); nav("/reels") }}
+              className="w-full mb-3 flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/8 text-left active:scale-[0.99] transition-transform"
+            >
+              <span
+                className="w-10 h-10 rounded-full grid place-items-center shrink-0"
+                style={{ background: "linear-gradient(135deg, #C084FC 0%, #EC4899 100%)" }}
+              >
+                <PenSquare size={18} color="#fff" />
+              </span>
+              <span className="flex-1 text-muted text-[14px]">What's on your mind?</span>
+              <span className="flex items-center gap-1">
+                <span className="w-8 h-8 rounded-full grid place-items-center bg-white/[0.06] border border-white/10">
+                  <ImageIcon size={14} className="text-purple-300" />
+                </span>
+                <span className="w-8 h-8 rounded-full grid place-items-center bg-white/[0.06] border border-white/10">
+                  <Video size={14} className="text-pink-300" />
+                </span>
+              </span>
+            </button>
+
+            {/* Reels rail */}
+            {reelsRail.length > 0 && (
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase">Reels</p>
+                  <button onClick={() => { tap("light"); nav("/reels") }} className="text-purple-300 text-[12px] font-bold">
+                    See all →
+                  </button>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                  {reelsRail.map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => { tap("light"); nav("/reels") }}
+                      className="shrink-0 relative rounded-xl overflow-hidden bg-black"
+                      style={{ width: 104, height: 156 }}
+                    >
+                      <video
+                        src={r.video_url}
+                        muted playsInline preload="metadata"
+                        className="w-full h-full object-cover"
+                        style={{ transform: r.mirrored ? "scaleX(-1)" : "none" }}
+                      />
+                      <span className="absolute inset-0 grid place-items-center bg-black/25">
+                        <span className="w-10 h-10 rounded-full grid place-items-center bg-black/45 backdrop-blur-md border border-white/20">
+                          <Play size={16} fill="#fff" color="#fff" />
+                        </span>
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -292,13 +412,35 @@ export default function Feed() {
                   <img src={imageUrl} alt="" className="w-full" loading="lazy" />
                 )}
 
-                {/* Footer actions */}
-                <div className="flex items-center gap-3 px-3 py-2.5 border-t border-white/5">
+                {/* Engagement bar */}
+                <div className="flex items-center justify-between px-2 py-1.5 border-t border-white/5">
                   <button
-                    onClick={() => { tap("light"); nav("/communities/" + p.community_id) }}
-                    className="flex items-center gap-1.5 text-muted text-[12px] font-semibold"
+                    onClick={() => toggleLike(p.id)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl flex-1 justify-center"
                   >
-                    <Heart size={14} /> View in community
+                    <Heart
+                      size={18}
+                      strokeWidth={2.2}
+                      color={myReactions.has(p.id) ? "#EC4899" : "#888"}
+                      fill={myReactions.has(p.id) ? "#EC4899" : "none"}
+                    />
+                    <span className="text-[12.5px] font-bold" style={{ color: myReactions.has(p.id) ? "#EC4899" : "#888" }}>
+                      {reactionCounts.get(p.id) || 0}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => { tap("light"); setCommentsFor(p.id) }}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl flex-1 justify-center"
+                  >
+                    <MessageCircle size={18} strokeWidth={2.2} color="#888" />
+                    <span className="text-muted text-[12.5px] font-bold">{commentCounts.get(p.id) || 0}</span>
+                  </button>
+                  <button
+                    onClick={() => sharePost(p)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl flex-1 justify-center"
+                  >
+                    <Share2 size={18} strokeWidth={2.2} color="#888" />
+                    <span className="text-muted text-[12.5px] font-bold">Share</span>
                   </button>
                 </div>
               </article>
@@ -306,6 +448,20 @@ export default function Feed() {
           })
         )}
       </div>
+
+      {commentsFor && (
+        <PostCommentsSheet
+          postId={commentsFor}
+          onClose={() => setCommentsFor(null)}
+          onCountChange={(n) => {
+            setCommentCounts((prev) => {
+              const next = new Map(prev)
+              next.set(commentsFor, n)
+              return next
+            })
+          }}
+        />
+      )}
 
       <BottomNav />
     </div>
