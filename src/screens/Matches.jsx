@@ -9,6 +9,7 @@ import { publicPhotoUrl, calcAge } from '../lib/photo'
 import { tap } from '../lib/haptic'
 import BottomNav from '../components/BottomNav'
 import NotificationBell from '../components/NotificationBell'
+import AppHeader from '../components/AppHeader'
 import BrandGlow from '../components/BrandGlow'
 
 export default function Matches() {
@@ -95,25 +96,22 @@ export default function Matches() {
       }}
     >
       <BrandGlow />
-      <header
-        style={{ height: 52, flexShrink: 0 }}
-        className="px-4 flex items-center justify-between"
+      <AppHeader />
+
+      {/* Floating refresh */}
+      <button
+        onClick={() => { tap('light'); load() }}
+        className="fixed top-16 right-4 z-30 w-10 h-10 rounded-full grid place-items-center"
+        style={{
+          background: 'rgba(20,20,31,0.85)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          backdropFilter: 'blur(10px)',
+          boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
+        }}
+        aria-label="Refresh"
       >
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-purple-600 grid place-items-center shadow-[0_4px_12px_rgba(124,58,237,0.45)]">
-            <span className="text-white font-black text-sm">N</span>
-          </div>
-          <span className="text-cream font-bold text-[14px]">Matches</span>
-        </div>
-        <NotificationBell />
-        <button
-          onClick={load}
-          className="w-9 h-9 rounded-full grid place-items-center bg-white/[0.05] border border-white/8 text-muted"
-          aria-label="Refresh"
-        >
-          <RefreshCw size={16} strokeWidth={2.3} />
-        </button>
-      </header>
+        <RefreshCw size={16} strokeWidth={2.3} className="text-cream" />
+      </button>
 
       <div className="px-4 pb-3 shrink-0">
         <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-1">

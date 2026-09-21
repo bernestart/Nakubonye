@@ -8,6 +8,7 @@ import { useAuth } from '../lib/auth'
 import { publicPhotoUrl } from '../lib/photo'
 import { tap } from '../lib/haptic'
 import BottomNav from '../components/BottomNav'
+import AppHeader from '../components/AppHeader'
 import NotificationBell from '../components/NotificationBell'
 import BrandGlow from '../components/BrandGlow'
 
@@ -179,25 +180,7 @@ export default function Messages() {
       }}
     >
       <BrandGlow />
-      <header
-        style={{ height: 52, flexShrink: 0 }}
-        className="px-4 flex items-center justify-between"
-      >
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-purple-600 grid place-items-center shadow-[0_4px_12px_rgba(124,58,237,0.45)]">
-            <span className="text-white font-black text-sm">N</span>
-          </div>
-          <span className="text-cream font-bold text-[14px]">Messages</span>
-        </div>
-        <NotificationBell />
-        <button
-          onClick={load}
-          className="w-9 h-9 rounded-full grid place-items-center bg-white/[0.05] border border-white/8 text-muted"
-          aria-label="Refresh"
-        >
-          <RefreshCw size={16} strokeWidth={2.3} />
-        </button>
-      </header>
+      <AppHeader />
 
       {error && (
         <div className="mx-4 mb-2 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5 shrink-0">
