@@ -9,6 +9,44 @@ import { useAuth } from "../lib/auth"
 
 const MAX_RECORD_SECONDS = 60
 
+async function extractThumbnail(file, timeSec) {
+  return new Promise((resolve) => {
+    try {
+      const url = URL.createObjectURL(file)
+      const v = document.createElement("video")
+      v.src = url
+      v.muted = true
+      v.playsInline = true
+      v.crossOrigin = "anonymous"
+      let resolved = false
+      const done = (blob) => {
+        if (resolved) return
+        resolved = true
+        try { URL.revokeObjectURL(url) } catch {}
+        resolve(blob)
+      }
+      v.onloadedmetadata = () => {
+        const t = Math.max(0, Math.min(timeSec || 0.1, (v.duration || 1) - 0.1))
+        try { v.currentTime = t } catch { done(null) }
+      }
+      v.onseeked = () => {
+        try {
+          const c = document.createElement("canvas")
+          c.width = v.videoWidth || 720
+          c.height = v.videoHeight || 1280
+          const ctx = c.getContext("2d")
+          ctx.drawImage(v, 0, 0, c.width, c.height)
+          c.toBlob((blob) => done(blob), "image/jpeg", 0.85)
+        } catch { done(null) }
+      }
+      v.onerror = () => done(null)
+      setTimeout(() => done(null), 5000)
+    } catch {
+      resolve(null)
+    }
+  })
+}
+
 export default function ReelComposer({ onClose, onDone }) {
   const { session } = useAuth()
   const myId = session?.user?.id
@@ -196,6 +234,25 @@ export default function ReelComposer({ onClose, onDone }) {
     const firstUrl = uploaded[0].url
     const totalDuration = uploaded.reduce((acc, c) => acc + ((c.trim_end || 0) - (c.trim_start || 0)), 0)
 
+    // Generate + upload a thumbnail from the first clip
+    let thumbnailUrl = null
+    try {
+      const firstClip = sourceClips[0]
+      if (firstClip?.file) {
+        const blob = await extractThumbnail(firstClip.file, coverTime || 0.1)
+        if (blob) {
+          const thumbPath = myId + "/" + crypto.randomUUID() + "_thumb.jpg"
+          const { error: tErr } = await supabase.storage
+            .from("reels-media")
+            .upload(thumbPath, blob, { upsert: false, contentType: "image/jpeg" })
+          if (!tErr) {
+            const { data: tpub } = supabase.storage.from("reels-media").getPublicUrl(thumbPath)
+            thumbnailUrl = tpub?.publicUrl || null
+          }
+        }
+      }
+    } catch {}
+
     const { error: insErr } = await supabase.from("reels").insert({
       user_id: myId,
       video_url: firstUrl,
@@ -215,6 +272,7 @@ export default function ReelComposer({ onClose, onDone }) {
       location: locationState.trim() || null,
       cover_frame_time: coverTime || 0,
       tagged_user_ids: taggedUsers.map((u) => u.id),
+      thumbnail_url: thumbnailUrl,
     })
     if (insErr) { setError(insErr.message); setBusy(false); return }
     setProgress(100); setBusy(false); setStage("capture"); onDone?.()

@@ -380,17 +380,25 @@ export default function Feed() {
                       className="shrink-0 relative rounded-xl overflow-hidden bg-black"
                       style={{ width: 104, height: 156 }}
                     >
-                      <video
-                        src={r.video_url}
-                        muted playsInline preload="metadata"
-                        poster={r.thumbnail_url || undefined}
-                        onLoadedMetadata={(e) => {
-                          const t = Number(r.cover_frame_time) || 0.1
-                          try { e.target.currentTime = t } catch {}
-                        }}
-                        className="w-full h-full object-cover"
-                        style={{ transform: r.mirrored ? "scaleX(-1)" : "none" }}
-                      />
+                      {r.thumbnail_url ? (
+                        <img
+                          src={r.thumbnail_url}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          style={{ transform: r.mirrored ? "scaleX(-1)" : "none" }}
+                        />
+                      ) : (
+                        <video
+                          src={r.video_url}
+                          muted playsInline preload="auto"
+                          onLoadedData={(e) => {
+                            const t = Number(r.cover_frame_time) || 0.1
+                            try { e.target.currentTime = t } catch {}
+                          }}
+                          className="w-full h-full object-cover"
+                          style={{ transform: r.mirrored ? "scaleX(-1)" : "none" }}
+                        />
+                      )}
                       <span className="absolute inset-0 grid place-items-center bg-black/25">
                         <span className="w-10 h-10 rounded-full grid place-items-center bg-black/45 backdrop-blur-md border border-white/20">
                           <Play size={16} fill="#fff" color="#fff" />
