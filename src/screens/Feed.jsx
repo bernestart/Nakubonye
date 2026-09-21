@@ -27,6 +27,10 @@ export default function Feed() {
   const [commentCounts, setCommentCounts] = useState(new Map())
   const [commentsFor, setCommentsFor] = useState(null)
   const [suggested, setSuggested] = useState([])
+  const [cursor, setCursor] = useState(null)
+  const [hasMore, setHasMore] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const sentinelRef = useRef(null)
 
   const load = useCallback(async () => {
     if (!myId) return
@@ -57,12 +61,14 @@ export default function Feed() {
       .select("id, community_id, author_id, content, image_path, created_at, pinned_until")
       .in("community_id", myCommIds)
       .order("created_at", { ascending: false })
-      .limit(60)
+      .limit(12)
 
     if (pErr) { setError(pErr.message); setLoading(false); return }
 
     const list = rows || []
     setPosts(list)
+    setHasMore(list.length === 12)
+    setCursor(list.length > 0 ? list[list.length - 1].created_at : null)
 
     // 4. Profiles + photos for post authors
     const ids = [...new Set(list.map((r) => r.author_id))]
@@ -138,6 +144,96 @@ export default function Feed() {
 
     setLoading(false)
   }, [myId])
+
+  // ---- Infinite scroll: fetch next page ----
+  const loadMore = useCallback(async () => {
+    if (!myId || loadingMore || !hasMore || !cursor) return
+    setLoadingMore(true)
+    const myCommIds = [...communities.keys()]
+    if (myCommIds.length === 0) { setLoadingMore(false); return }
+
+    const { data: rows } = await supabase
+      .from("community_posts")
+      .select("id, community_id, author_id, content, image_path, created_at, pinned_until")
+      .in("community_id", myCommIds)
+      .lt("created_at", cursor)
+      .order("created_at", { ascending: false })
+      .limit(12)
+
+    const newPosts = rows || []
+    if (newPosts.length === 0) {
+      setHasMore(false)
+      setLoadingMore(false)
+      return
+    }
+
+    const ids = [...new Set(newPosts.map((r) => r.author_id))]
+    if (ids.length > 0) {
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("id, display_name, username, is_verified")
+        .in("id", ids)
+      setProfiles((prev) => {
+        const next = new Map(prev)
+        ;(profs || []).forEach((p) => next.set(p.id, p))
+        return next
+      })
+      const { data: ph } = await supabase
+        .from("profile_photos")
+        .select("user_id, storage_path, is_primary, display_order")
+        .in("user_id", ids)
+        .order("is_primary", { ascending: false })
+        .order("display_order", { ascending: true })
+      setPhotos((prev) => {
+        const next = new Map(prev)
+        ;(ph || []).forEach((p) => { if (!next.has(p.user_id)) next.set(p.user_id, p.storage_path) })
+        return next
+      })
+    }
+
+    const postIds = newPosts.map((r) => r.id)
+    if (postIds.length > 0) {
+      const { data: reactRows } = await supabase
+        .from("community_post_reactions")
+        .select("post_id, user_id")
+        .in("post_id", postIds)
+      setMyReactions((prev) => {
+        const next = new Set(prev)
+        ;(reactRows || []).forEach((r) => { if (r.user_id === myId) next.add(r.post_id) })
+        return next
+      })
+      setReactionCounts((prev) => {
+        const next = new Map(prev)
+        ;(reactRows || []).forEach((r) => next.set(r.post_id, (next.get(r.post_id) || 0) + 1))
+        return next
+      })
+      const { data: commentRows } = await supabase
+        .from("community_post_comments")
+        .select("post_id")
+        .in("post_id", postIds)
+      setCommentCounts((prev) => {
+        const next = new Map(prev)
+        ;(commentRows || []).forEach((c) => next.set(c.post_id, (next.get(c.post_id) || 0) + 1))
+        return next
+      })
+    }
+
+    setPosts((prev) => [...prev, ...newPosts])
+    setCursor(newPosts[newPosts.length - 1].created_at)
+    setHasMore(newPosts.length === 12)
+    setLoadingMore(false)
+  }, [myId, loadingMore, hasMore, cursor, communities])
+
+  // ---- Sentinel observer ----
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const obs = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) loadMore()
+    }, { rootMargin: "300px" })
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [loadMore])
 
   useEffect(() => { load() }, [load])
 
