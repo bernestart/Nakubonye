@@ -200,7 +200,7 @@ export default function Feed() {
               >
                 <PenSquare size={18} color="#fff" />
               </span>
-              <span className="flex-1 text-muted text-[14px]">What's on your mind?</span>
+              <span className="flex-1 text-muted text-[14px]">Share something real</span>
               <span className="flex items-center gap-1">
                 <span className="w-8 h-8 rounded-full grid place-items-center bg-white/[0.06] border border-white/10">
                   <ImageIcon size={14} className="text-purple-300" />
@@ -288,7 +288,7 @@ export default function Feed() {
               >
                 <PenSquare size={18} color="#fff" />
               </span>
-              <span className="flex-1 text-muted text-[14px]">What's on your mind?</span>
+              <span className="flex-1 text-muted text-[14px]">Share something real</span>
               <span className="flex items-center gap-1">
                 <span className="w-8 h-8 rounded-full grid place-items-center bg-white/[0.06] border border-white/10">
                   <ImageIcon size={14} className="text-purple-300" />
