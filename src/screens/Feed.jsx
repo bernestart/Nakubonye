@@ -298,7 +298,7 @@ export default function Feed() {
       <BrandGlow />
       <AppHeader />
 
-      <div className="flex-1 overflow-y-auto px-3 py-3 pb-24">
+      <div className="flex-1 overflow-y-auto px-2 py-2 pb-24">
         {error && (
           <div className="mb-3 text-red-400 text-[12.5px] bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2">
             {error}
@@ -430,7 +430,7 @@ export default function Feed() {
             const imageUrl = p.image_path ? supabase.storage.from("community-media").getPublicUrl(p.image_path).data?.publicUrl : null
             return (
               <Fragment key={p.id}>
-              <article className="mb-4 rounded-2xl bg-white/[0.03] border border-white/8 overflow-hidden">
+              <article className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
                 {/* Community badge */}
                 {comm && (
                   <button
@@ -535,7 +535,7 @@ export default function Feed() {
               </article>
 
               {(idx + 1) % 4 === 0 && suggested.length > 0 && (
-                <div className="mb-4 rounded-2xl bg-white/[0.03] border border-white/8 overflow-hidden">
+                <div className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
                   <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase px-3 pt-3 mb-2">
                     People you may know
                   </p>
