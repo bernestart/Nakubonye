@@ -482,6 +482,24 @@ export default function Feed() {
                   <img src={imageUrl} alt="" className="w-full" loading="lazy" />
                 )}
 
+                {/* Engagement summary */}
+                {((reactionCounts.get(p.id) || 0) > 0 || (commentCounts.get(p.id) || 0) > 0) && (
+                  <div className="flex items-center justify-between px-3 pt-2.5 pb-1 border-t border-white/5">
+                    <span className="flex items-center gap-1.5 text-muted text-[12px]">
+                      {myReactions.has(p.id) ? (
+                        <>You and <strong className="text-cream">{Math.max(0, (reactionCounts.get(p.id) || 1) - 1)}</strong> others</>
+                      ) : (
+                        <><strong className="text-cream">{reactionCounts.get(p.id) || 0}</strong> {reactionCounts.get(p.id) === 1 ? "reaction" : "reactions"}</>
+                      )}
+                    </span>
+                    {(commentCounts.get(p.id) || 0) > 0 && (
+                      <span className="text-muted text-[12px]">
+                        {commentCounts.get(p.id)} {commentCounts.get(p.id) === 1 ? "comment" : "comments"}
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 {/* Engagement bar */}
                 <div className="flex items-center justify-between px-2 py-1.5 border-t border-white/5">
                   <button
