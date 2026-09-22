@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Heart, Mail, MessageCircle, FileText, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Heart, Mail, MessageCircle, FileText, ShieldCheck, Sparkles } from 'lucide-react'
 import BrandGlow from '../components/BrandGlow'
 
 export default function About() {
