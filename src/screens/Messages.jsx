@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { MessageCircle, RefreshCw } from 'lucide-react'
+import { MessageCircle, RefreshCw, PenSquare } from 'lucide-react'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -17,6 +17,7 @@ export default function Messages() {
   const { session } = useAuth()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const [newMsgOpen, setNewMsgOpen] = useState(false)
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
@@ -181,6 +182,29 @@ export default function Messages() {
     >
       <BrandGlow />
       <AppHeader />
+
+      {/* Messages list header */}
+      <div className="px-4 pt-2 pb-3 shrink-0 flex items-center justify-between">
+        <div>
+          <h1 className="text-cream text-[22px] font-extrabold tracking-tight">
+            Messages
+          </h1>
+          <p className="text-muted text-[12.5px] mt-0.5">
+            {items.length === 0 ? "No conversations yet" : items.length + (items.length === 1 ? " conversation" : " conversations")}
+          </p>
+        </div>
+        <button
+          onClick={() => { tap("light"); setNewMsgOpen(true) }}
+          className="w-10 h-10 rounded-full grid place-items-center active:scale-95 transition-transform"
+          style={{
+            background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)",
+            boxShadow: "0 6px 18px rgba(236,72,153,0.45)",
+          }}
+          aria-label="New message"
+        >
+          <PenSquare size={18} color="#fff" />
+        </button>
+      </div>
 
       {error && (
         <div className="mx-4 mb-2 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5 shrink-0">
