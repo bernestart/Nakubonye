@@ -310,22 +310,27 @@ export default function Feed() {
     return () => { supabase.removeChannel(ch) }
   }, [myId, load])
 
-  async function toggleLike(postId) {
+  async function toggleLike(postId, source = "community") {
     if (!myId) return
     tap("light")
     const isLiked = myReactions.has(postId)
     const nextMine = new Set(myReactions)
     const nextCounts = new Map(reactionCounts)
+    const table = source === "personal" ? "user_post_likes" : "community_post_reactions"
+
     if (isLiked) {
       nextMine.delete(postId)
       nextCounts.set(postId, Math.max(0, (nextCounts.get(postId) || 1) - 1))
       setMyReactions(nextMine); setReactionCounts(nextCounts)
-      await supabase.from("community_post_reactions").delete().eq("post_id", postId).eq("user_id", myId)
+      await supabase.from(table).delete().eq("post_id", postId).eq("user_id", myId)
     } else {
       nextMine.add(postId)
       nextCounts.set(postId, (nextCounts.get(postId) || 0) + 1)
       setMyReactions(nextMine); setReactionCounts(nextCounts)
-      await supabase.from("community_post_reactions").insert({ post_id: postId, user_id: myId, reaction: "❤️" })
+      const row = source === "personal"
+        ? { post_id: postId, user_id: myId }
+        : { post_id: postId, user_id: myId, reaction: "❤️" }
+      await supabase.from(table).insert(row)
     }
   }
 
@@ -505,7 +510,7 @@ export default function Feed() {
                 {/* Engagement bar */}
                 <div className="flex items-center justify-between px-2 py-1.5 border-t border-white/5">
                   <button
-                    onClick={() => toggleLike(p.id)}
+                    onClick={() => toggleLike(p.id, p._source)}
                     className="flex items-center gap-1.5 px-3 py-2 rounded-xl flex-1 justify-center"
                   >
                     <Heart
