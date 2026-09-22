@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { ArrowLeft, Users, RefreshCw } from "lucide-react"
+import VerifiedBadge from "../components/VerifiedBadge"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
@@ -123,7 +124,7 @@ export default function Online() {
                 <div className="flex-1 min-w-0">
                   <p className="text-cream font-semibold text-[14px] truncate">
                     {u.display_name || u.username}
-                    {u.is_verified && <span className="text-purple-400 ml-1">✓</span>}
+                    {u.is_verified && <VerifiedBadge size={14} className="ml-1" />}
                   </p>
                   <p className="text-muted text-[12px] truncate">
                     {u.city ? "📍 " + u.city : u.username ? "@" + u.username : "Online now"}

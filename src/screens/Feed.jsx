@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { ImagePlus, Heart, Send, X, Users, Play, Camera, PenSquare, Video, Image as ImageIcon, MessageCircle, Share2 } from "lucide-react"
+import VerifiedBadge from "../components/VerifiedBadge"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
@@ -398,7 +399,7 @@ export default function Feed() {
                   </button>
                   <div className="flex-1 min-w-0">
                     <p className="text-cream font-bold text-[13.5px] truncate">
-                      {name} {prof?.is_verified && <span className="text-purple-400">✓</span>}
+                      {name} {prof?.is_verified && <VerifiedBadge size={14} className="ml-1" />}
                     </p>
                     <p className="text-subtle text-[11px]">
                       {new Date(p.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}

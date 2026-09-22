@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { ArrowLeft, Search as SearchIcon, X, Users } from "lucide-react"
+import VerifiedBadge from "../components/VerifiedBadge"
 import { supabase } from "../lib/supabase"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
@@ -223,7 +224,7 @@ export default function Search() {
                   <div className="flex-1 min-w-0">
                     <p className="text-cream font-semibold text-[13.5px] truncate">
                       {u.display_name || u.username}
-                      {u.is_verified && <span className="text-purple-400 ml-1">✓</span>}
+                      {u.is_verified && <VerifiedBadge size={14} className="ml-1" />}
                     </p>
                     {u.username && <p className="text-muted text-[12px] truncate">@{u.username}</p>}
                   </div>

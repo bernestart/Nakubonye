@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { X, Send, Trash2 } from "lucide-react"
+import VerifiedBadge from "./VerifiedBadge"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
@@ -119,7 +120,7 @@ export default function ReelComments({ reelId, onClose, onCountChange }) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-0.5">
                         <span className="text-cream font-bold text-[12.5px] truncate">
-                          {name} {prof?.is_verified && <span className="text-purple-400">✓</span>}
+                          {name} {prof?.is_verified && <VerifiedBadge size={13} className="ml-1" />}
                         </span>
                         <span className="text-subtle text-[10.5px]">{new Date(c.created_at).toLocaleDateString()}</span>
                         {mine && (

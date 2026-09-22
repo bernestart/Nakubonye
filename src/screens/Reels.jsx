@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Heart, MessageCircle, Share2, Plus, Volume2, VolumeX, ArrowLeft, MoreVertical, Bookmark } from "lucide-react"
+import VerifiedBadge from "../components/VerifiedBadge"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
@@ -503,7 +504,7 @@ export default function Reels() {
                     </button>
                     <div className="min-w-0">
                       <p className="text-white font-bold text-[14px] truncate">
-                        {name} {prof?.is_verified && <span className="text-purple-300">✓</span>}
+                        {name} {prof?.is_verified && <VerifiedBadge size={14} className="ml-1" />}
                       </p>
                     </div>
                   </div>

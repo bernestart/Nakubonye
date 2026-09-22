@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Send, MessageCircle, Paperclip, X, Smile, Mic, Square, Play, Pause, MoreVertical, Trash2, Eye, Flag, Ban, Check, CheckCheck , Phone, Video } from 'lucide-react'
+import VerifiedBadge from "../components/VerifiedBadge"
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -449,7 +450,7 @@ export default function Chat() {
           <div className="min-w-0">
             <p className="text-cream text-[14.5px] font-semibold truncate flex items-center gap-1.5">
               {other?.display_name || other?.username || 'Someone'}
-              {other?.is_verified && <span className="text-purple-400 text-[11px]">✓</span>}
+              {other?.is_verified && <VerifiedBadge size={14} className="ml-1" />}
             </p>
             <p className="text-subtle text-[11px] font-medium">{otherTyping ? 'typing…' : isOnline(other?.last_seen_at, 2) ? (<><span className="inline-block w-2 h-2 rounded-full mr-1.5 align-middle" style={{ background: '#22C55E', boxShadow: '0 0 6px rgba(34,197,94,0.55)' }} />Online</>) : other?.last_seen_at ? 'Last seen ' + formatLastSeen(other.last_seen_at) : other?.isDirect === true ? 'Direct message' : other?.isDirect === false ? 'Matched' : ''}</p>
           </div>
