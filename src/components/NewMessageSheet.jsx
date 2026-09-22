@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
+import DirectMessageModal from "./DirectMessageModal"
 
 export default function NewMessageSheet({ onClose }) {
   const nav = useNavigate()
@@ -13,6 +14,8 @@ export default function NewMessageSheet({ onClose }) {
   const [query, setQuery] = useState("")
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [others, setOthers] = useState([])
+  const [dmTarget, setDmTarget] = useState(null)
 
   const load = useCallback(async () => {
     if (!myId) return
@@ -57,6 +60,14 @@ export default function NewMessageSheet({ onClose }) {
     const q = query.toLowerCase()
     return (u.display_name || "").toLowerCase().includes(q) || (u.username || "").toLowerCase().includes(q)
   })
+
+  const filteredOthers = others
+    .filter((u) => !users.some((m) => m.id === u.id))
+    .filter((u) => {
+      if (!query.trim()) return true
+      const q = query.toLowerCase()
+      return (u.display_name || "").toLowerCase().includes(q) || (u.username || "").toLowerCase().includes(q)
+    })
 
   function openChat(u) {
     tap("light")
@@ -134,8 +145,60 @@ export default function NewMessageSheet({ onClose }) {
               ))}
             </div>
           )}
+
+          {/* Others — paid DM section */}
+          {filteredOthers.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-white/8">
+              <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-3 px-1 flex items-center gap-1.5">
+                Others on Nakubonye
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold normal-case tracking-normal">
+                  Uses coins
+                </span>
+              </p>
+              <div className="flex flex-col gap-1">
+                {filteredOthers.slice(0, 20).map((u) => (
+                  <button
+                    key={u.id}
+                    onClick={() => { tap("light"); setDmTarget(u) }}
+                    className="flex items-center gap-3 p-3 rounded-2xl text-left active:scale-[0.98] transition-transform"
+                  >
+                    <span className="w-11 h-11 rounded-full overflow-hidden bg-elevated border border-white/8 shrink-0">
+                      {u.photo_url ? (
+                        <img src={u.photo_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="w-full h-full grid place-items-center text-purple-400 font-black text-sm">
+                          {(u.display_name || "?")[0]}
+                        </span>
+                      )}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-cream font-semibold text-[13.5px] truncate">
+                        {u.display_name || u.username}
+                        {u.is_verified && <span className="text-purple-400 ml-1">✓</span>}
+                      </p>
+                      {u.username && <p className="text-muted text-[12px] truncate">@{u.username}</p>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {dmTarget && (
+        <DirectMessageModal
+          open={true}
+          target={dmTarget}
+          onClose={() => setDmTarget(null)}
+          onSuccess={() => {
+            const uid = dmTarget.id
+            setDmTarget(null)
+            onClose?.()
+            nav("/messages/" + uid)
+          }}
+        />
+      )}
     </div>
   )
 }
