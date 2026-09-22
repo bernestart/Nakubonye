@@ -22,7 +22,6 @@ export default function Feed() {
   const [photos, setPhotos] = useState(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [reelsRail, setReelsRail] = useState([])
   const [myReactions, setMyReactions] = useState(new Set())
   const [reactionCounts, setReactionCounts] = useState(new Map())
   const [commentCounts, setCommentCounts] = useState(new Map())
