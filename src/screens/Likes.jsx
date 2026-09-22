@@ -174,9 +174,15 @@ export default function Likes() {
 
       <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
         {loading || premiumLoading ? (
-          <div className="grid grid-cols-2 gap-3">
-            {[0,1,2,3].map(i => (
-              <div key={i} className="aspect-[3/4] rounded-2xl bg-surface animate-pulse" />
+          <div className="grid grid-cols-2 gap-3 animate-pulse">
+            {[0,1,2,3].map((i) => (
+              <div key={i} className="rounded-2xl bg-white/[0.03] border border-white/8 overflow-hidden">
+                <div className="aspect-[3/4] bg-white/[0.04]" />
+                <div className="p-3">
+                  <div className="h-3 w-2/3 rounded bg-white/[0.08] mb-1.5" />
+                  <div className="h-2.5 w-1/2 rounded bg-white/[0.05]" />
+                </div>
+              </div>
             ))}
           </div>
         ) : tab === 'received' && !isPremium ? (
