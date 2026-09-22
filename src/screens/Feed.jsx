@@ -513,7 +513,7 @@ export default function Feed() {
             <div className="w-7 h-7 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
           </div>
         )}
-        {!hasMore && posts.length > 0 && (
+        {!loading && !hasMore && posts.length > 0 && (
           <p className="text-center text-subtle text-[12px] py-6">
             You're all caught up ✨
           </p>
