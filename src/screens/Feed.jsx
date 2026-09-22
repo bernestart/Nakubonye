@@ -11,6 +11,7 @@ import NotificationBell from "../components/NotificationBell"
 import AppHeader from "../components/AppHeader"
 import StoriesRow from "../components/StoriesRow"
 import PostCommentsSheet from "../components/PostCommentsSheet"
+import PostComposer from "../components/PostComposer"
 import BrandGlow from "../components/BrandGlow"
 
 export default function Feed() {
@@ -28,6 +29,8 @@ export default function Feed() {
   const [commentCounts, setCommentCounts] = useState(new Map())
   const [commentsFor, setCommentsFor] = useState(null)
   const [suggested, setSuggested] = useState([])
+  const [composerChooserOpen, setComposerChooserOpen] = useState(false)
+  const [postComposerOpen, setPostComposerOpen] = useState(false)
   const [myPhotoUrl, setMyPhotoUrl] = useState(null)
   const [cursor, setCursor] = useState(null)
   const [hasMore, setHasMore] = useState(true)
@@ -314,7 +317,7 @@ export default function Feed() {
 
             {/* Composer pill */}
             <button
-              onClick={() => { tap("light"); nav("/reels") }}
+              onClick={() => { tap("light"); setComposerChooserOpen(true) }}
               className="w-full mb-3 flex items-center gap-2.5 active:scale-[0.99] transition-transform"
             >
               <span className="w-9 h-9 rounded-full overflow-hidden bg-elevated border border-white/10 shrink-0">
@@ -533,6 +536,56 @@ export default function Feed() {
               return next
             })
           }}
+        />
+      )}
+
+      {/* Composer chooser sheet */}
+      {composerChooserOpen && (
+        <div className="fixed inset-0 z-[210] flex items-end" onClick={() => setComposerChooserOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
+            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+          >
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
+            <h3 className="text-cream font-extrabold text-[16px] mb-1">Share something real</h3>
+            <p className="text-muted text-[12.5px] mb-3">What would you like to create?</p>
+
+            <button
+              onClick={() => { tap("light"); setComposerChooserOpen(false); setPostComposerOpen(true) }}
+              className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left active:scale-[0.99] transition-transform"
+            >
+              <span className="w-11 h-11 rounded-2xl grid place-items-center" style={{ background: "linear-gradient(135deg, #C084FC 0%, #EC4899 100%)" }}>
+                <PenSquare size={20} color="#fff" />
+              </span>
+              <div className="flex-1">
+                <p className="text-cream font-bold text-[14.5px]">Write a post</p>
+                <p className="text-muted text-[12px]">Text + photo to your profile or matches</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => { tap("light"); setComposerChooserOpen(false); nav("/reels") }}
+              className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left active:scale-[0.99] transition-transform"
+            >
+              <span className="w-11 h-11 rounded-2xl grid place-items-center" style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}>
+                <Video size={20} color="#fff" />
+              </span>
+              <div className="flex-1">
+                <p className="text-cream font-bold text-[14.5px]">Create a reel</p>
+                <p className="text-muted text-[12px]">Record or upload a short video</p>
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Full-screen post composer */}
+      {postComposerOpen && (
+        <PostComposer
+          onClose={() => setPostComposerOpen(false)}
+          onDone={() => { setPostComposerOpen(false); load() }}
         />
       )}
 
