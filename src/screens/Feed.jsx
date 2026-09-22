@@ -190,25 +190,57 @@ export default function Feed() {
   const loadMore = useCallback(async () => {
     if (!myId || loadingMore || !hasMore || !cursor) return
     setLoadingMore(true)
-    const myCommIds = [...communities.keys()]
-    if (myCommIds.length === 0) { setLoadingMore(false); return }
 
-    const { data: rows } = await supabase
-      .from("community_posts")
-      .select("id, community_id, author_id, content, image_path, created_at, pinned_until")
-      .in("community_id", myCommIds)
+    const myCommIds = [...communities.keys()]
+
+    // --- Community posts (older than cursor) ---
+    let communityPosts = []
+    if (myCommIds.length > 0) {
+      const { data: rows } = await supabase
+        .from("community_posts")
+        .select("id, community_id, author_id, content, image_path, created_at, pinned_until")
+        .in("community_id", myCommIds)
+        .lt("created_at", cursor)
+        .order("created_at", { ascending: false })
+        .limit(20)
+      communityPosts = (rows || []).map((r) => ({ ...r, _source: "community" }))
+    }
+
+    // --- Personal posts from me + matches ---
+    const { data: matchRows } = await supabase
+      .from("matches")
+      .select("user_one_id, user_two_id")
+      .or("user_one_id.eq." + myId + ",user_two_id.eq." + myId)
+    const matchIds = (matchRows || []).map((m) => m.user_one_id === myId ? m.user_two_id : m.user_one_id)
+    const allowedUserIds = [myId, ...matchIds]
+
+    const { data: personalRows } = await supabase
+      .from("user_posts")
+      .select("id, user_id, content, image_path, audience, created_at")
+      .in("user_id", allowedUserIds)
+      .eq("is_active", true)
       .lt("created_at", cursor)
       .order("created_at", { ascending: false })
-      .limit(12)
+      .limit(20)
+    const personalPosts = (personalRows || []).map((r) => ({
+      ...r,
+      author_id: r.user_id,
+      _source: "personal",
+    }))
 
-    const newPosts = rows || []
-    if (newPosts.length === 0) {
+    // --- Merge + take newest 12 ---
+    const merged = [...communityPosts, ...personalPosts]
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .slice(0, 12)
+
+    if (merged.length === 0) {
       setHasMore(false)
       setLoadingMore(false)
       return
     }
 
-    const ids = [...new Set(newPosts.map((r) => r.author_id))]
+    // --- Profiles + photos for new authors ---
+    const ids = [...new Set(merged.map((r) => r.author_id))]
     if (ids.length > 0) {
       const { data: profs } = await supabase
         .from("profiles")
@@ -232,12 +264,13 @@ export default function Feed() {
       })
     }
 
-    const postIds = newPosts.map((r) => r.id)
-    if (postIds.length > 0) {
+    // --- Reactions + comment counts (community posts only) ---
+    const communityIds = merged.filter((r) => r._source === "community").map((r) => r.id)
+    if (communityIds.length > 0) {
       const { data: reactRows } = await supabase
         .from("community_post_reactions")
         .select("post_id, user_id")
-        .in("post_id", postIds)
+        .in("post_id", communityIds)
       setMyReactions((prev) => {
         const next = new Set(prev)
         ;(reactRows || []).forEach((r) => { if (r.user_id === myId) next.add(r.post_id) })
@@ -251,7 +284,7 @@ export default function Feed() {
       const { data: commentRows } = await supabase
         .from("community_post_comments")
         .select("post_id")
-        .in("post_id", postIds)
+        .in("post_id", communityIds)
       setCommentCounts((prev) => {
         const next = new Map(prev)
         ;(commentRows || []).forEach((c) => next.set(c.post_id, (next.get(c.post_id) || 0) + 1))
@@ -259,9 +292,9 @@ export default function Feed() {
       })
     }
 
-    setPosts((prev) => [...prev, ...newPosts])
-    setCursor(newPosts[newPosts.length - 1].created_at)
-    setHasMore(newPosts.length === 12)
+    setPosts((prev) => [...prev, ...merged])
+    setCursor(merged[merged.length - 1].created_at)
+    setHasMore(merged.length === 12)
     setLoadingMore(false)
   }, [myId, loadingMore, hasMore, cursor, communities])
 
