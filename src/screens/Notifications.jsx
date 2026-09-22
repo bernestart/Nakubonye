@@ -58,7 +58,7 @@ export default function Notifications() {
     if (matchOtherIds.length) {
       const { data: profs } = await supabase
         .from('profiles')
-        .select('id, display_name, username')
+        .select('id, display_name, username, is_verified')
         .in('id', matchOtherIds)
       ;(profs || []).forEach((p) => matchProfiles.set(p.id, p))
 
@@ -82,6 +82,7 @@ export default function Notifications() {
         user_id: other,
         display_name: p?.display_name,
         username: p?.username,
+        is_verified: !!p?.is_verified,
         photo_url: publicPhotoUrl(matchPhotos.get(other)),
         created_at: m.created_at,
         route: '/messages/' + other,
@@ -112,7 +113,7 @@ export default function Notifications() {
       const senderIds = newDMs.map((c) => c.initiator_id)
       const { data: profs } = await supabase
         .from('profiles')
-        .select('id, display_name, username')
+        .select('id, display_name, username, is_verified')
         .in('id', senderIds)
       const uProfiles = new Map((profs || []).map((p) => [p.id, p]))
 
@@ -136,6 +137,7 @@ export default function Notifications() {
           user_id: sender,
           display_name: prof?.display_name,
           username: prof?.username,
+          is_verified: !!prof?.is_verified,
           photo_url: publicPhotoUrl(uPhotos.get(sender)),
           created_at: c.created_at,
           route: '/messages/' + sender,
@@ -154,7 +156,7 @@ export default function Notifications() {
     if (superRows?.length) {
       const senderIds = superRows.map((r) => r.sender_id)
       const { data: profs } = await supabase
-        .from('profiles').select('id, display_name, username').in('id', senderIds)
+        .from('profiles').select('id, display_name, username, is_verified').in('id', senderIds)
       const pMap = new Map((profs || []).map((p) => [p.id, p]))
       const { data: photos } = await supabase
         .from('profile_photos')
@@ -388,6 +390,7 @@ function Row({ item, onOpen }) {
       <div className="flex-1 min-w-0">
         <p className="text-cream text-[14px] font-semibold truncate">
           {item.display_name || item.username || 'Someone'}
+          {item.is_verified && <span className="text-purple-400 ml-1">✓</span>}
         </p>
         {isPremium && (
           <span
