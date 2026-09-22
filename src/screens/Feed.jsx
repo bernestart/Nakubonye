@@ -41,36 +41,61 @@ export default function Feed() {
     if (!myId) return
     setLoading(true); setError("")
 
-    // 1. My communities
+    // 1. My communities (may be empty)
     const { data: mine } = await supabase
       .from("community_memberships")
       .select("community_id")
       .eq("user_id", myId)
     const myCommIds = (mine || []).map((m) => m.community_id)
 
-    if (myCommIds.length === 0) {
-      setPosts([]); setLoading(false); return
+    // 2. Community meta
+    if (myCommIds.length > 0) {
+      const { data: commRows } = await supabase
+        .from("communities")
+        .select("id, name, emoji, cover_color")
+        .in("id", myCommIds)
+      setCommunities(new Map((commRows || []).map((c) => [c.id, c])))
     }
 
-    // 2. Community meta
-    const { data: commRows } = await supabase
-      .from("communities")
-      .select("id, name, emoji, cover_color")
-      .in("id", myCommIds)
-    const commMap = new Map((commRows || []).map((c) => [c.id, c]))
-    setCommunities(commMap)
+    // 3a. Community posts (only if user has communities)
+    let communityPosts = []
+    if (myCommIds.length > 0) {
+      const { data: rows, error: pErr } = await supabase
+        .from("community_posts")
+        .select("id, community_id, author_id, content, image_path, created_at, pinned_until")
+        .in("community_id", myCommIds)
+        .order("created_at", { ascending: false })
+        .limit(20)
+      if (pErr) { setError(pErr.message); setLoading(false); return }
+      communityPosts = (rows || []).map((r) => ({ ...r, _source: "community" }))
+    }
 
-    // 3. Posts from all my communities
-    const { data: rows, error: pErr } = await supabase
-      .from("community_posts")
-      .select("id, community_id, author_id, content, image_path, created_at, pinned_until")
-      .in("community_id", myCommIds)
+    // 3b. Personal posts (from me + my matches)
+    const { data: matchRows } = await supabase
+      .from("matches")
+      .select("user_one_id, user_two_id")
+      .or("user_one_id.eq." + myId + ",user_two_id.eq." + myId)
+    const matchIds = (matchRows || []).map((m) => m.user_one_id === myId ? m.user_two_id : m.user_one_id)
+    const allowedUserIds = [myId, ...matchIds]
+
+    const { data: personalRows } = await supabase
+      .from("user_posts")
+      .select("id, user_id, content, image_path, audience, created_at")
+      .in("user_id", allowedUserIds)
+      .eq("is_active", true)
       .order("created_at", { ascending: false })
-      .limit(12)
+      .limit(20)
+    const personalPosts = (personalRows || []).map((r) => ({
+      ...r,
+      author_id: r.user_id,
+      _source: "personal",
+    }))
 
-    if (pErr) { setError(pErr.message); setLoading(false); return }
+    // 3c. Merge + sort + take first 12
+    const list = [...communityPosts, ...personalPosts]
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .slice(0, 12)
 
-    const list = rows || []
     setPosts(list)
     setHasMore(list.length === 12)
     setCursor(list.length > 0 ? list[list.length - 1].created_at : null)
@@ -372,8 +397,8 @@ export default function Feed() {
             return (
               <Fragment key={p.id}>
               <article className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
-                {/* Community badge */}
-                {comm && (
+                {/* Source badge — community OR profile */}
+                {p._source === "community" && comm && (
                   <button
                     onClick={() => { tap("light"); nav("/communities/" + comm.id) }}
                     className="w-full flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-white/[0.02] text-left"
@@ -386,6 +411,18 @@ export default function Feed() {
                     </span>
                     <span className="text-purple-300 text-[11.5px] font-bold tracking-wide truncate">{comm.name}</span>
                   </button>
+                )}
+                {p._source === "personal" && (
+                  <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-white/[0.02]">
+                    <span className="w-6 h-6 rounded-lg grid place-items-center text-[12px] bg-pink-500/20">
+                      {p.audience === "matches" ? "💜" : p.audience === "private" ? "🔒" : "🌍"}
+                    </span>
+                    <span className="text-pink-300 text-[11.5px] font-bold tracking-wide">
+                      {p.author_id === myId
+                        ? "Your post · " + (p.audience === "matches" ? "Matches" : p.audience === "private" ? "Only me" : "Everyone")
+                        : "Posted to their profile"}
+                    </span>
+                  </div>
                 )}
 
                 {/* Author header */}
