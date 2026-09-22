@@ -52,10 +52,13 @@ export default function StoryViewer({ groups, startIndex, onClose, onViewed }) {
   }
 
   function back() {
-    if (storyIdx > 0) setStoryIdx(storyIdx - 1)
-    else if (groupIdx > 0) {
+    if (storyIdx > 0) {
+      setStoryIdx(storyIdx - 1)
+    } else if (groupIdx > 0) {
+      const prevGroup = groups[groupIdx - 1]
+      const lastIdx = Math.max(0, (prevGroup?.stories?.length || 1) - 1)
       setGroupIdx(groupIdx - 1)
-      setStoryIdx(0)
+      setStoryIdx(lastIdx)
     }
   }
 
