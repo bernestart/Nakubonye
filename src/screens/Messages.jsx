@@ -209,7 +209,7 @@ export default function Messages() {
             {items.map((item) => (
               <motion.button
                 key={item.userId}
-                whileTap={{ scale: 0.98 }}
+                whileTap={{ scale: 0.97 }}
                 onClick={() => { tap('light'); nav('/messages/' + item.userId) }}
                 className="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/[0.03] transition-colors text-left"
               >
