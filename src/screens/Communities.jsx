@@ -127,9 +127,16 @@ export default function Communities() {
         </div>
 
         {loading ? (
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-2.5 animate-pulse">
             {[0,1,2,3,4].map((i) => (
-              <div key={i} className="h-20 rounded-2xl bg-white/[0.04] animate-pulse" />
+              <div key={i} className="flex items-center gap-3 p-3.5 rounded-2xl bg-white/[0.03] border border-white/8">
+                <div className="w-12 h-12 rounded-2xl bg-white/[0.06] shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="h-3.5 w-1/2 rounded bg-white/[0.08] mb-2" />
+                  <div className="h-2.5 w-1/3 rounded bg-white/[0.05]" />
+                </div>
+                <div className="h-9 w-16 rounded-full bg-white/[0.05] shrink-0" />
+              </div>
             ))}
           </div>
         ) : (
