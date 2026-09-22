@@ -29,6 +29,7 @@ export default function Reels() {
   const [actionsFor, setActionsFor] = useState(null)
   const [hiddenIds, setHiddenIds] = useState(new Set())
   const [savedIds, setSavedIds] = useState(new Set())
+  const [likedAuthors, setLikedAuthors] = useState(new Set())
   const [matchSet, setMatchSet] = useState(new Set())
   const containerRef = useRef(null)
   const videoRefs = useRef([])
@@ -189,6 +190,14 @@ export default function Reels() {
       setSavedIds(next)
       await supabase.from("reel_saves").insert({ reel_id: reelId, user_id: myId })
     }
+  }
+
+  async function likeAuthor(userId) {
+    if (!myId || !userId || userId === myId) return
+    if (likedAuthors.has(userId)) return
+    tap("medium")
+    setLikedAuthors((prev) => new Set([...prev, userId]))
+    await supabase.rpc("like_user", { target_user_id: userId })
   }
 
   async function toggleLike(reelId) {
@@ -487,12 +496,13 @@ export default function Reels() {
                   </button>
                 </div>
 
-                {/* Bottom info: author + caption */}
-                <div className="absolute left-3 right-20 bottom-24 z-20">
-                  <div className="flex items-center gap-2.5 mb-2">
+                {/* Bottom info: author + caption + actions */}
+                <div className="absolute left-3 right-20 bottom-4 z-20">
+                  {/* Author row with Like button */}
+                  <div className="flex items-center gap-2 mb-2">
                     <button
                       onClick={() => { tap("light"); nav("/profile/" + reel.user_id) }}
-                      className="w-10 h-10 rounded-full overflow-hidden bg-black/40 border border-white/20 shrink-0"
+                      className="w-9 h-9 rounded-full overflow-hidden bg-black/40 border border-white/25 shrink-0"
                     >
                       {photo ? (
                         <img src={publicPhotoUrl(photo)} alt="" className="w-full h-full object-cover" />
@@ -502,20 +512,52 @@ export default function Reels() {
                         </div>
                       )}
                     </button>
-                    <div className="min-w-0">
-                      <p className="text-white font-bold text-[14px] truncate">
-                        {name} {prof?.is_verified && <VerifiedBadge size={14} className="ml-1" />}
-                      </p>
-                    </div>
+                    <button
+                      onClick={() => { tap("light"); nav("/profile/" + reel.user_id) }}
+                      className="min-w-0 flex items-center gap-1 text-left"
+                    >
+                      <span className="text-white font-bold text-[14px] truncate">
+                        {name}
+                      </span>
+                      {prof?.is_verified && <VerifiedBadge size={13} />}
+                    </button>
+
+                    {reel.user_id !== myId && (
+                      <button
+                        onClick={() => likeAuthor(reel.user_id)}
+                        disabled={likedAuthors.has(reel.user_id)}
+                        className="shrink-0 h-7 px-2.5 rounded-full flex items-center gap-1 font-bold text-[11.5px] transition-all"
+                        style={{
+                          background: likedAuthors.has(reel.user_id)
+                            ? "rgba(236,72,153,0.25)"
+                            : "rgba(255,255,255,0.15)",
+                          border: likedAuthors.has(reel.user_id)
+                            ? "1px solid rgba(236,72,153,0.6)"
+                            : "1px solid rgba(255,255,255,0.3)",
+                          color: "#fff",
+                          backdropFilter: "blur(8px)",
+                        }}
+                      >
+                        <Heart
+                          size={12}
+                          fill={likedAuthors.has(reel.user_id) ? "#EC4899" : "none"}
+                          color={likedAuthors.has(reel.user_id) ? "#EC4899" : "#fff"}
+                        />
+                        {likedAuthors.has(reel.user_id) ? "Liked" : "Like"}
+                      </button>
+                    )}
                   </div>
+
+                  {/* Caption */}
                   {reel.caption && (
-                    <p className="text-white/95 text-[14px] leading-[1.4] whitespace-pre-wrap" style={{ textShadow: "0 1px 6px rgba(0,0,0,0.8)" }}>
+                    <p className="text-white/95 text-[13.5px] leading-[1.4] whitespace-pre-wrap mb-1" style={{ textShadow: "0 1px 6px rgba(0,0,0,0.8)" }}>
                       {reel.caption}
                     </p>
                   )}
 
+                  {/* Location */}
                   {reel.location && (
-                    <p className="text-white/75 text-[12.5px] mt-1.5 flex items-center gap-1">
+                    <p className="text-white/75 text-[12px] flex items-center gap-1">
                       📍 {reel.location}
                     </p>
                   )}
