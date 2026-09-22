@@ -81,6 +81,10 @@ export default function Matches() {
       username: r.username,
       is_verified: r.is_verified,
       photo_url: publicPhotoUrl(r.primary_photo),
+      city: r.city,
+      country: r.country,
+      age: r.age,
+      date_of_birth: r.date_of_birth,
       liked_at: r.liked_at,
     }))
     setLikes(receivedList)
@@ -98,7 +102,7 @@ export default function Matches() {
       const sentIds = sentRows.map((r) => r.liked_user_id)
       const { data: sentProfs } = await supabase
         .from('profiles')
-        .select('id, display_name, username, is_verified')
+        .select('id, display_name, username, is_verified, city, country, date_of_birth')
         .in('id', sentIds)
 
       const { data: sentPhotos } = await supabase
@@ -121,6 +125,9 @@ export default function Matches() {
           username: p2.username,
           is_verified: p2.is_verified,
           photo_url: publicPhotoUrl(spMap.get(p2.id)),
+          city: p2.city,
+          country: p2.country,
+          age: p2.date_of_birth ? calcAge(p2.date_of_birth) : null,
           sent_at: r.created_at,
         }
       }).filter(Boolean)
