@@ -242,7 +242,12 @@ export default function Reels() {
       </div>
 
       {loading ? (
-        <div className="absolute inset-0 grid place-items-center text-white/60 text-[14px]">Loading reels…</div>
+        <div className="absolute inset-0 grid place-items-center">
+          <div className="text-center">
+            <div className="w-12 h-12 rounded-full border-[3px] border-purple-500/30 border-t-purple-500 mx-auto mb-4 animate-spin" />
+            <p className="text-white/60 text-[13px] font-medium tracking-wide">Loading reels…</p>
+          </div>
+        </div>
       ) : reels.length === 0 ? (
         <div className="absolute inset-0 grid place-items-center px-6 text-center">
           <div>
