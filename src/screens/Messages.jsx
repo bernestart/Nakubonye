@@ -282,7 +282,7 @@ function Empty({ onGo }) {
         When you match with someone, your conversation will appear here.
       </p>
       <button
-        onClick={onGo}
+        onClick={() => { tap('light'); onGo() }}
         className="px-5 py-2.5 rounded-full bg-gradient-to-r from-purple-600 to-purple-500 text-white font-bold text-[13px] shadow-[0_8px_20px_rgba(124,58,237,0.45)] mx-auto"
       >
         Discover people
