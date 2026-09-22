@@ -120,16 +120,6 @@ export default function Feed() {
       setPhotos(pm)
     }
 
-    // Recent public reels for home rail
-    const { data: reelRows } = await supabase
-      .from("reels")
-      .select("id, video_url, thumbnail_url, caption, mirrored, cover_frame_time, created_at")
-      .eq("is_active", true)
-      .eq("audience", "public")
-      .order("created_at", { ascending: false })
-      .limit(8)
-    setReelsRail(reelRows || [])
-
     // Suggested people
     const { data: sug } = await supabase.rpc("get_discover_profiles", {
       p_limit: 10,
