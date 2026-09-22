@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { tap } from '../lib/haptic'
 import { ArrowLeft, ShieldCheck, UserX, LogOut, ChevronRight, Wallet as WalletIcon, Crown, Trash2, Bell, Gift, FileText, Zap, Info, Users, Eye, Shield, Key } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -53,7 +54,7 @@ export default function ProfileSettings() {
         className="px-3 flex items-center gap-2"
       >
         <button
-          onClick={() => nav(-1)}
+          onClick={() => { tap('light'); nav(-1) }}
           className="w-9 h-9 rounded-full grid place-items-center text-muted"
           aria-label="Back"
         >
@@ -66,7 +67,7 @@ export default function ProfileSettings() {
         {/* Profile header */}
         <button
           type="button"
-          onClick={() => nav('/me/preview')}
+          onClick={() => { tap('light'); nav('/me/preview') }}
           className="flex items-center gap-4 mb-8 text-left w-full active:opacity-70 transition-opacity"
           aria-label="Back to preview"
         >
@@ -172,7 +173,7 @@ export default function ProfileSettings() {
 function MenuItem({ icon, label, onClick, danger }) {
   return (
     <button
-      onClick={onClick}
+      onClick={() => { tap('light'); onClick?.() }}
       className={`w-full flex items-center gap-3 p-4 rounded-2xl bg-surface border border-white/8 text-left ${danger ? 'text-danger' : 'text-cream'}`}
     >
       <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0">
