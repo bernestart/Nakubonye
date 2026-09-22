@@ -9,6 +9,7 @@ import { publicPhotoUrl } from '../lib/photo'
 import { tap } from '../lib/haptic'
 import BottomNav from '../components/BottomNav'
 import AppHeader from '../components/AppHeader'
+import NewMessageSheet from '../components/NewMessageSheet'
 import NotificationBell from '../components/NotificationBell'
 import BrandGlow from '../components/BrandGlow'
 
@@ -278,6 +279,10 @@ export default function Messages() {
       </div>
 
       <div style={{ height: 72, flexShrink: 0 }} />
+      {newMsgOpen && (
+        <NewMessageSheet onClose={() => setNewMsgOpen(false)} />
+      )}
+
       <BottomNav />
     </div>
   )
