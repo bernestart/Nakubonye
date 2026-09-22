@@ -148,30 +148,51 @@ export default function Feed() {
       photo_url: publicPhotoUrl(r.primary_photo),
     })))
 
-    // Reactions + comment counts
-    const postIds = list.map((r) => r.id)
-    if (postIds.length > 0) {
+    // Reactions + comment counts (per source)
+    const communityIds = list.filter((r) => r._source === "community").map((r) => r.id)
+    const personalIds = list.filter((r) => r._source === "personal").map((r) => r.id)
+
+    const myLikedIds = new Set()
+    const counts = new Map()
+    const cc = new Map()
+
+    if (communityIds.length > 0) {
       const { data: reactRows } = await supabase
         .from("community_post_reactions")
         .select("post_id, user_id")
-        .in("post_id", postIds)
-      const mine = new Set()
-      const counts = new Map()
+        .in("post_id", communityIds)
       ;(reactRows || []).forEach((r) => {
         counts.set(r.post_id, (counts.get(r.post_id) || 0) + 1)
-        if (r.user_id === myId) mine.add(r.post_id)
+        if (r.user_id === myId) myLikedIds.add(r.post_id)
       })
-      setMyReactions(mine)
-      setReactionCounts(counts)
 
       const { data: commentRows } = await supabase
         .from("community_post_comments")
         .select("post_id")
-        .in("post_id", postIds)
-      const cc = new Map()
+        .in("post_id", communityIds)
       ;(commentRows || []).forEach((c) => cc.set(c.post_id, (cc.get(c.post_id) || 0) + 1))
-      setCommentCounts(cc)
     }
+
+    if (personalIds.length > 0) {
+      const { data: reactRows } = await supabase
+        .from("user_post_likes")
+        .select("post_id, user_id")
+        .in("post_id", personalIds)
+      ;(reactRows || []).forEach((r) => {
+        counts.set(r.post_id, (counts.get(r.post_id) || 0) + 1)
+        if (r.user_id === myId) myLikedIds.add(r.post_id)
+      })
+
+      const { data: commentRows } = await supabase
+        .from("user_post_comments")
+        .select("post_id")
+        .in("post_id", personalIds)
+      ;(commentRows || []).forEach((c) => cc.set(c.post_id, (cc.get(c.post_id) || 0) + 1))
+    }
+
+    setMyReactions(myLikedIds)
+    setReactionCounts(counts)
+    setCommentCounts(cc)
 
     setLoading(false)
   }, [myId])
@@ -254,8 +275,10 @@ export default function Feed() {
       })
     }
 
-    // --- Reactions + comment counts (community posts only) ---
+    // --- Reactions + comment counts (per source) ---
     const communityIds = merged.filter((r) => r._source === "community").map((r) => r.id)
+    const personalIds = merged.filter((r) => r._source === "personal").map((r) => r.id)
+
     if (communityIds.length > 0) {
       const { data: reactRows } = await supabase
         .from("community_post_reactions")
@@ -275,6 +298,32 @@ export default function Feed() {
         .from("community_post_comments")
         .select("post_id")
         .in("post_id", communityIds)
+      setCommentCounts((prev) => {
+        const next = new Map(prev)
+        ;(commentRows || []).forEach((c) => next.set(c.post_id, (next.get(c.post_id) || 0) + 1))
+        return next
+      })
+    }
+
+    if (personalIds.length > 0) {
+      const { data: reactRows } = await supabase
+        .from("user_post_likes")
+        .select("post_id, user_id")
+        .in("post_id", personalIds)
+      setMyReactions((prev) => {
+        const next = new Set(prev)
+        ;(reactRows || []).forEach((r) => { if (r.user_id === myId) next.add(r.post_id) })
+        return next
+      })
+      setReactionCounts((prev) => {
+        const next = new Map(prev)
+        ;(reactRows || []).forEach((r) => next.set(r.post_id, (next.get(r.post_id) || 0) + 1))
+        return next
+      })
+      const { data: commentRows } = await supabase
+        .from("user_post_comments")
+        .select("post_id")
+        .in("post_id", personalIds)
       setCommentCounts((prev) => {
         const next = new Map(prev)
         ;(commentRows || []).forEach((c) => next.set(c.post_id, (next.get(c.post_id) || 0) + 1))
