@@ -37,6 +37,11 @@ export default function Feed() {
   const [cursor, setCursor] = useState(null)
   const [hasMore, setHasMore] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [pullDistance, setPullDistance] = useState(0)
+  const [refreshing, setRefreshing] = useState(false)
+  const scrollRef = useRef(null)
+  const pullStartY = useRef(0)
+  const isPulling = useRef(false)
   const sentinelRef = useRef(null)
 
   const load = useCallback(async () => {
@@ -455,6 +460,38 @@ export default function Feed() {
     }
   }
 
+  const PULL_THRESHOLD = 80
+
+  function handleTouchStart(e) {
+    const el = scrollRef.current
+    if (!el || el.scrollTop > 0) return
+    pullStartY.current = e.touches[0].clientY
+    isPulling.current = true
+  }
+
+  function handleTouchMove(e) {
+    if (!isPulling.current) return
+    const dy = e.touches[0].clientY - pullStartY.current
+    if (dy > 0) {
+      // Dampen the pull distance
+      setPullDistance(Math.min(dy * 0.5, 120))
+    }
+  }
+
+  async function handleTouchEnd() {
+    if (!isPulling.current) return
+    isPulling.current = false
+    if (pullDistance >= PULL_THRESHOLD) {
+      setRefreshing(true)
+      setPullDistance(60)
+      try {
+        await load()
+      } catch {}
+      setRefreshing(false)
+    }
+    setPullDistance(0)
+  }
+
   return (
     <div style={{
       position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
@@ -465,7 +502,41 @@ export default function Feed() {
       <BrandGlow />
       <AppHeader />
 
-      <div className="flex-1 overflow-y-auto px-2 py-2 pb-24">
+      <div
+        ref={scrollRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className="flex-1 overflow-y-auto px-2 py-2 pb-24"
+        style={{
+          transform: `translateY(${Math.max(0, pullDistance - 20)}px)`,
+          transition: pullDistance === 0 ? "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" : "none",
+        }}
+      >
+        {/* Pull-to-refresh indicator */}
+        {(pullDistance > 0 || refreshing) && (
+          <div
+            className="flex items-center justify-center overflow-hidden"
+            style={{
+              height: Math.max(0, pullDistance - 20),
+              transition: pullDistance === 0 ? "height 200ms" : "none",
+            }}
+          >
+            <div className="flex flex-col items-center gap-1">
+              <div
+                className="w-6 h-6 rounded-full border-2 border-purple-500 border-t-transparent"
+                style={{
+                  animation: refreshing ? "spin 0.8s linear infinite" : "none",
+                  transform: refreshing ? "none" : `rotate(${(pullDistance / PULL_THRESHOLD) * 360}deg)`,
+                }}
+              />
+              <span className="text-purple-300 text-[10.5px] font-bold">
+                {refreshing ? "Refreshing…" : pullDistance >= PULL_THRESHOLD ? "Release to refresh" : "Pull down"}
+              </span>
+            </div>
+          </div>
+        )}
+
         {error && (
           <div className="mb-3 text-red-400 text-[12.5px] bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2">
             {error}
