@@ -6,6 +6,7 @@ import { useAuth } from '../lib/auth'
 import { publicPhotoUrl, calcAge } from '../lib/photo'
 import { tap } from '../lib/haptic'
 import ProfileTabs from '../components/ProfileTabs'
+import AppHeader from '../components/AppHeader'
 import ProfileDetails from '../components/ProfileDetails'
 import { PromptList } from '../components/PromptCard'
 import BottomNav from '../components/BottomNav'
@@ -134,7 +135,11 @@ export default function Preview() {
         <div className="absolute bottom-[-180px] right-[-100px] w-[420px] h-[420px] rounded-full bg-pink-500/14" style={{ filter: 'blur(120px)' }} />
       </div>
 
-      <ProfileTabs active="preview" />
+      <AppHeader />
+
+      <div className="px-4 pt-3">
+        <ProfileTabs active="preview" />
+      </div>
 
       <div className="flex-1 overflow-y-auto">
         {loading ? (

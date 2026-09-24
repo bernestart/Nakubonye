@@ -7,6 +7,7 @@ import { useAuth } from '../lib/auth'
 import { publicPhotoUrl } from '../lib/photo'
 import { tap } from '../lib/haptic'
 import ProfileTabs from '../components/ProfileTabs'
+import AppHeader from '../components/AppHeader'
 import { PROMPT_LIBRARY } from '../lib/profileLabels'
 
 const MAX_BIO = 300
@@ -372,7 +373,11 @@ export default function EditProfile() {
       background: '#0B0B14', overflow: 'hidden',
     }}>
       <BrandGlow />
-      <ProfileTabs active="edit" />
+      <AppHeader />
+
+      <div className="px-4 pt-3">
+        <ProfileTabs active="edit" />
+      </div>
 
       {error && (
         <div className="mx-3 mt-2 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5 shrink-0">

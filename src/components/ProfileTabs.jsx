@@ -1,5 +1,4 @@
 import { useNavigate } from 'react-router-dom'
-import { Settings } from 'lucide-react'
 import { tap } from '../lib/haptic'
 
 export default function ProfileTabs({ active = 'preview' }) {
@@ -7,21 +6,8 @@ export default function ProfileTabs({ active = 'preview' }) {
 
   return (
     <div
-      style={{ height: 92, flexShrink: 0 }}
-      className="px-5 flex flex-col justify-end gap-3 pb-3 border-b border-white/8"
+      className="px-5 pb-3 flex flex-col gap-3"
     >
-      <div className="flex items-center justify-between">
-        <span className="text-cream font-bold text-[15px]">My profile</span>
-        <button
-          type="button"
-          onClick={() => { tap('light'); nav('/me') }}
-          className="w-8 h-8 rounded-full grid place-items-center text-muted"
-          aria-label="Settings"
-        >
-          <Settings size={18} strokeWidth={2.2} />
-        </button>
-      </div>
-
       <div className="flex gap-1 p-1 rounded-2xl bg-white/[0.05] border border-white/8">
         <button
           type="button"
