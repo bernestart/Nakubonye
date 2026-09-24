@@ -1,5 +1,5 @@
-import { NavLink } from 'react-router-dom'
-import { Compass, Heart, MessageCircle, User, Newspaper, Clapperboard } from 'lucide-react'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { Compass, Heart, MessageCircle, User, Newspaper, Clapperboard , Plus } from 'lucide-react'
 import { tap } from '../lib/haptic'
 import { useChatsUnread, useMatchesUnread } from '../lib/badges'
 
@@ -38,6 +38,7 @@ function TwoHearts({ size = 22, strokeWidth = 1.9, fill = 'none', color }) {
 }
 
 export default function BottomNav() {
+  const nav = useNavigate()
   const chatsUnread = useChatsUnread()
   const matchesUnread = useMatchesUnread()
 
@@ -154,6 +155,26 @@ export default function BottomNav() {
           </NavLink>
         ))}
       </div>
+
+      {/* Center FAB — create button */}
+      <button
+        data-fab
+        onClick={() => { tap('medium'); nav('/create') }}
+        className="absolute left-1/2 -translate-x-1/2 grid place-items-center active:scale-95 transition-transform"
+        style={{
+          top: -20,
+          width: 56,
+          height: 56,
+          borderRadius: 999,
+          background: 'linear-gradient(135deg, #EC4899 0%, #A855F7 100%)',
+          boxShadow: '0 10px 28px rgba(236,72,153,0.55), 0 4px 12px rgba(168,85,247,0.4)',
+          border: '3px solid #0B0B14',
+          zIndex: 5,
+        }}
+        aria-label="Create"
+      >
+        <Plus size={26} color="#fff" strokeWidth={2.6} />
+      </button>
     </nav>
   )
 }
