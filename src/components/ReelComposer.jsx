@@ -47,7 +47,7 @@ async function extractThumbnail(file, timeSec) {
   })
 }
 
-export default function ReelComposer({ onClose, onDone }) {
+export default function ReelComposer({ onClose, onDone, remixOf }) {
   const { session } = useAuth()
   const myId = session?.user?.id
   const fileRef = useRef(null)
@@ -273,6 +273,7 @@ export default function ReelComposer({ onClose, onDone }) {
       cover_frame_time: coverTime || 0,
       tagged_user_ids: taggedUsers.map((u) => u.id),
       thumbnail_url: thumbnailUrl,
+          remix_of: remixOf?.id || null,
     })
     if (insErr) { setError(insErr.message); setBusy(false); return }
     setProgress(100); setBusy(false); setStage("capture"); onDone?.()
@@ -574,6 +575,28 @@ export default function ReelComposer({ onClose, onDone }) {
   return (
     <div className="fixed inset-0 z-[220] bg-black flex flex-col">
       <input ref={fileRef} type="file" accept="video/*" hidden onChange={pick} />
+
+      {remixOf && (
+        <div className="shrink-0 px-3 pt-3 flex items-center gap-3"
+             style={{ paddingTop: "max(12px, env(safe-area-inset-top))" }}>
+          <div className="relative shrink-0 rounded-xl overflow-hidden bg-black border border-white/15" style={{ width: 48, height: 64 }}>
+            <video
+              src={remixOf.video_url}
+              muted
+              playsInline
+              preload="metadata"
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-purple-300 text-[11px] font-black tracking-wider uppercase">Remixing</p>
+            <p className="text-cream text-[13px] font-semibold truncate mt-0.5">
+              {remixOf.caption || "Original reel"}
+            </p>
+          </div>
+        </div>
+      )}
+
       <header className="flex items-center justify-between px-3 py-3 z-10">
         <button onClick={() => { stopCamera(); onClose() }} className="w-10 h-10 rounded-full grid place-items-center bg-black/50 text-white" aria-label="Close"><X size={22} /></button>
         <div className="flex bg-white/10 rounded-full p-1">
