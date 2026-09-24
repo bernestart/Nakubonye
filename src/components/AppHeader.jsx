@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
-import { Search, Bell, Plus, MessageCircle } from "lucide-react"
+import { Search, Bell, Plus } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
@@ -121,14 +121,6 @@ export default function AppHeader({ onScrollTop }) {
 
         {/* Right actions */}
         <div className="flex items-center gap-1 shrink-0">
-          <button
-            onClick={() => { tap("light"); nav("/messages") }}
-            aria-label="Messages"
-            className="w-9 h-9 rounded-full grid place-items-center text-muted active:scale-95 transition-transform"
-          >
-            <MessageCircle size={20} strokeWidth={2.2} />
-          </button>
-
           <button
             onClick={() => { tap("light"); nav("/create") }}
             aria-label="Create"
