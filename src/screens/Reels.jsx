@@ -31,6 +31,7 @@ export default function Reels() {
   const [hiddenIds, setHiddenIds] = useState(new Set())
   const [savedIds, setSavedIds] = useState(new Set())
   const [likedAuthors, setLikedAuthors] = useState(new Set())
+  const [remixOriginals, setRemixOriginals] = useState(new Map())
   const [matchSet, setMatchSet] = useState(new Set())
   const containerRef = useRef(null)
   const videoRefs = useRef([])
@@ -42,7 +43,7 @@ export default function Reels() {
     setLoading(true)
     const { data: rows } = await supabase
       .from("reels")
-      .select("id, user_id, video_url, clips, thumbnail_url, caption, duration_sec, trim_start, trim_end, mirrored, aspect_ratio, text_overlays, sticker_overlays, filter_id, audience, allow_comments, allow_remix, location, cover_frame_time, view_count, created_at")
+      .select("id, user_id, video_url, clips, thumbnail_url, caption, duration_sec, trim_start, trim_end, mirrored, aspect_ratio, text_overlays, sticker_overlays, filter_id, audience, allow_comments, allow_remix, location, cover_frame_time, view_count, remix_of, created_at")
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .limit(50)
@@ -117,6 +118,29 @@ export default function Reels() {
       ;(allComments || []).forEach((c) => cc.set(c.reel_id, (cc.get(c.reel_id) || 0) + 1))
       setCommentCounts(cc)
     }
+    // Load remix original owners
+    const remixIds = list.map((r) => r.remix_of).filter(Boolean)
+    if (remixIds.length > 0) {
+      const { data: origReels } = await supabase
+        .from("reels")
+        .select("id, user_id, caption")
+        .in("id", remixIds)
+      if (origReels && origReels.length > 0) {
+        const ownerIds = [...new Set(origReels.map((r) => r.user_id))]
+        const { data: owners } = await supabase
+          .from("profiles")
+          .select("id, display_name, username, is_verified")
+          .in("id", ownerIds)
+        const ownerMap = new Map((owners || []).map((o) => [o.id, o]))
+        const rm = new Map()
+        origReels.forEach((r) => {
+          const owner = ownerMap.get(r.user_id)
+          rm.set(r.id, { ...r, owner })
+        })
+        setRemixOriginals(rm)
+      }
+    }
+
     setLoading(false)
   }, [myId])
 
@@ -522,6 +546,26 @@ export default function Reels() {
                       </span>
                       {prof?.is_verified && <VerifiedBadge size={13} />}
                     </button>
+
+                    {reel.remix_of && remixOriginals.get(reel.remix_of) && (
+                      <button
+                        onClick={() => {
+                          tap("light")
+                          const orig = remixOriginals.get(reel.remix_of)
+                          if (orig?.owner?.id) nav("/profile/" + orig.owner.id)
+                        }}
+                        className="shrink-0 h-6 px-2 rounded-full flex items-center gap-1 font-bold text-[10.5px]"
+                        style={{
+                          background: "rgba(168,85,247,0.2)",
+                          border: "1px solid rgba(168,85,247,0.5)",
+                          color: "#DDD6FE",
+                        }}
+                      >
+                        🔀 {remixOriginals.get(reel.remix_of).owner?.username
+                          ? "@" + remixOriginals.get(reel.remix_of).owner.username
+                          : "Remix"}
+                      </button>
+                    )}
 
                     {reel.user_id !== myId && (
                       <button
