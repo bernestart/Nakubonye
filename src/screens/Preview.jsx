@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, MapPin, Check, Sparkles, Heart, Share2, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, MapPin, Check, Sparkles, Heart, Share2, AlertTriangle , Settings } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl, calcAge } from '../lib/photo'
@@ -410,6 +410,22 @@ export default function Preview() {
                 <div className="flex-1">
                   <p className="text-cream font-semibold text-[14.5px]">Share profile</p>
                   <p className="text-muted text-[12px]">{copied ? 'Copied to clipboard' : 'Share an invite link'}</p>
+                </div>
+              </button>
+            </div>
+
+            {/* Settings */}
+            <div className="px-5 mt-3">
+              <button
+                onClick={() => { tap('light'); nav('/me') }}
+                className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left"
+              >
+                <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
+                  <Settings size={16} strokeWidth={2.4} className="text-purple-300" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-cream font-semibold text-[14.5px]">Settings</p>
+                  <p className="text-muted text-[12px]">Account, privacy, security</p>
                 </div>
               </button>
             </div>
