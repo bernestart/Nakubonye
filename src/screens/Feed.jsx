@@ -621,7 +621,7 @@ export default function Feed() {
                 </div>
               </article>
 
-              {(idx + 1) % 4 === 0 && suggested.length > 0 && (
+              {((idx + 1) % 4 === 0 || (idx === posts.length - 1 && posts.length < 4)) && suggested.length > 0 && (
                 <div className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
                   <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase px-3 pt-3 mb-2">
                     People you may know
