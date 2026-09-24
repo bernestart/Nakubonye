@@ -107,7 +107,9 @@ export default function Feed() {
       .slice(0, 12)
 
     setPosts(list)
-    setHasMore(list.length === 12)
+    // hasMore stays true as long as we got something —
+    // loadMore() will set it false when there's truly nothing left
+    setHasMore(list.length > 0)
     setCursor(list.length > 0 ? list[list.length - 1].created_at : null)
 
     // 4. Profiles + photos for post authors
@@ -350,7 +352,7 @@ export default function Feed() {
 
     setPosts((prev) => [...prev, ...merged])
     setCursor(merged[merged.length - 1].created_at)
-    setHasMore(merged.length === 12)
+    setHasMore(merged.length > 0)
     setLoadingMore(false)
   }, [myId, loadingMore, hasMore, cursor, communities])
 
