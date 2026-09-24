@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { X, Flag, EyeOff, AlertTriangle } from "lucide-react"
+import { X, Flag, EyeOff, AlertTriangle , Trash2 } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
@@ -13,7 +13,7 @@ const REASONS = [
   "Something else",
 ]
 
-export default function ReelActionsSheet({ reel, onClose, onHidden }) {
+export default function ReelActionsSheet({ reel, onClose, onHidden, onDeleted }) {
   const { session } = useAuth()
   const myId = session?.user?.id
   const [screen, setScreen] = useState("menu") // menu | report
@@ -41,6 +41,16 @@ export default function ReelActionsSheet({ reel, onClose, onHidden }) {
       reason,
       details: details.trim() || null,
     })
+  async function deleteReel() {
+    if (!confirm("Delete this reel permanently? Cannot be undone.")) return
+    setBusy(true); setError("")
+    const { error: err } = await supabase.rpc("delete_my_reel", { p_reel_id: reel.id })
+    setBusy(false)
+    if (err) { setError(err.message); return }
+    onDeleted?.(reel.id)
+    onClose?.()
+  }
+
     setBusy(false)
     if (err) { setError(err.message); return }
     onClose?.()
@@ -87,6 +97,22 @@ export default function ReelActionsSheet({ reel, onClose, onHidden }) {
                   <p className="text-muted text-[12px]">Flag inappropriate content</p>
                 </div>
               </button>
+
+              {reel.user_id === myId && (
+                <button
+                  onClick={deleteReel}
+                  disabled={busy}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-red-500/12 border border-red-500/40 text-left disabled:opacity-50"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-red-500/25 border border-red-500/50 grid place-items-center">
+                    <Trash2 size={17} className="text-red-400" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-cream font-semibold text-[14.5px]">Delete reel</p>
+                    <p className="text-muted text-[12px]">Remove permanently</p>
+                  </div>
+                </button>
+              )}
 
               <button
                 onClick={onClose}

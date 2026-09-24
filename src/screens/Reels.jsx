@@ -597,6 +597,10 @@ export default function Reels() {
         <ReelActionsSheet
           reel={actionsFor}
           onClose={() => setActionsFor(null)}
+          onDeleted={(id) => {
+            setReels((arr) => arr.filter((r) => r.id !== id))
+            setCurrentIdx(0)
+          }}
           onHidden={(id) => {
             setHiddenIds((prev) => new Set([...prev, id]))
             // If we hid the current reel, jump to next
