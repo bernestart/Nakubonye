@@ -554,7 +554,13 @@ export default function Feed() {
                 )}
 
                 {imageUrl && (
-                  <img src={imageUrl} alt="" className="w-full" loading="lazy" />
+                  <img
+                    src={imageUrl}
+                    alt=""
+                    className="w-full object-cover"
+                    style={{ maxHeight: "72vh" }}
+                    loading="lazy"
+                  />
                 )}
 
                 {/* Engagement summary */}

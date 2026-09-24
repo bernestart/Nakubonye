@@ -228,6 +228,13 @@ export default function StoriesRow() {
 
   return (
     <>
+      {groups.length === 0 && (
+        <div className="px-4 mb-2">
+          <p className="text-muted text-[12px] leading-relaxed">
+            <span className="text-purple-300 font-semibold">Tip:</span> Stories disappear in 24h. Post yours and invite friends to see theirs.
+          </p>
+        </div>
+      )}
       <div ref={stripRef} className="flex gap-2.5 overflow-x-auto px-3 py-2.5" style={{ scrollbarWidth: "none" }}>
         {/* My story tile */}
         <button
