@@ -93,8 +93,16 @@ export default function Feed() {
       _source: "personal",
     }))
 
-    // 3c. Merge + sort + take first 12
+    // 3c. Load my hidden post IDs and filter them out
+    const { data: hideRows } = await supabase
+      .from("post_hides")
+      .select("post_id, post_type")
+      .eq("user_id", myId)
+    const hiddenKeys = new Set((hideRows || []).map((h) => h.post_type + ":" + h.post_id))
+
+    // 3d. Merge + filter + sort + take first 12
     const list = [...communityPosts, ...personalPosts]
+      .filter((r) => !hiddenKeys.has((r._source || "community") + ":" + r.id))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
       .slice(0, 12)
 
@@ -241,8 +249,15 @@ export default function Feed() {
       _source: "personal",
     }))
 
-    // --- Merge + take newest 12 ---
+    // --- Load hidden IDs, filter, merge, take newest 12 ---
+    const { data: hideRows } = await supabase
+      .from("post_hides")
+      .select("post_id, post_type")
+      .eq("user_id", myId)
+    const hiddenKeys = new Set((hideRows || []).map((h) => h.post_type + ":" + h.post_id))
+
     const merged = [...communityPosts, ...personalPosts]
+      .filter((r) => !hiddenKeys.has((r._source || "community") + ":" + r.id))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
       .slice(0, 12)
 
