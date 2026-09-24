@@ -93,15 +93,36 @@ export default function Feed() {
       _source: "personal",
     }))
 
-    // 3c. Load my hidden post IDs and filter them out
+    // 3c. Reels (public only, from anyone)
+    const { data: reelRows } = await supabase
+      .from("reels")
+      .select("id, user_id, video_url, thumbnail_url, caption, mirrored, cover_frame_time, created_at")
+      .eq("is_active", true)
+      .eq("audience", "public")
+      .order("created_at", { ascending: false })
+      .limit(20)
+    const reelItems = (reelRows || []).map((r) => ({
+      id: r.id,
+      user_id: r.user_id,
+      author_id: r.user_id,
+      content: r.caption,
+      video_url: r.video_url,
+      thumbnail_url: r.thumbnail_url,
+      mirrored: r.mirrored,
+      cover_frame_time: r.cover_frame_time,
+      created_at: r.created_at,
+      _source: "reel",
+    }))
+
+    // 3d. Load my hidden post IDs and filter them out
     const { data: hideRows } = await supabase
       .from("post_hides")
       .select("post_id, post_type")
       .eq("user_id", myId)
     const hiddenKeys = new Set((hideRows || []).map((h) => h.post_type + ":" + h.post_id))
 
-    // 3d. Merge + filter + sort + take first 12
-    const list = [...communityPosts, ...personalPosts]
+    // 3e. Merge + filter + sort + take first 12
+    const list = [...communityPosts, ...personalPosts, ...reelItems]
       .filter((r) => !hiddenKeys.has((r._source || "community") + ":" + r.id))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
       .slice(0, 12)
@@ -251,6 +272,28 @@ export default function Feed() {
       _source: "personal",
     }))
 
+    // --- Reels older than cursor ---
+    const { data: reelRows } = await supabase
+      .from("reels")
+      .select("id, user_id, video_url, thumbnail_url, caption, mirrored, cover_frame_time, created_at")
+      .eq("is_active", true)
+      .eq("audience", "public")
+      .lt("created_at", cursor)
+      .order("created_at", { ascending: false })
+      .limit(20)
+    const reelItems = (reelRows || []).map((r) => ({
+      id: r.id,
+      user_id: r.user_id,
+      author_id: r.user_id,
+      content: r.caption,
+      video_url: r.video_url,
+      thumbnail_url: r.thumbnail_url,
+      mirrored: r.mirrored,
+      cover_frame_time: r.cover_frame_time,
+      created_at: r.created_at,
+      _source: "reel",
+    }))
+
     // --- Load hidden IDs, filter, merge, take newest 12 ---
     const { data: hideRows } = await supabase
       .from("post_hides")
@@ -258,7 +301,7 @@ export default function Feed() {
       .eq("user_id", myId)
     const hiddenKeys = new Set((hideRows || []).map((h) => h.post_type + ":" + h.post_id))
 
-    const merged = [...communityPosts, ...personalPosts]
+    const merged = [...communityPosts, ...personalPosts, ...reelItems]
       .filter((r) => !hiddenKeys.has((r._source || "community") + ":" + r.id))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
       .slice(0, 12)
@@ -485,6 +528,129 @@ export default function Feed() {
           </div>
         ) : (
           posts.map((p, idx) => {
+            // REELS render as video cards
+            if (p._source === "reel") {
+              const rProf = profiles.get(p.author_id)
+              const rPhoto = photos.get(p.author_id)
+              const rName = rProf?.display_name || rProf?.username || "Someone"
+              return (
+                <Fragment key={"reel-" + p.id}>
+                  <article className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
+                    {/* Author header */}
+                    <div className="flex items-center gap-2.5 px-3 pt-3 pb-2">
+                      <button
+                        onClick={() => { tap("light"); nav("/profile/" + p.author_id) }}
+                        className="w-9 h-9 rounded-full overflow-hidden bg-elevated border border-white/8 shrink-0"
+                      >
+                        {rPhoto ? (
+                          <img src={publicPhotoUrl(rPhoto)} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full grid place-items-center text-purple-400 font-black text-sm">{rName[0]}</div>
+                        )}
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-cream font-bold text-[13.5px] truncate flex items-center gap-1">
+                          {rName}
+                          {rProf?.is_verified && <VerifiedBadge size={13} />}
+                        </p>
+                        <p className="text-subtle text-[11px]">
+                          {new Date(p.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      </div>
+                      <span
+                        className="shrink-0 px-2 h-6 rounded-full flex items-center gap-1 text-[10.5px] font-black tracking-wider"
+                        style={{ background: "rgba(236,72,153,0.2)", border: "1px solid rgba(236,72,153,0.5)", color: "#F9A8D4" }}
+                      >
+                        ▶ REEL
+                      </span>
+                    </div>
+
+                    {/* Caption */}
+                    {p.content && (
+                      <p className="px-3 pb-3 text-cream text-[14px] leading-[1.5] whitespace-pre-wrap">{p.content}</p>
+                    )}
+
+                    {/* Video / thumbnail — tap opens Reels player */}
+                    <button
+                      onClick={() => { tap("light"); nav("/reels") }}
+                      className="relative w-full block bg-black"
+                      style={{ aspectRatio: "9 / 16", maxHeight: "72vh" }}
+                    >
+                      {p.thumbnail_url ? (
+                        <img
+                          src={p.thumbnail_url}
+                          alt=""
+                          className="absolute inset-0 w-full h-full object-cover"
+                          style={{ transform: p.mirrored ? "scaleX(-1)" : "none" }}
+                        />
+                      ) : (
+                        <video
+                          src={p.video_url}
+                          muted
+                          playsInline
+                          preload="auto"
+                          onLoadedData={(e) => {
+                            try { e.target.currentTime = p.cover_frame_time || 0.1 } catch {}
+                          }}
+                          className="absolute inset-0 w-full h-full object-cover"
+                          style={{ transform: p.mirrored ? "scaleX(-1)" : "none" }}
+                        />
+                      )}
+
+                      {/* Play overlay */}
+                      <span className="absolute inset-0 grid place-items-center bg-black/15">
+                        <span className="w-16 h-16 rounded-full grid place-items-center bg-black/45 backdrop-blur-md border border-white/25">
+                          <span className="ml-1" style={{ width: 0, height: 0, borderTop: "10px solid transparent", borderBottom: "10px solid transparent", borderLeft: "16px solid #fff" }} />
+                        </span>
+                      </span>
+                    </button>
+
+                    {/* Footer */}
+                    <button
+                      onClick={() => { tap("light"); nav("/reels") }}
+                      className="w-full flex items-center justify-between px-3 py-2.5 border-t border-white/5"
+                    >
+                      <span className="text-purple-300 text-[12.5px] font-bold">Watch reel →</span>
+                      <span className="text-muted text-[11.5px]">Tap to open</span>
+                    </button>
+                  </article>
+
+                  {((idx + 1) % 4 === 0 || (idx === posts.length - 1 && posts.length < 4)) && suggested.length > 0 && (
+                    <div className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
+                      <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase px-3 pt-3 mb-2">
+                        People you may know
+                      </p>
+                      <div className="flex gap-3 overflow-x-auto px-3 pb-3" style={{ scrollbarWidth: "none" }}>
+                        {suggested.slice(0, 6).map((u) => (
+                          <button
+                            key={u.id}
+                            onClick={() => { tap("light"); nav("/profile/" + u.id) }}
+                            className="shrink-0 flex flex-col items-center gap-1.5"
+                            style={{ width: 92 }}
+                          >
+                            <span className="w-[72px] h-[72px] rounded-full overflow-hidden bg-elevated border-2 border-white/10">
+                              {u.photo_url ? (
+                                <img src={u.photo_url} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="w-full h-full grid place-items-center text-purple-400 font-black text-xl">
+                                  {(u.display_name || "?")[0]}
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-cream text-[12px] font-semibold truncate w-full text-center">
+                              {u.display_name || u.username}
+                            </span>
+                            <span className="text-purple-300 text-[11px] font-bold">View</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </Fragment>
+              )
+            }
+
+            // Regular post render
             const prof = profiles.get(p.author_id)
             const comm = communities.get(p.community_id)
             const photoPath = photos.get(p.author_id)
