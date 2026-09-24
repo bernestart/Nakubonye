@@ -6,9 +6,10 @@ import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 
-export default function PostCommentsSheet({ postId, onClose, onCountChange }) {
+export default function PostCommentsSheet({ postId, source = "community", onClose, onCountChange }) {
   const { session } = useAuth()
   const myId = session?.user?.id
+  const table = source === "personal" ? "user_post_comments" : "community_post_comments"
   const [comments, setComments] = useState([])
   const [profiles, setProfiles] = useState(new Map())
   const [photos, setPhotos] = useState(new Map())
@@ -20,7 +21,7 @@ export default function PostCommentsSheet({ postId, onClose, onCountChange }) {
   const load = useCallback(async () => {
     setLoading(true)
     const { data: rows } = await supabase
-      .from("community_post_comments")
+      .from(table)
       .select("id, user_id, content, created_at")
       .eq("post_id", postId)
       .order("created_at", { ascending: true })
@@ -49,7 +50,7 @@ export default function PostCommentsSheet({ postId, onClose, onCountChange }) {
       setPhotos(pm)
     }
     setLoading(false)
-  }, [postId, onCountChange])
+  }, [postId, onCountChange, table])
 
   useEffect(() => { load() }, [load])
 
@@ -61,7 +62,7 @@ export default function PostCommentsSheet({ postId, onClose, onCountChange }) {
     const body = text.trim()
     if (!body || !myId || busy) return
     setBusy(true); tap("light")
-    const { error } = await supabase.from("community_post_comments").insert({
+    const { error } = await supabase.from(table).insert({
       post_id: postId,
       user_id: myId,
       content: body.slice(0, 800),
@@ -72,7 +73,7 @@ export default function PostCommentsSheet({ postId, onClose, onCountChange }) {
 
   async function remove(id) {
     if (!confirm("Delete this comment?")) return
-    await supabase.from("community_post_comments").delete().eq("id", id)
+    await supabase.from(table).delete().eq("id", id)
     load()
   }
 

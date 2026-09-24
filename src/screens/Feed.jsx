@@ -573,7 +573,7 @@ export default function Feed() {
                     </span>
                   </button>
                   <button
-                    onClick={() => { tap("light"); setCommentsFor(p.id) }}
+                    onClick={() => { tap("light"); setCommentsFor({ id: p.id, source: p._source }) }}
                     className="flex items-center gap-1.5 px-3 py-2 rounded-xl flex-1 justify-center"
                   >
                     <MessageCircle size={18} strokeWidth={2.2} color="#888" />
@@ -641,12 +641,13 @@ export default function Feed() {
 
       {commentsFor && (
         <PostCommentsSheet
-          postId={commentsFor}
+          postId={commentsFor.id}
+          source={commentsFor.source}
           onClose={() => setCommentsFor(null)}
           onCountChange={(n) => {
             setCommentCounts((prev) => {
               const next = new Map(prev)
-              next.set(commentsFor, n)
+              next.set(commentsFor.id, n)
               return next
             })
           }}
