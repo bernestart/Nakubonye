@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { X, Flag, EyeOff, AlertTriangle , Trash2 } from "lucide-react"
+import { X, Flag, EyeOff, AlertTriangle , Trash2 , Bookmark, Link2 } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
@@ -41,6 +41,26 @@ export default function ReelActionsSheet({ reel, onClose, onHidden, onDeleted })
       reason,
       details: details.trim() || null,
     })
+  async function saveReel() {
+    if (!myId) return
+    setBusy(true); setError("")
+    const { error: err } = await supabase.from("reel_saves").insert({ reel_id: reel.id, user_id: myId })
+    setBusy(false)
+    if (err && !err.message.includes("duplicate")) { setError(err.message); return }
+    onClose?.()
+    alert("Saved!")
+  }
+
+  async function copyLink() {
+    try {
+      const url = window.location.origin + "/reels"
+      await navigator.clipboard.writeText(url)
+      alert("Link copied!")
+    } catch {
+      alert("Could not copy link")
+    }
+  }
+
   async function deleteReel() {
     if (!confirm("Delete this reel permanently? Cannot be undone.")) return
     setBusy(true); setError("")
@@ -71,6 +91,33 @@ export default function ReelActionsSheet({ reel, onClose, onHidden, onDeleted })
           <>
             <h3 className="text-cream font-extrabold text-[17px] mb-4">Reel options</h3>
             <div className="flex flex-col gap-2">
+              <button
+                onClick={saveReel}
+                disabled={busy}
+                className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left disabled:opacity-50"
+              >
+                <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
+                  <Bookmark size={17} className="text-purple-300" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-cream font-semibold text-[14.5px]">Save reel</p>
+                  <p className="text-muted text-[12px]">Add to your saved</p>
+                </div>
+              </button>
+
+              <button
+                onClick={copyLink}
+                disabled={busy}
+                className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left disabled:opacity-50"
+              >
+                <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
+                  <Link2 size={17} className="text-purple-300" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-cream font-semibold text-[14.5px]">Copy link</p>
+                </div>
+              </button>
+
               <button
                 onClick={hideReel}
                 disabled={busy}
