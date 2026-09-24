@@ -91,33 +91,30 @@ export default function AppHeader({ onScrollTop }) {
           <span className="text-white font-black text-[15px] leading-none">N</span>
         </button>
 
-        {/* Online pill — center */}
-        <button
-          onClick={openOnline}
-          disabled={onlineCount === 0}
-          aria-label={onlineCount + " people online"}
-          className="h-7 px-3 rounded-full flex items-center gap-1.5 transition-all"
-          style={{
-            background: onlineCount > 0 ? "rgba(34,197,94,0.12)" : "rgba(255,255,255,0.03)",
-            border: onlineCount > 0 ? "1px solid rgba(34,197,94,0.35)" : "1px solid rgba(255,255,255,0.06)",
-            opacity: onlineCount === 0 ? 0.5 : 1,
-          }}
-        >
-          <span
-            className="w-1.5 h-1.5 rounded-full"
+        {/* Online pill — only shows when someone is online */}
+        {onlineCount > 0 && (
+          <button
+            onClick={openOnline}
+            aria-label={onlineCount + " people online"}
+            className="h-7 px-3 rounded-full flex items-center gap-1.5 transition-all"
             style={{
-              background: onlineCount > 0 ? "#22C55E" : "#888",
-              boxShadow: onlineCount > 0 ? "0 0 8px rgba(34,197,94,0.9)" : "none",
-              animation: onlineCount > 0 ? "pulse-dot 2s ease-in-out infinite" : "none",
+              background: "rgba(34,197,94,0.12)",
+              border: "1px solid rgba(34,197,94,0.35)",
             }}
-          />
-          <span
-            className="text-[11.5px] font-bold tracking-tight"
-            style={{ color: onlineCount > 0 ? "#4ADE80" : "#666" }}
           >
-            {onlineCount > 0 ? `${onlineCount} online` : "No one online"}
-          </span>
-        </button>
+            <span
+              className="w-1.5 h-1.5 rounded-full"
+              style={{
+                background: "#22C55E",
+                boxShadow: "0 0 8px rgba(34,197,94,0.9)",
+                animation: "pulse-dot 2s ease-in-out infinite",
+              }}
+            />
+            <span className="text-[11.5px] font-bold tracking-tight" style={{ color: "#4ADE80" }}>
+              {onlineCount} online
+            </span>
+          </button>
+        )}
 
         {/* Right actions */}
         <div className="flex items-center gap-1 shrink-0">
