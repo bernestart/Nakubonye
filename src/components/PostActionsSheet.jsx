@@ -17,6 +17,9 @@ export default function PostActionsSheet({ post, onClose, onDeleted, onUpdated }
   const [content, setContent] = useState(post.content || "")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
+  const [reportSheetOpen, setReportSheetOpen] = useState(false)
+  const [reportReason, setReportReason] = useState(null)
+  const [reportDetails, setReportDetails] = useState("")
 
   const isMine = post.author_id === myId
   const isPersonal = post._source === "personal"
@@ -64,6 +67,51 @@ export default function PostActionsSheet({ post, onClose, onDeleted, onUpdated }
     tap("light")
     const url = window.location.origin + "/feed"
     try { await navigator.clipboard.writeText(url); alert("Link copied!") } catch {}
+  }
+
+  async function savePost() {
+    if (!myId) return
+    setBusy(true); setError("")
+    const { error: err } = await supabase.from("post_saves").insert({
+      post_id: post.id,
+      post_type: post._source,
+      user_id: myId,
+    })
+    setBusy(false)
+    if (err && !err.message.includes("duplicate")) { setError(err.message); return }
+    onClose?.()
+    alert("Saved!")
+  }
+
+  async function hidePost() {
+    if (!myId) return
+    if (!confirm("Hide this post? You won't see it again.")) return
+    setBusy(true); setError("")
+    const { error: err } = await supabase.from("post_hides").insert({
+      post_id: post.id,
+      post_type: post._source,
+      user_id: myId,
+    })
+    setBusy(false)
+    if (err && !err.message.includes("duplicate")) { setError(err.message); return }
+    onDeleted?.(post.id)
+    onClose?.()
+  }
+
+  async function submitReport() {
+    if (!myId || !reportReason) return
+    setBusy(true); setError("")
+    const { error: err } = await supabase.from("post_reports").insert({
+      post_id: post.id,
+      post_type: post._source,
+      reporter_id: myId,
+      reason: reportReason,
+      details: reportDetails.trim() || null,
+    })
+    setBusy(false)
+    if (err) { setError(err.message); return }
+    onClose?.()
+    alert("Thanks — we'll review this post.")
   }
 
   return (
@@ -124,42 +172,45 @@ export default function PostActionsSheet({ post, onClose, onDeleted, onUpdated }
 
               {!isMine && (
                 <button
-                  className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left"
+                  onClick={savePost}
+                  disabled={busy}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left disabled:opacity-50"
                 >
                   <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
                     <Bookmark size={17} className="text-purple-300" />
                   </div>
                   <div className="flex-1">
                     <p className="text-cream font-semibold text-[14.5px]">Save post</p>
-                    <p className="text-muted text-[12px]">Coming soon</p>
                   </div>
                 </button>
               )}
 
               {!isMine && (
                 <button
-                  className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left"
+                  onClick={hidePost}
+                  disabled={busy}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left disabled:opacity-50"
                 >
                   <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
                     <EyeOff size={17} className="text-purple-300" />
                   </div>
                   <div className="flex-1">
                     <p className="text-cream font-semibold text-[14.5px]">Hide post</p>
-                    <p className="text-muted text-[12px]">Coming soon</p>
                   </div>
                 </button>
               )}
 
               {!isMine && (
                 <button
-                  className="flex items-center gap-3 p-4 rounded-2xl bg-red-500/8 border border-red-500/25 text-left"
+                  onClick={() => setReportSheetOpen(true)}
+                  disabled={busy}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-red-500/8 border border-red-500/25 text-left disabled:opacity-50"
                 >
                   <div className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 grid place-items-center">
                     <Flag size={17} className="text-red-400" />
                   </div>
                   <div className="flex-1">
                     <p className="text-cream font-semibold text-[14.5px]">Report post</p>
-                    <p className="text-muted text-[12px]">Coming soon</p>
                   </div>
                 </button>
               )}
@@ -246,6 +297,50 @@ export default function PostActionsSheet({ post, onClose, onDeleted, onUpdated }
               ))}
             </div>
             {error && <p className="text-red-400 text-[12.5px] mt-3 text-center">{error}</p>}
+          </>
+        )}
+
+        {reportSheetOpen && (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-cream font-extrabold text-[16px]">Why are you reporting?</h3>
+              <button onClick={() => setReportSheetOpen(false)} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Close">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex flex-col gap-1.5 mb-4">
+              {["Nudity or sexual content","Violence or dangerous content","Harassment or bullying","Hate speech","Spam or misleading","Something else"].map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setReportReason(r)}
+                  className="flex items-center gap-3 p-3 rounded-2xl border text-left"
+                  style={{
+                    background: reportReason === r ? "rgba(168,85,247,0.12)" : "rgba(255,255,255,0.03)",
+                    borderColor: reportReason === r ? "rgba(168,85,247,0.5)" : "rgba(255,255,255,0.06)",
+                  }}
+                >
+                  <span className="w-5 h-5 rounded-full border-2 shrink-0 grid place-items-center" style={{ borderColor: reportReason === r ? "#A855F7" : "rgba(255,255,255,0.2)" }}>
+                    {reportReason === r && <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />}
+                  </span>
+                  <span className="text-cream text-[13.5px] font-medium">{r}</span>
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={reportDetails}
+              onChange={(e) => setReportDetails(e.target.value.slice(0, 300))}
+              placeholder="Add details (optional)…"
+              rows={2}
+              className="w-full bg-elevated border border-white/8 rounded-2xl px-4 py-3 text-cream text-[14px] placeholder:text-subtle focus:outline-none focus:border-purple-500 resize-none mb-3"
+            />
+            {error && <p className="text-red-400 text-[12.5px] mb-3">{error}</p>}
+            <button
+              onClick={submitReport}
+              disabled={!reportReason || busy}
+              className="w-full h-12 rounded-full bg-red-500/90 text-white font-bold text-[14.5px] disabled:opacity-40"
+            >
+              {busy ? "Submitting…" : "Submit report"}
+            </button>
           </>
         )}
       </div>
