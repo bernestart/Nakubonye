@@ -308,6 +308,41 @@ export default function StoriesRow() {
             </button>
           )
         })}
+
+        {/* Invite friends tile — only when nobody else has a story */}
+        {groups.length === 0 && (
+          <button
+            onClick={async () => {
+              tap("light")
+              const url = window.location.origin
+              const text = "Join me on Nakubonye — share your story. " + url
+              if (navigator.share) {
+                try { await navigator.share({ title: "Nakubonye", text, url }) } catch {}
+              } else {
+                try { await navigator.clipboard.writeText(text); alert("Link copied!") } catch {}
+              }
+            }}
+            className="shrink-0 relative overflow-hidden"
+            style={{
+              width: TILE_W,
+              height: TILE_H,
+              borderRadius: 14,
+              border: "2px dashed rgba(168,85,247,0.35)",
+              background: "linear-gradient(160deg, rgba(168,85,247,0.08) 0%, rgba(236,72,153,0.06) 100%)",
+            }}
+          >
+            <div className="absolute inset-0 grid place-items-center">
+              <div className="text-center px-2">
+                <div className="w-10 h-10 rounded-full grid place-items-center mx-auto mb-2"
+                     style={{ background: "linear-gradient(135deg, #C084FC 0%, #EC4899 100%)", boxShadow: "0 4px 14px rgba(168,85,247,0.4)" }}>
+                  <span className="text-white text-[20px] leading-none">+</span>
+                </div>
+                <p className="text-cream text-[11px] font-bold leading-tight">Invite friends</p>
+                <p className="text-muted text-[9.5px] mt-1 leading-tight">Share your link</p>
+              </div>
+            </div>
+          </button>
+        )}
       </div>
 
       {composerOpen && (
