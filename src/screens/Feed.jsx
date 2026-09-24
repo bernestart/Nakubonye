@@ -429,11 +429,6 @@ export default function Feed() {
 
         {!loading && (
           <>
-            {/* Stories row */}
-            <div className="mb-3 -mx-3">
-              <StoriesRow />
-            </div>
-
             {/* Composer pill */}
             <button
               onClick={() => { tap("light"); setComposerChooserOpen(true) }}
@@ -456,6 +451,11 @@ export default function Feed() {
                 <Video size={15} className="text-pink-300" />
               </span>
             </button>
+
+            {/* Stories row */}
+            <div className="mb-3 -mx-3">
+              <StoriesRow />
+            </div>
 
           </>
         )}
