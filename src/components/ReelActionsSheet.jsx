@@ -41,6 +41,12 @@ export default function ReelActionsSheet({ reel, onClose, onHidden, onDeleted, o
       reason,
       details: details.trim() || null,
     })
+    setBusy(false)
+    if (err) { setError(err.message); return }
+    onClose?.()
+    alert("Thanks — we'll review this reel.")
+  }
+
   async function saveReel() {
     if (!myId) return
     setBusy(true); setError("")
@@ -69,12 +75,6 @@ export default function ReelActionsSheet({ reel, onClose, onHidden, onDeleted, o
     if (err) { setError(err.message); return }
     onDeleted?.(reel.id)
     onClose?.()
-  }
-
-    setBusy(false)
-    if (err) { setError(err.message); return }
-    onClose?.()
-    alert("Thanks — we'll review this reel.")
   }
 
   return (
