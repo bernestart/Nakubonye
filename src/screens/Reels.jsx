@@ -27,6 +27,7 @@ export default function Reels() {
   const [commentCounts, setCommentCounts] = useState(new Map())
   const [commentsFor, setCommentsFor] = useState(null)
   const [actionsFor, setActionsFor] = useState(null)
+  const [remixFor, setRemixFor] = useState(null)
   const [hiddenIds, setHiddenIds] = useState(new Set())
   const [savedIds, setSavedIds] = useState(new Set())
   const [likedAuthors, setLikedAuthors] = useState(new Set())
@@ -593,10 +594,19 @@ export default function Reels() {
         />
       )}
 
+      {remixFor && (
+        <ReelComposer
+          remixOf={remixFor}
+          onClose={() => setRemixFor(null)}
+          onDone={() => { setRemixFor(null); load() }}
+        />
+      )}
+
       {actionsFor && (
         <ReelActionsSheet
           reel={actionsFor}
           onClose={() => setActionsFor(null)}
+          onRemix={(r) => { setActionsFor(null); setRemixFor(r) }}
           onDeleted={(id) => {
             setReels((arr) => arr.filter((r) => r.id !== id))
             setCurrentIdx(0)

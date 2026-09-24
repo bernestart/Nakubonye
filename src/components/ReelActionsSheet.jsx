@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { X, Flag, EyeOff, AlertTriangle , Trash2 , Bookmark, Link2 } from "lucide-react"
+import { X, Flag, EyeOff, AlertTriangle , Trash2 , Bookmark, Link2 , Repeat2 } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
@@ -13,7 +13,7 @@ const REASONS = [
   "Something else",
 ]
 
-export default function ReelActionsSheet({ reel, onClose, onHidden, onDeleted }) {
+export default function ReelActionsSheet({ reel, onClose, onHidden, onDeleted, onRemix }) {
   const { session } = useAuth()
   const myId = session?.user?.id
   const [screen, setScreen] = useState("menu") // menu | report
@@ -91,6 +91,22 @@ export default function ReelActionsSheet({ reel, onClose, onHidden, onDeleted })
           <>
             <h3 className="text-cream font-extrabold text-[17px] mb-4">Reel options</h3>
             <div className="flex flex-col gap-2">
+              {reel.user_id !== myId && onRemix && (
+                <button
+                  onClick={() => { onRemix(reel); onClose?.() }}
+                  disabled={busy}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left disabled:opacity-50"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
+                    <Repeat2 size={17} className="text-purple-300" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-cream font-semibold text-[14.5px]">Remix this reel</p>
+                    <p className="text-muted text-[12px]">Record your take</p>
+                  </div>
+                </button>
+              )}
+
               <button
                 onClick={saveReel}
                 disabled={busy}
