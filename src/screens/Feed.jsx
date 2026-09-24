@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { ImagePlus, Heart, Send, X, Users, Play, Camera, PenSquare, Video, Image as ImageIcon, MessageCircle, Share2 } from "lucide-react"
+import { ImagePlus, Heart, Send, X, Users, Play, Camera, PenSquare, Video, Image as ImageIcon, MessageCircle, Share2 , MoreVertical } from "lucide-react"
 import VerifiedBadge from "../components/VerifiedBadge"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
@@ -11,6 +11,7 @@ import NotificationBell from "../components/NotificationBell"
 import AppHeader from "../components/AppHeader"
 import StoriesRow from "../components/StoriesRow"
 import PostCommentsSheet from "../components/PostCommentsSheet"
+import PostActionsSheet from "../components/PostActionsSheet"
 import PostComposer from "../components/PostComposer"
 import BrandGlow from "../components/BrandGlow"
 
@@ -28,6 +29,7 @@ export default function Feed() {
   const [reactionCounts, setReactionCounts] = useState(new Map())
   const [commentCounts, setCommentCounts] = useState(new Map())
   const [commentsFor, setCommentsFor] = useState(null)
+  const [actionsFor, setActionsFor] = useState(null)
   const [suggested, setSuggested] = useState([])
   const [composerChooserOpen, setComposerChooserOpen] = useState(false)
   const [postComposerOpen, setPostComposerOpen] = useState(false)
@@ -522,6 +524,13 @@ export default function Feed() {
                       {new Date(p.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                     </p>
                   </div>
+                  <button
+                    onClick={() => { tap("light"); setActionsFor(p) }}
+                    className="w-8 h-8 rounded-full grid place-items-center text-muted shrink-0"
+                    aria-label="Post options"
+                  >
+                    <MoreVertical size={18} />
+                  </button>
                 </div>
 
                 {/* Content */}
@@ -701,6 +710,15 @@ export default function Feed() {
         <PostComposer
           onClose={() => setPostComposerOpen(false)}
           onDone={() => { setPostComposerOpen(false); load() }}
+        />
+      )}
+
+      {actionsFor && (
+        <PostActionsSheet
+          post={actionsFor}
+          onClose={() => setActionsFor(null)}
+          onDeleted={(id) => setPosts((arr) => arr.filter((x) => x.id !== id || x._source !== actionsFor._source))}
+          onUpdated={(next) => setPosts((arr) => arr.map((x) => (x.id === next.id && x._source === actionsFor._source) ? { ...x, ...next } : x))}
         />
       )}
 
