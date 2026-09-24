@@ -1,13 +1,15 @@
 import { useNavigate } from "react-router-dom"
-import { ArrowLeft, PenSquare, Video } from "lucide-react"
+import { ArrowLeft, PenSquare, Video, Camera } from "lucide-react"
 import BrandGlow from "../components/BrandGlow"
 import { tap } from "../lib/haptic"
 import PostComposer from "../components/PostComposer"
+import StoryComposer from "../components/StoryComposer"
 import { useState } from "react"
 
 export default function Create() {
   const nav = useNavigate()
   const [postComposerOpen, setPostComposerOpen] = useState(false)
+  const [storyComposerOpen, setStoryComposerOpen] = useState(false)
 
   return (
     <div style={{
@@ -38,6 +40,22 @@ export default function Create() {
         </p>
 
         <div className="flex flex-col gap-3">
+          <button
+            onClick={() => { tap("light"); setStoryComposerOpen(true) }}
+            className="flex items-center gap-4 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left active:scale-[0.99] transition-transform"
+          >
+            <span
+              className="w-14 h-14 rounded-2xl grid place-items-center shrink-0"
+              style={{ background: "linear-gradient(135deg, #A855F7 0%, #EC4899 100%)" }}
+            >
+              <Camera size={24} color="#fff" />
+            </span>
+            <div className="flex-1">
+              <p className="text-cream font-bold text-[15.5px]">Create a story</p>
+              <p className="text-muted text-[12.5px] mt-0.5">Photo or video · disappears in 24h</p>
+            </div>
+          </button>
+
           <button
             onClick={() => { tap("light"); setPostComposerOpen(true) }}
             className="flex items-center gap-4 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left active:scale-[0.99] transition-transform"
@@ -71,6 +89,13 @@ export default function Create() {
           </button>
         </div>
       </div>
+
+      {storyComposerOpen && (
+        <StoryComposer
+          onClose={() => setStoryComposerOpen(false)}
+          onDone={() => { setStoryComposerOpen(false); nav("/feed") }}
+        />
+      )}
 
       {postComposerOpen && (
         <PostComposer
