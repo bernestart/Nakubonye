@@ -832,6 +832,18 @@ export default function Chat() {
         target={other}
         onBlocked={() => nav('/messages', { replace: true })}
       />
+
+      {actionsForMsg && (
+        <MessageActionsSheet
+          message={actionsForMsg}
+          isMine={actionsForMsg.sender_id === myId}
+          onClose={() => setActionsForMsg(null)}
+          onReply={(m) => setReplyingTo(m)}
+          onForward={(m) => alert("Forward coming soon")}
+          onDelete={deleteMessage}
+          onReact={(emoji) => toggleReaction(actionsForMsg.id, emoji)}
+        />
+      )}
     </div>
   )
 }
