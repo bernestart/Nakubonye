@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
-import { Search, Bell, Plus } from "lucide-react"
+import { Search, Bell, Plus, Users } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
@@ -128,6 +128,14 @@ export default function AppHeader({ onScrollTop }) {
             }}
           >
             <Plus size={20} color="#fff" strokeWidth={2.6} />
+          </button>
+
+          <button
+            onClick={() => { tap("light"); nav("/communities") }}
+            aria-label="Communities"
+            className="w-9 h-9 rounded-full grid place-items-center text-muted active:scale-95 transition-transform"
+          >
+            <Users size={20} strokeWidth={2.2} />
           </button>
 
           <button
