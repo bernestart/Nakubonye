@@ -255,7 +255,20 @@ export default function Chat() {
           if (next) setOther((cur) => cur ? { ...cur, last_seen_at: next } : cur)
         })
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    function onMsgPressStart(m) {
+    longPressTimer.current = setTimeout(() => {
+      tap("medium")
+      setActionsForMsg(m)
+    }, 450)
+  }
+  function onMsgPressEnd() {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }
+
+  return () => { supabase.removeChannel(channel) }
   }, [conversationId, myId, otherId])
 
   useEffect(() => {
@@ -542,7 +555,13 @@ export default function Chat() {
             const deleted = !!m.deleted_at
 
             return (
-              <div key={m.id}>
+              <div
+                key={m.id}
+                onTouchStart={() => onMsgPressStart(m)}
+                onTouchEnd={onMsgPressEnd}
+                onTouchMove={onMsgPressEnd}
+                onContextMenu={(e) => { e.preventDefault(); setActionsForMsg(m) }}
+              >
                 {i === firstUnreadIdx && (
                   <div className="flex items-center gap-3 py-3 px-2">
                     <div className="flex-1 h-px bg-purple-500/30" />
