@@ -185,8 +185,6 @@ export default function Likes() {
               </div>
             ))}
           </div>
-        ) : tab === 'received' && !isPremium ? (
-          <LockedReceived count={received.length} />
         ) : list.length === 0 ? (
           <Empty tab={tab} onGo={nav} />
         ) : (
