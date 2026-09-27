@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { useNavigate, useParams, useLocation } from "react-router-dom"
 import { ArrowLeft, Users, RefreshCw } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { publicPhotoUrl } from "../lib/photo"
@@ -7,7 +7,9 @@ import { tap } from "../lib/haptic"
 
 export default function FollowList() {
   const nav = useNavigate()
-  const { userId, type } = useParams() // type: 'followers' | 'following'
+  const { userId } = useParams()
+  const location = useLocation()
+  const type = location.pathname.endsWith("/followers") ? "followers" : "following"
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
 
