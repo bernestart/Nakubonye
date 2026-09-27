@@ -48,9 +48,12 @@ export default function Chat() {
   useEffect(() => {
     const prefill = location.state?.prefill
     if (prefill && !text) setText(prefill)
-  }, [location.state?.prefill])
+    const sr = location.state?.storyReply
+    if (sr) setStoryReply(sr)
+  }, [location.state?.prefill, location.state?.storyReply])
   const [sending, setSending] = useState(false)
   const [replyingTo, setReplyingTo] = useState(null)
+  const [storyReply, setStoryReply] = useState(null)
   const [reactionPickerFor, setReactionPickerFor] = useState(null)
   const [attachment, setAttachment] = useState(null)
   const [attachmentPreview, setAttachmentPreview] = useState('')
@@ -386,9 +389,12 @@ export default function Chat() {
       mediaName = attachment.name
     }
     const payload = { conversation_id: conversationId, sender_id: myId, content: body || '' }
+    if (storyReply) {
+      payload.metadata = { story_reply: { story_id: storyReply.story_id, media_url: storyReply.media_url, media_type: storyReply.media_type } }
+    }
     if (mediaUrl) { payload.media_url = mediaUrl; payload.media_type = mediaType; payload.media_name = mediaName }
     if (replyingTo?.id) payload.reply_to_id = replyingTo.id
-    setText(''); clearAttachment(); setReplyingTo(null)
+    setText(''); clearAttachment(); setReplyingTo(null); setStoryReply(null)
     const { data: inserted, error: sendErr } = await supabase
       .from('messages')
       .insert(payload)
@@ -725,6 +731,29 @@ export default function Chat() {
           })
         )}
       </div>
+
+      {storyReply && (
+        <div className="shrink-0 mx-3 mb-2 p-2 rounded-xl bg-elevated border border-purple-500/30 flex items-center gap-3">
+          <div className="w-10 h-14 rounded-lg overflow-hidden bg-black shrink-0">
+            {storyReply.media_type === "video" ? (
+              <video src={storyReply.media_url} muted playsInline preload="metadata" className="w-full h-full object-cover" />
+            ) : (
+              <img src={storyReply.media_url} alt="" className="w-full h-full object-cover" />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-purple-300 text-[10.5px] font-bold tracking-wider uppercase">Replying to story</p>
+            <p className="text-muted text-[12px] mt-0.5">Sent with the story</p>
+          </div>
+          <button
+            onClick={() => setStoryReply(null)}
+            className="w-7 h-7 rounded-full grid place-items-center text-muted shrink-0"
+            aria-label="Cancel story reply"
+          >
+            <X size={15} strokeWidth={2.4} />
+          </button>
+        </div>
+      )}
 
       {replyingTo && (
         <div className="shrink-0 mx-3 mb-2 px-3 py-2 rounded-xl bg-elevated border border-purple-500/30 flex items-start gap-2">
