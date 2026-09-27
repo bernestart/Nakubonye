@@ -77,13 +77,14 @@ export default function Feed() {
       communityPosts = (rows || []).map((r) => ({ ...r, _source: "community" }))
     }
 
-    // 3b. Personal posts (from me + my matches)
-    const { data: matchRows } = await supabase
-      .from("matches")
-      .select("user_one_id, user_two_id")
-      .or("user_one_id.eq." + myId + ",user_two_id.eq." + myId)
-    const matchIds = (matchRows || []).map((m) => m.user_one_id === myId ? m.user_two_id : m.user_one_id)
-    const allowedUserIds = [myId, ...matchIds]
+    // 3b. Personal posts (from me + matches + people I follow)
+    const [matchRes, followRes] = await Promise.all([
+      supabase.from("matches").select("user_one_id, user_two_id").or("user_one_id.eq." + myId + ",user_two_id.eq." + myId),
+      supabase.from("follows").select("following_id").eq("follower_id", myId),
+    ])
+    const matchIds = (matchRes.data || []).map((m) => m.user_one_id === myId ? m.user_two_id : m.user_one_id)
+    const followIds = (followRes.data || []).map((f) => f.following_id)
+    const allowedUserIds = [...new Set([myId, ...matchIds, ...followIds])]
 
     const { data: personalRows } = await supabase
       .from("user_posts")
@@ -255,13 +256,14 @@ export default function Feed() {
       communityPosts = (rows || []).map((r) => ({ ...r, _source: "community" }))
     }
 
-    // --- Personal posts from me + matches ---
-    const { data: matchRows } = await supabase
-      .from("matches")
-      .select("user_one_id, user_two_id")
-      .or("user_one_id.eq." + myId + ",user_two_id.eq." + myId)
-    const matchIds = (matchRows || []).map((m) => m.user_one_id === myId ? m.user_two_id : m.user_one_id)
-    const allowedUserIds = [myId, ...matchIds]
+    // --- Personal posts from me + matches + follows ---
+    const [matchRes, followRes] = await Promise.all([
+      supabase.from("matches").select("user_one_id, user_two_id").or("user_one_id.eq." + myId + ",user_two_id.eq." + myId),
+      supabase.from("follows").select("following_id").eq("follower_id", myId),
+    ])
+    const matchIds = (matchRes.data || []).map((m) => m.user_one_id === myId ? m.user_two_id : m.user_one_id)
+    const followIds = (followRes.data || []).map((f) => f.following_id)
+    const allowedUserIds = [...new Set([myId, ...matchIds, ...followIds])]
 
     const { data: personalRows } = await supabase
       .from("user_posts")
