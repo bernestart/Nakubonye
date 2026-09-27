@@ -10,75 +10,91 @@ const AUDIENCES = [
   { id: "private", label: "Only me",   icon: "🔒", desc: "Just for you" },
 ]
 
+const MAX_IMAGES = 10
+
 export default function PostComposer({ onClose, onDone }) {
   const { session } = useAuth()
   const myId = session?.user?.id
   const fileRef = useRef(null)
   const [content, setContent] = useState("")
-  const [imageFile, setImageFile] = useState(null)
-  const [imagePreview, setImagePreview] = useState("")
+  const [imageFiles, setImageFiles] = useState([])
+  const [imagePreviews, setImagePreviews] = useState([])
   const [audience, setAudience] = useState("public")
   const [audienceSheetOpen, setAudienceSheetOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
+  const [progress, setProgress] = useState(0)
 
-  function pickImage(e) {
-    const f = e.target.files?.[0]
-    if (!f) return
-    if (!f.type.startsWith("image/")) { setError("Only images allowed"); return }
-    if (f.size > 20 * 1024 * 1024) { setError("Max 20 MB"); return }
-    setImageFile(f)
-    setImagePreview(URL.createObjectURL(f))
+  function pickImages(e) {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+    const remaining = MAX_IMAGES - imageFiles.length
+    if (remaining <= 0) { setError(`Max ${MAX_IMAGES} images`); return }
+
+    const accepted = []
+    const previews = []
+    for (const f of files.slice(0, remaining)) {
+      if (!f.type.startsWith("image/")) { setError("Only images allowed"); continue }
+      if (f.size > 20 * 1024 * 1024) { setError("Each image must be under 20 MB"); continue }
+      accepted.push(f)
+      previews.push(URL.createObjectURL(f))
+    }
+    if (accepted.length === 0) return
+    setImageFiles((cur) => [...cur, ...accepted])
+    setImagePreviews((cur) => [...cur, ...previews])
     setError("")
+    e.target.value = ""
   }
 
-  function clearImage() {
-    if (imagePreview) URL.revokeObjectURL(imagePreview)
-    setImageFile(null)
-    setImagePreview("")
+  function removeImage(idx) {
+    setImageFiles((cur) => cur.filter((_, i) => i !== idx))
+    setImagePreviews((cur) => {
+      URL.revokeObjectURL(cur[idx])
+      return cur.filter((_, i) => i !== idx)
+    })
   }
 
   async function submit() {
     const body = content.trim()
-    if ((!body && !imageFile) || !myId || busy) return
-    setBusy(true); setError("")
+    if ((!body && imageFiles.length === 0) || !myId || busy) return
+    setBusy(true); setError(""); setProgress(0)
 
-    let imagePath = null
-
-    // Upload image if present
-    if (imageFile) {
-      const ext = (imageFile.name.split(".").pop() || "jpg").toLowerCase()
+    const uploadedPaths = []
+    for (let i = 0; i < imageFiles.length; i++) {
+      const f = imageFiles[i]
+      const ext = (f.name.split(".").pop() || "jpg").toLowerCase()
       const path = `${myId}/${crypto.randomUUID()}.${ext}`
       const { error: upErr } = await supabase.storage
         .from("community-media")
-        .upload(path, imageFile, { upsert: false, contentType: imageFile.type })
+        .upload(path, f, { upsert: false, contentType: f.type })
       if (upErr) { setError(upErr.message); setBusy(false); return }
-      imagePath = path
+      uploadedPaths.push(path)
+      setProgress(Math.round(((i + 1) / imageFiles.length) * 90))
     }
 
     const { error: insErr } = await supabase.from("user_posts").insert({
       user_id: myId,
       content: body || null,
-      image_path: imagePath,
+      image_path: uploadedPaths[0] || null,     // legacy single-image field
+      image_paths: uploadedPaths,               // new multi-image field
       audience,
     })
 
     if (insErr) { setError(insErr.message); setBusy(false); return }
+    setProgress(100)
     setBusy(false)
     onDone?.()
   }
 
   useEffect(() => () => {
-    if (imagePreview) URL.revokeObjectURL(imagePreview)
-  }, [imagePreview])
+    imagePreviews.forEach((p) => URL.revokeObjectURL(p))
+  }, [])
 
   const activeAud = AUDIENCES.find((a) => a.id === audience) || AUDIENCES[0]
-  const canPost = (content.trim() || imageFile) && !busy
+  const canPost = (content.trim() || imageFiles.length > 0) && !busy
 
   return (
-    <div className="fixed inset-0 z-[220] bg-[#0B0B14] flex flex-col"
-         style={{ height: "100dvh" }}>
-      {/* Header */}
+    <div className="fixed inset-0 z-[220] bg-[#0B0B14] flex flex-col" style={{ height: "100dvh" }}>
       <header className="flex items-center justify-between px-3 py-3 shrink-0"
               style={{ paddingTop: "max(12px, env(safe-area-inset-top))" }}>
         <button
@@ -99,48 +115,71 @@ export default function PostComposer({ onClose, onDone }) {
         </button>
       </header>
 
-      {/* Body */}
       <div className="flex-1 overflow-y-auto px-4 pb-4">
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value.slice(0, 1000))}
           placeholder="Share something real…"
-          rows={6}
+          rows={5}
           autoFocus
           className="w-full bg-transparent border-0 text-cream text-[16px] leading-[1.5] placeholder:text-subtle focus:outline-none resize-none mb-3"
         />
 
-        {imagePreview && (
-          <div className="relative rounded-2xl overflow-hidden mb-3">
-            <img src={imagePreview} alt="" className="w-full max-h-[60vh] object-contain bg-black" />
-            <button
-              onClick={clearImage}
-              className="absolute top-2 right-2 w-8 h-8 rounded-full grid place-items-center bg-black/60 backdrop-blur-md text-white"
-              aria-label="Remove image"
-            >
-              <X size={14} />
-            </button>
+        {/* Image grid */}
+        {imagePreviews.length > 0 && (
+          <div className="grid grid-cols-3 gap-1 mb-3">
+            {imagePreviews.map((src, i) => (
+              <div key={i} className="relative aspect-square rounded-lg overflow-hidden bg-black">
+                <img src={src} alt="" className="w-full h-full object-cover" />
+                <button
+                  onClick={() => removeImage(i)}
+                  className="absolute top-1 right-1 w-6 h-6 rounded-full grid place-items-center bg-black/70 backdrop-blur-md text-white"
+                  aria-label="Remove image"
+                >
+                  <X size={12} strokeWidth={3} />
+                </button>
+                {i === 0 && imagePreviews.length > 1 && (
+                  <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded text-[9.5px] font-black bg-black/70 text-white">
+                    COVER
+                  </span>
+                )}
+              </div>
+            ))}
+            {imagePreviews.length < MAX_IMAGES && (
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="aspect-square rounded-lg border-2 border-dashed border-white/15 grid place-items-center"
+              >
+                <ImagePlus size={22} className="text-purple-400" />
+              </button>
+            )}
           </div>
         )}
 
-        {!imagePreview && (
+        {imagePreviews.length === 0 && (
           <button
             onClick={() => fileRef.current?.click()}
             className="w-full h-32 rounded-2xl border-2 border-dashed border-white/15 grid place-items-center mb-3"
           >
             <div className="text-center">
               <ImagePlus size={24} className="text-purple-400 mx-auto mb-1.5" />
-              <p className="text-cream text-[13.5px] font-semibold">Add a photo</p>
-              <p className="text-subtle text-[11.5px]">Optional</p>
+              <p className="text-cream text-[13.5px] font-semibold">Add photos</p>
+              <p className="text-subtle text-[11.5px]">Up to {MAX_IMAGES} · optional</p>
             </div>
           </button>
         )}
 
-        <input ref={fileRef} type="file" accept="image/*" hidden onChange={pickImage} />
+        <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={pickImages} />
 
         {error && (
           <div className="mb-3 text-red-400 text-[12.5px] bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2">
             {error}
+          </div>
+        )}
+
+        {busy && progress > 0 && (
+          <div className="mb-3 h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div className="h-full bg-purple-500 transition-all" style={{ width: progress + "%" }} />
           </div>
         )}
 
@@ -157,7 +196,6 @@ export default function PostComposer({ onClose, onDone }) {
         </button>
       </div>
 
-      {/* Audience sheet */}
       {audienceSheetOpen && (
         <div className="fixed inset-0 z-[240] flex items-end" onClick={() => setAudienceSheetOpen(false)}>
           <div className="absolute inset-0 bg-black/60" />
