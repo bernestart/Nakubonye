@@ -626,14 +626,11 @@ export default function ReelComposer({ onClose, onDone, remixOf }) {
 
       <header className="flex items-center justify-between px-3 py-3 z-10">
         <button onClick={() => { stopCamera(); onClose() }} className="w-10 h-10 rounded-full grid place-items-center bg-black/50 text-white" aria-label="Close"><X size={22} /></button>
-        <div className="flex bg-white/10 rounded-full p-1">
-          <button onClick={() => { stopCamera(); setTab("record"); setError("") }} className={`h-8 px-3 rounded-full text-[12.5px] font-bold ${tab === "record" ? "bg-white text-black" : "text-white"}`}>Record</button>
-          <button onClick={() => { stopCamera(); setTab("upload"); setError("") }} className={`h-8 px-3 rounded-full text-[12.5px] font-bold ${tab === "upload" ? "bg-white text-black" : "text-white"}`}>Upload</button>
-        </div>
+        <div className="w-10" />
         <div className="w-10" />
       </header>
 
-      {tab === "record" ? (
+      {tab === "record" && (
         <>
           <div className="flex-1 relative bg-black overflow-hidden">
             <video ref={videoRef} playsInline muted autoPlay className="absolute inset-0 w-full h-full object-cover" style={{ transform: facing === "user" ? "scaleX(-1)" : "none" }} />
@@ -649,24 +646,18 @@ export default function ReelComposer({ onClose, onDone, remixOf }) {
             </div>
             {error && <div className="absolute top-20 left-4 right-4 bg-red-500/20 border border-red-500/50 rounded-xl px-3 py-2 text-red-200 text-[12.5px]">{error}</div>}
           </div>
-          <div className="p-6 flex items-center justify-center" style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
+          <div className="px-6 py-6 flex items-center justify-between" style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
+            <button onClick={() => fileRef.current?.click()} disabled={recording} className="w-14 h-14 rounded-xl overflow-hidden bg-white/10 border border-white/20 grid place-items-center disabled:opacity-40" aria-label="Gallery">
+              <Upload size={22} className="text-white" />
+            </button>
             <button onClick={recording ? stopRecording : startRecording} disabled={!cameraReady} className="grid place-items-center disabled:opacity-40" aria-label={recording ? "Stop" : "Record"}>
               <span className="grid place-items-center transition-all" style={{ width: 74, height: 74, borderRadius: 999, border: "5px solid #fff", background: recording ? "#EC4899" : "#fff" }}>
                 {recording ? <Square size={22} fill="#fff" color="#fff" /> : <Circle size={30} fill="#0B0B14" color="#0B0B14" />}
               </span>
             </button>
+            <div className="w-14" />
           </div>
         </>
-      ) : (
-        <div className="flex-1 grid place-items-center p-5">
-          <button onClick={() => fileRef.current?.click()} className="w-full max-w-[420px] h-72 rounded-3xl border-2 border-dashed border-white/20 grid place-items-center">
-            <div className="text-center px-6">
-              <Upload size={40} className="text-purple-400 mx-auto mb-3" />
-              <p className="text-white text-[16px] font-bold mb-1">Choose a video from gallery</p>
-              <p className="text-white/50 text-[12.5px]">MP4, MOV, WebM · up to 100 MB</p>
-            </div>
-          </button>
-        </div>
       )}
     </div>
   )
