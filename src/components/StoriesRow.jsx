@@ -203,9 +203,20 @@ export default function StoriesRow() {
   }, [myId, load])
 
   function markViewed(userId, storyId) {
+    // Local seen-state (fast)
     const next = { ...viewed, [storyId]: true }
     setViewed(next)
     try { localStorage.setItem("story_views", JSON.stringify(next)) } catch {}
+
+    // Record view in DB (skip my own stories)
+    if (userId === myId) return
+    supabase
+      .from("story_views")
+      .upsert(
+        { story_id: storyId, user_id: myId },
+        { onConflict: "story_id,user_id", ignoreDuplicates: true }
+      )
+      .then(() => {})
   }
 
   const allGroups = myStory ? [myStory, ...groups] : groups
