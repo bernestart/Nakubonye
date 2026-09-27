@@ -104,6 +104,18 @@ export default function StoryComposer({ onClose, onDone }) {
   }
 
   useEffect(() => {
+    const el = fileRef.current
+    if (!el) return
+    const onCancel = () => onClose?.()
+    el.addEventListener("cancel", onCancel)
+    const t = setTimeout(() => el.click(), 60)
+    return () => {
+      clearTimeout(t)
+      el.removeEventListener("cancel", onCancel)
+    }
+  }, [])
+
+  useEffect(() => {
     return () => { if (preview) URL.revokeObjectURL(preview) }
   }, [preview])
 
@@ -126,29 +138,7 @@ export default function StoryComposer({ onClose, onDone }) {
     <div className="fixed inset-0 z-[2000] bg-black">
       <input ref={fileRef} type="file" accept="image/*,video/*" hidden onChange={pick} />
 
-      {!preview && (
-        <div className="absolute inset-0 grid place-items-center p-4">
-          <div className="w-full max-w-[420px] bg-surface rounded-[24px] border border-white/10 p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-cream font-extrabold text-[18px]">New story</h2>
-              <button onClick={onClose} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Close">
-                <X size={20} />
-              </button>
-            </div>
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="w-full h-56 rounded-2xl border-2 border-dashed border-white/15 grid place-items-center"
-            >
-              <div className="text-center px-4">
-                <ImagePlus size={32} className="text-purple-400 mx-auto mb-3" />
-                <p className="text-cream text-[15px] font-semibold">Choose a photo or video</p>
-                <p className="text-subtle text-[12.5px] mt-1">Disappears after 24 hours</p>
-              </div>
-            </button>
-            {error && <p className="text-red-400 text-[12.5px] mt-4 text-center">{error}</p>}
-          </div>
-        </div>
-      )}
+      {!preview && null}
 
       {preview && (
         <div className="absolute inset-0 flex flex-col">
