@@ -9,6 +9,7 @@ import { tap } from '../lib/haptic'
 import ReportModal from '../components/ReportModal'
 import BlockConfirm from '../components/BlockConfirm'
 import DirectMessageModal from '../components/DirectMessageModal'
+import FollowButton from '../components/FollowButton'
 import ProfileDetails from '../components/ProfileDetails'
 import { PromptList } from '../components/PromptCard'
 
@@ -18,6 +19,8 @@ export default function ProfileView() {
   const { session } = useAuth()
 
   const [loading, setLoading] = useState(true)
+  const [followersCount, setFollowersCount] = useState(0)
+  const [followingCount, setFollowingCount] = useState(0)
   const [error, setError] = useState('')
   const [person, setPerson] = useState(null)
   const [photos, setPhotos] = useState([])
@@ -47,6 +50,14 @@ export default function ProfileView() {
       .select('id, display_name, username, date_of_birth, gender, bio, city, country, is_verified, looking_for, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children')
       .eq('id', userId)
       .single()
+
+    // Load follower + following counts
+    const [{ count: f1 }, { count: f2 }] = await Promise.all([
+      supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', userId),
+      supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', userId),
+    ])
+    setFollowersCount(f1 || 0)
+    setFollowingCount(f2 || 0)
 
     if (profErr || !prof) {
       setError(profErr?.message || 'Profile not found.')
@@ -235,6 +246,16 @@ export default function ProfileView() {
                     <MapPin size={12} />
                     {person.city || 'Unknown'}{person.country ? `, ${person.country}` : ''}
                   </p>
+                  {person.id && (
+                    <div className="mt-2 flex items-center gap-3">
+                      <FollowButton userId={person.id} />
+                      <span className="text-white/75 text-[11.5px] font-medium">
+                        <strong className="text-white">{followersCount}</strong> followers
+                        {" · "}
+                        <strong className="text-white">{followingCount}</strong> following
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -349,7 +370,7 @@ export default function ProfileView() {
                 onClick={() => setDmOpen(true)}
                 className="h-[52px] px-4 rounded-full bg-white/[0.06] border border-white/10 text-cream font-bold text-[13.5px] shrink-0"
               >
-                Message · 55
+                Message
               </motion.button>
               <motion.button
                 whileTap={{ scale: 0.95 }}
