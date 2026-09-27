@@ -9,6 +9,7 @@ import { tap } from "../lib/haptic"
 import ReelComposer from "../components/ReelComposer"
 import ReelComments from "../components/ReelComments"
 import ReelActionsSheet from "../components/ReelActionsSheet"
+import FollowButton from "../components/FollowButton"
 
 export default function Reels() {
   const nav = useNavigate()
@@ -565,6 +566,10 @@ export default function Reels() {
                           ? "@" + remixOriginals.get(reel.remix_of).owner.username
                           : "Remix"}
                       </button>
+                    )}
+
+                    {reel.user_id !== myId && (
+                      <FollowButton userId={reel.user_id} size="sm" />
                     )}
 
                     {reel.user_id !== myId && (
