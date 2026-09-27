@@ -1,7 +1,32 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Pause, Play, Undo2, Redo2, Plus, ImagePlus, Crop, FlipHorizontal, Scissors, Type, X, Check } from "lucide-react"
+import { supabase } from "../lib/supabase"
+import { Pause, Play, Undo2, Redo2, Plus, ImagePlus, Crop, FlipHorizontal, Scissors, Type, X, Check, Music, Sparkles, Smile, Download, ChevronRight, Gauge, Mic, Image as ImageIcon } from "lucide-react"
 
 const FILMSTRIP_PER_CLIP = 6
+
+const STICKER_LIB = ["❤️","😂","😍","🥰","🔥","✨","💯","👏","🙌","😎","🤩","😘","💜","💕","🌸","🌈","☀️","⭐","🎉","🎈","🍀","🌹","🦋","🍕","☕","🎶","⚡","💫","🌙","👑"]
+
+const FILTERS = [
+  { id: "none",    name: "Original", css: "none" },
+  { id: "warm",    name: "Warm",     css: "sepia(0.35) saturate(1.3) brightness(1.05)" },
+  { id: "cool",    name: "Cool",     css: "hue-rotate(180deg) saturate(1.1) brightness(1.05)" },
+  { id: "mono",    name: "Mono",     css: "grayscale(1) contrast(1.1)" },
+  { id: "vivid",   name: "Vivid",    css: "saturate(1.8) contrast(1.1)" },
+  { id: "fade",    name: "Fade",     css: "saturate(0.7) brightness(1.15) contrast(0.9)" },
+  { id: "vintage", name: "Vintage",  css: "sepia(0.55) saturate(1.1) contrast(1.05)" },
+  { id: "noir",    name: "Noir",     css: "grayscale(1) contrast(1.3) brightness(0.95)" },
+]
+
+const SPEEDS = [0.3, 0.5, 1, 1.5, 2, 3]
+
+async function loadTracksFromDb() {
+  const { data, error } = await supabase
+    .from("tracks")
+    .select("id, title, artist, audio_url, cover_url, duration_sec")
+    .limit(50)
+  if (error) { console.warn("tracks load error:", error.message); return [] }
+  return data || []
+}
 
 export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
   const videoRef = useRef(null)
@@ -24,6 +49,30 @@ export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
   const [editingTextId, setEditingTextId] = useState(null)
   const [textDraft, setTextDraft] = useState({ text: "", color: "#ffffff", size: 24 })
   const [splitFlash, setSplitFlash] = useState(false)
+  // --- merged from ReelDecorate ---
+  const [stickerOverlays, setStickerOverlays] = useState([])
+  const [activeStickerId, setActiveStickerId] = useState(null)
+  const [stickerSheetOpen, setStickerSheetOpen] = useState(false)
+  const [filterId, setFilterId] = useState("none")
+  const [filterCarouselOpen, setFilterCarouselOpen] = useState(false)
+  const [speed, setSpeed] = useState(1)
+  const [speedSheetOpen, setSpeedSheetOpen] = useState(false)
+  const [audioTrack, setAudioTrack] = useState(null)
+  const [audioSheetOpen, setAudioSheetOpen] = useState(false)
+  const [audioList, setAudioList] = useState([])
+  const [audioLoading, setAudioLoading] = useState(false)
+  const [coverTime, setCoverTime] = useState(0)
+  const [coverBlob, setCoverBlob] = useState(null)
+  const audioRef = useRef(null)
+  const [audioMuted, setAudioMuted] = useState(false)
+  const [voiceoverBlob, setVoiceoverBlob] = useState(null)
+  const [voiceoverUrl, setVoiceoverUrl] = useState(null)
+  const [voiceoverRecording, setVoiceoverRecording] = useState(false)
+  const [voiceoverPlaying, setVoiceoverPlaying] = useState(false)
+  const voiceoverRecorderRef = useRef(null)
+  const voiceoverStreamRef = useRef(null)
+  const voiceoverChunksRef = useRef([])
+  const voiceoverRef = useRef(null)
 
   const activeClip = clips[activeClipIdx]
   const activeDuration = activeClip ? (durations[activeClip.id] || 0) : 0
@@ -62,6 +111,98 @@ export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
     v.addEventListener("loadedmetadata", onLoaded)
     return () => v.removeEventListener("loadedmetadata", onLoaded)
   }, [activeClip?.id])
+
+  // Audio sync: picked track follows video play/pause/seek
+  useEffect(() => {
+    const v = videoRef.current
+    const a = audioRef.current
+    if (!v || !a || !audioTrack?.audio_url) return
+
+    const onPlay = () => {
+      a.currentTime = v.currentTime
+      a.play().catch(() => {})
+    }
+    const onPause = () => a.pause()
+    const onSeek = () => { a.currentTime = v.currentTime }
+    const onTime = () => {
+      if (Math.abs(a.currentTime - v.currentTime) > 0.4) a.currentTime = v.currentTime
+    }
+    v.addEventListener("play", onPlay)
+    v.addEventListener("pause", onPause)
+    v.addEventListener("seeked", onSeek)
+    v.addEventListener("timeupdate", onTime)
+    return () => {
+      v.removeEventListener("play", onPlay)
+      v.removeEventListener("pause", onPause)
+      v.removeEventListener("seeked", onSeek)
+      v.removeEventListener("timeupdate", onTime)
+      a.pause()
+    }
+  }, [audioTrack?.id, audioTrack?.audio_url])
+
+  // Voiceover playback sync
+  useEffect(() => {
+    const v = videoRef.current
+    const vo = voiceoverRef.current
+    if (!v || !vo || !voiceoverUrl) return
+
+    const onPlay = () => { vo.currentTime = Math.max(0, v.currentTime - (voiceoverStartRef.current || 0)); vo.play().catch(() => {}) }
+    const onPause = () => vo.pause()
+    const onTime = () => {
+      const target = Math.max(0, v.currentTime - (voiceoverStartRef.current || 0))
+      if (Math.abs(vo.currentTime - target) > 0.4) vo.currentTime = target
+    }
+    v.addEventListener("play", onPlay)
+    v.addEventListener("pause", onPause)
+    v.addEventListener("timeupdate", onTime)
+    return () => {
+      v.removeEventListener("play", onPlay)
+      v.removeEventListener("pause", onPause)
+      v.removeEventListener("timeupdate", onTime)
+      vo.pause()
+    }
+  }, [voiceoverUrl])
+
+  // Voiceover record helpers
+  async function startVoiceover() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      voiceoverStreamRef.current = stream
+      voiceoverChunksRef.current = []
+      const rec = new MediaRecorder(stream)
+      voiceoverRecorderRef.current = rec
+      rec.ondataavailable = (e) => { if (e.data.size > 0) voiceoverChunksRef.current.push(e.data) }
+      rec.onstop = () => {
+        const blob = new Blob(voiceoverChunksRef.current, { type: "audio/webm" })
+        if (voiceoverUrl) { try { URL.revokeObjectURL(voiceoverUrl) } catch {} }
+        setVoiceoverBlob(blob)
+        setVoiceoverUrl(URL.createObjectURL(blob))
+        voiceoverStreamRef.current?.getTracks().forEach((t) => t.stop())
+        voiceoverStartRef.current = 0
+      }
+      voiceoverStartRef.current = videoRef.current?.currentTime || 0
+      rec.start()
+      setVoiceoverRecording(true)
+      const v = videoRef.current
+      if (v) { v.muted = true; v.play().catch(() => {}) }
+    } catch (e) {
+      alert("Microphone permission denied")
+    }
+  }
+
+  function stopVoiceover() {
+    try { voiceoverRecorderRef.current?.stop() } catch {}
+    setVoiceoverRecording(false)
+    const v = videoRef.current
+    if (v) { v.pause(); v.muted = false }
+  }
+
+  function clearVoiceover() {
+    if (voiceoverUrl) { try { URL.revokeObjectURL(voiceoverUrl) } catch {} }
+    setVoiceoverBlob(null)
+    setVoiceoverUrl(null)
+    voiceoverStartRef.current = 0
+  }
 
   async function extractFilmstrip(clip) {
     const v = videoRef.current
@@ -202,6 +343,13 @@ export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
         const nx = Math.max(0, Math.min(1, (t.clientX - videoRect.left) / videoRect.width))
         const ny = Math.max(0, Math.min(1, (t.clientY - videoRect.top) / videoRect.height))
         setTextOverlays((arr) => arr.map((x) => (x.id === id ? { ...x, x: nx, y: ny } : x)))
+      } else if (dragging.startsWith("sticker-")) {
+        const id = dragging.slice(8)
+        const videoRect = videoRef.current?.getBoundingClientRect()
+        if (!videoRect) return
+        const nx = Math.max(0, Math.min(1, (t.clientX - videoRect.left) / videoRect.width))
+        const ny = Math.max(0, Math.min(1, (t.clientY - videoRect.top) / videoRect.height))
+        setStickerOverlays((arr) => arr.map((x) => (x.id === id ? { ...x, x: nx, y: ny } : x)))
       }
     }
     const up = () => setDragging(null)
@@ -291,12 +439,18 @@ export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
       mirrored,
       aspectRatio,
       textOverlays,
+      stickerOverlays,
+      filterId,
+      speed,
+      audioTrack,
+      coverTime,
+      coverBlob,
     })
   }
 
   return (
     <div className="fixed inset-0 z-[230] bg-black flex flex-col select-none"
-         style={{ width: "100vw", height: "100dvh" }}>
+         style={{ width: "100vw", height: "100dvh", touchAction: "none" }}>
       <input ref={fileRef} type="file" accept="video/*" hidden onChange={(e) => {
         if (splitFlash || dragging) return
         // Route to replace or add based on which tool was tapped
@@ -354,6 +508,10 @@ export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
         </div>
       )}
 
+      {/* Hidden audio elements */}
+      <audio ref={audioRef} src={audioTrack?.audio_url || ""} preload="auto" muted={audioMuted} style={{ display: "none" }} />
+      <audio ref={voiceoverRef} src={voiceoverUrl || ""} preload="auto" style={{ display: "none" }} />
+
       {/* Video preview */}
       <div className="flex-1 grid place-items-center overflow-hidden bg-black px-4">
         <div style={{ position: "relative", display: "inline-block", maxHeight: "55dvh" }}>
@@ -370,7 +528,9 @@ export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
                 width: "auto",
                 maxWidth: "100%",
                 display: "block",
+                filter: (FILTERS.find((f) => f.id === filterId)?.css) || "none",
               }}
+              onLoadedMetadata={(e) => { try { e.target.playbackRate = speed } catch {} }}
             />
           )}
           {textOverlays.map((t) => (
@@ -399,6 +559,28 @@ export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
               {t.text || "Tap to type"}
             </button>
           ))}
+          {stickerOverlays.map((st) => (
+            <button
+              key={st.id}
+              onMouseDown={(e) => { e.preventDefault(); setDragging("sticker-" + st.id) }}
+              onTouchStart={(e) => { e.preventDefault(); setDragging("sticker-" + st.id) }}
+              onClick={(e) => { e.stopPropagation(); setActiveStickerId(st.id); setStickerSheetOpen(true) }}
+              style={{
+                position: "absolute",
+                left: st.x * 100 + "%",
+                top: st.y * 100 + "%",
+                transform: "translate(-50%, -50%)",
+                fontSize: st.size,
+                zIndex: 6,
+                padding: 4,
+                border: activeStickerId === st.id ? "1px dashed rgba(255,255,255,0.7)" : "none",
+                touchAction: "none",
+                background: "transparent",
+              }}
+            >
+              {st.emoji}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -419,7 +601,7 @@ export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
 
       {/* Yellow timeline */}
       <div className="px-4 pb-2">
-        <div ref={trackRef} className="relative w-full rounded-xl overflow-hidden"
+        <div ref={trackRef} className="relative w-full rounded-xl"
              style={{ height: 52, background: "#FFC107", border: "3px solid #FFC107" }}>
           <div className="absolute inset-0 flex">
             {frames[activeClip?.id]?.length ? (
@@ -443,7 +625,7 @@ export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
             onMouseDown={(e) => onHandleDown("start", e)}
             onTouchStart={(e) => onHandleDown("start", e)}
             className="absolute inset-y-0 z-40 grid place-items-center cursor-ew-resize"
-            style={{ left: startPct + "%", transform: "translateX(-50%)", width: 22, touchAction: "none" }}
+            style={{ left: startPct + "%", transform: "translateX(-50%)", width: 32, touchAction: "none", zIndex: 50 }}
             aria-label="Trim start"
           >
             <span className="w-1.5 h-8 rounded-full bg-[#0B0B14]" />
@@ -452,7 +634,7 @@ export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
             onMouseDown={(e) => onHandleDown("end", e)}
             onTouchStart={(e) => onHandleDown("end", e)}
             className="absolute inset-y-0 z-40 grid place-items-center cursor-ew-resize"
-            style={{ left: endPct + "%", transform: "translateX(-50%)", width: 22, touchAction: "none" }}
+            style={{ left: endPct + "%", transform: "translateX(-50%)", width: 32, touchAction: "none", zIndex: 50 }}
             aria-label="Trim end"
           >
             <span className="w-1.5 h-8 rounded-full bg-[#0B0B14]" />
@@ -467,6 +649,62 @@ export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
                if (videoRef.current) videoRef.current.currentTime = t
                setCurrent(t)
              }} />
+      </div>
+
+      {/* Right-side floating rail — merged from ReelDecorate */}
+      <div className="absolute right-3 top-20 z-30 flex flex-col items-end gap-3">
+        {[
+          { label: "Text",     icon: <Type size={17} />,     onClick: () => { setEditingTextId(null); setTextDraft({ text: "", color: "#ffffff", size: 24 }); setTextSheetOpen(true) } },
+          { label: "Effects",  icon: <Sparkles size={17} />, onClick: () => setFilterCarouselOpen(true) },
+          { label: "Stickers", icon: <Smile size={17} />,    onClick: () => setStickerSheetOpen(true) },
+          { label: "Audio",    icon: <Music size={17} />,    onClick: () => setAudioSheetOpen(true), active: !!audioTrack },
+          { label: "Speed",    icon: <Gauge size={17} />,    onClick: () => setSpeedSheetOpen(true), active: speed !== 1 },
+        ].map((b) => (
+          <button key={b.label} onClick={b.onClick} className="flex items-center gap-2">
+            <span className="text-white text-[11px] font-bold drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]"
+                  style={{ color: b.active ? "#EC4899" : "#fff" }}>
+              {b.label}
+            </span>
+            <span className="w-9 h-9 rounded-full grid place-items-center text-white"
+                  style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(8px)", border: b.active ? "1.5px solid #EC4899" : "1px solid rgba(255,255,255,0.18)" }}>
+              {b.icon}
+            </span>
+          </button>
+        ))}
+        <button
+          onClick={() => { if (voiceoverRecording) stopVoiceover(); else startVoiceover() }}
+          className="flex items-center gap-2">
+          <span className="text-white text-[11px] font-bold drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]"
+                style={{ color: voiceoverRecording ? "#EF4444" : voiceoverUrl ? "#EC4899" : "#fff" }}>
+            {voiceoverRecording ? "Stop" : voiceoverUrl ? "Voice ✓" : "Voice"}
+          </span>
+          <span className="w-9 h-9 rounded-full grid place-items-center text-white"
+                style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(8px)", border: voiceoverRecording ? "1.5px solid #EF4444" : voiceoverUrl ? "1.5px solid #EC4899" : "1px solid rgba(255,255,255,0.18)" }}>
+            <Mic size={17} />
+          </span>
+        </button>
+        <button
+          onClick={() => {
+            const v = videoRef.current
+            if (!v) return
+            setCoverTime(v.currentTime || 0)
+            try {
+              const c = document.createElement("canvas")
+              c.width = v.videoWidth || 720
+              c.height = v.videoHeight || 1280
+              c.getContext("2d").drawImage(v, 0, 0, c.width, c.height)
+              c.toBlob((blob) => {
+                if (blob) setCoverBlob(blob)
+              }, "image/jpeg", 0.85)
+            } catch {}
+          }}
+          className="flex items-center gap-2">
+          <span className="text-white text-[11px] font-bold drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]">Cover</span>
+          <span className="w-9 h-9 rounded-full grid place-items-center text-white"
+                style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.18)" }}>
+            <ImageIcon size={17} />
+          </span>
+        </button>
       </div>
 
       {/* Audio / Text */}
@@ -620,6 +858,143 @@ export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
                     <span style={{ width: r.w >= r.h ? 26 : 26 * (r.w / r.h), height: r.h >= r.w ? 26 : 26 * (r.h / r.w), border: "1.5px solid #fff", borderRadius: 3, opacity: 0.85 }} />
                   </span>
                   <span className="text-[12px] font-semibold" style={{ color: aspectRatio === r.id ? "#EC4899" : "#888" }}>{r.id}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Speed sheet */}
+      {speedSheetOpen && (
+        <div className="fixed inset-0 z-[240] flex items-end" onClick={() => setSpeedSheetOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div onClick={(e) => e.stopPropagation()}
+               className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5"
+               style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-4" />
+            <h3 className="text-cream font-extrabold text-[16px] mb-4">Playback speed</h3>
+            <div className="grid grid-cols-3 gap-2">
+              {SPEEDS.map((sp) => (
+                <button key={sp} onClick={() => { setSpeed(sp); if (videoRef.current) videoRef.current.playbackRate = sp; setSpeedSheetOpen(false) }}
+                        className="h-12 rounded-xl font-bold text-[13.5px]"
+                        style={{
+                          background: speed === sp ? "linear-gradient(135deg, rgba(236,72,153,0.22) 0%, rgba(168,85,247,0.22) 100%)" : "rgba(255,255,255,0.04)",
+                          border: speed === sp ? "1px solid rgba(236,72,153,0.6)" : "1px solid rgba(255,255,255,0.08)",
+                          color: speed === sp ? "#fff" : "#888",
+                        }}>
+                  {sp}x
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sticker picker */}
+      {stickerSheetOpen && (
+        <div className="fixed inset-0 z-[240] flex items-end" onClick={() => setStickerSheetOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div onClick={(e) => e.stopPropagation()}
+               className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-3"
+               style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto" />
+            <h3 className="text-cream font-extrabold text-[16px]">Add sticker</h3>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {STICKER_LIB.map((e) => (
+                <button key={e} onClick={() => {
+                  const id = crypto.randomUUID()
+                  setStickerOverlays((arr) => [...arr, { id, emoji: e, x: 0.5, y: 0.5, size: 56 }])
+                  setActiveStickerId(id)
+                }} className="w-11 h-11 rounded-full grid place-items-center text-2xl" style={{ background: "rgba(255,255,255,0.06)" }}>
+                  {e}
+                </button>
+              ))}
+            </div>
+            {activeStickerId && (
+              <div className="flex items-center gap-2 mt-2">
+                {[32, 48, 64, 88].map((sz) => (
+                  <button key={sz} onClick={() => setStickerOverlays((arr) => arr.map((x) => x.id === activeStickerId ? { ...x, size: sz } : x))}
+                          className="flex-1 h-9 rounded-full text-white text-[12px] font-bold border border-white/15 bg-white/[0.06]">
+                    {sz}
+                  </button>
+                ))}
+                <button onClick={() => { setStickerOverlays((arr) => arr.filter((x) => x.id !== activeStickerId)); setActiveStickerId(null) }}
+                        className="h-9 px-4 rounded-full bg-red-500/20 border border-red-500/40 text-red-300 text-[12px] font-bold">
+                  Delete
+                </button>
+              </div>
+            )}
+            <button onClick={() => setStickerSheetOpen(false)}
+                    className="w-full h-11 rounded-full text-white font-bold text-[13.5px] mt-2"
+                    style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}>
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Filter carousel */}
+      {filterCarouselOpen && (
+        <div className="fixed inset-0 z-[240] flex items-end" onClick={() => setFilterCarouselOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div onClick={(e) => e.stopPropagation()}
+               className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5"
+               style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-4" />
+            <h3 className="text-cream font-extrabold text-[16px] mb-4">Effects</h3>
+            <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+              {FILTERS.map((f) => (
+                <button key={f.id} onClick={() => { setFilterId(f.id); setFilterCarouselOpen(false) }} className="shrink-0 flex flex-col items-center gap-1.5">
+                  <span className="w-16 h-16 rounded-2xl border-2 overflow-hidden grid place-items-center"
+                        style={{ borderColor: filterId === f.id ? "#fff" : "rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)" }}>
+                    <span style={{ filter: f.css, width: "100%", height: "100%", display: "grid", placeItems: "center", background: "linear-gradient(135deg, #C084FC, #EC4899)", color: "#fff", fontWeight: 900 }}>Aa</span>
+                  </span>
+                  <span className="text-white text-[11px] font-semibold">{f.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Audio picker */}
+      {audioSheetOpen && (
+        <div className="fixed inset-0 z-[240] flex items-end" onClick={() => setAudioSheetOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div onClick={(e) => e.stopPropagation()}
+               className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 flex flex-col"
+               style={{ maxHeight: "80dvh", paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
+            <div className="pt-3 pb-2 shrink-0">
+              <div className="w-10 h-1 rounded-full bg-white/20 mx-auto" />
+            </div>
+            <div className="px-5 pb-3 flex items-center justify-between shrink-0">
+              <h3 className="text-cream font-extrabold text-[16px]">Add audio</h3>
+              {audioTrack && (
+                <button onClick={() => { setAudioTrack(null); setAudioSheetOpen(false) }}
+                        className="text-[12.5px] text-red-300 font-semibold">Remove</button>
+              )}
+            </div>
+            <div className="flex-1 overflow-y-auto px-4">
+              {audioLoading && <p className="text-muted text-[13px] text-center py-6">Loading…</p>}
+              {!audioLoading && audioList.length === 0 && (
+                <p className="text-muted text-[13px] text-center py-6">No tracks yet. Add some to the tracks table.</p>
+              )}
+              {!audioLoading && audioList.length > 0 && (
+                <p className="text-green-400 text-[11px] text-center pb-2">{audioList.length} tracks loaded</p>
+              )}
+              {audioList.map((tr) => (
+                <button key={tr.id}
+                        onClick={() => { setAudioTrack(tr); setAudioSheetOpen(false) }}
+                        className="w-full flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/8 mb-2 text-left">
+                  <span className="w-11 h-11 rounded-lg shrink-0 grid place-items-center overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+                    {tr.cover_url ? <img src={tr.cover_url} alt="" className="w-full h-full object-cover" /> : <Music size={18} className="text-purple-400" />}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-cream font-bold text-[13.5px] truncate">{tr.title}</p>
+                    <p className="text-muted text-[11.5px] truncate">{tr.artist}</p>
+                  </div>
+                  {audioTrack?.id === tr.id && <Check size={18} className="text-purple-400 shrink-0" />}
                 </button>
               ))}
             </div>

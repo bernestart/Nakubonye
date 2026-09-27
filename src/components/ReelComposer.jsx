@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { X, Send, Circle, Square, RotateCcw, Mic, MicOff, Camera, Upload } from "lucide-react"
 import ReelTrim from "./ReelTrim"
-import ReelDecorate from "./ReelDecorate"
+// ReelDecorate removed — merged into ReelTrim
 import ReelPublishSheet from "./ReelPublishSheet"
 import TagPicker from "./TagPicker"
 import { supabase } from "../lib/supabase"
@@ -85,6 +85,11 @@ export default function ReelComposer({ onClose, onDone, remixOf }) {
   const [publishSheetOpen, setPublishSheetOpen] = useState(false)
   const [aspectRatioState, setAspectRatioState] = useState("9:16")
   const [trimEnd, setTrimEnd] = useState(null)
+  const [speedState, setSpeedState] = useState(1)
+  const [audioTrackState, setAudioTrackState] = useState(null)
+  const [coverBlobState, setCoverBlobState] = useState(null)
+  const [voiceoverBlobState, setVoiceoverBlobState] = useState(null)
+  const [voiceoverStartState, setVoiceoverStartState] = useState(0)
 
   const [recording, setRecording] = useState(false)
   const [recordSec, setRecordSec] = useState(0)
@@ -239,9 +244,13 @@ export default function ReelComposer({ onClose, onDone, remixOf }) {
     // Generate + upload a thumbnail from the first clip
     let thumbnailUrl = null
     try {
-      const firstClip = sourceClips[0]
-      if (firstClip?.file) {
-        const blob = await extractThumbnail(firstClip.file, coverTime || 0.1)
+      // Prefer the user-picked cover frame; fall back to auto-extract
+      let blob = coverBlobState
+      if (!blob) {
+        const firstClip = sourceClips[0]
+        if (firstClip?.file) blob = await extractThumbnail(firstClip.file, coverTime || 0.1)
+      }
+      {
         if (blob) {
           const thumbPath = myId + "/" + crypto.randomUUID() + "_thumb.jpg"
           const { error: tErr } = await supabase.storage
@@ -254,6 +263,22 @@ export default function ReelComposer({ onClose, onDone, remixOf }) {
         }
       }
     } catch {}
+
+    // Upload voiceover if recorded
+    let voiceoverUrl = null
+    if (voiceoverBlobState) {
+      try {
+        const voPath = myId + "/voiceover_" + crypto.randomUUID() + ".webm"
+        const { error: voErr } = await supabase.storage
+          .from("reels-media")
+          .upload(voPath, voiceoverBlobState, { upsert: false, contentType: "audio/webm" })
+        if (!voErr) {
+          const { data: vpub } = supabase.storage.from("reels-media").getPublicUrl(voPath)
+          voiceoverUrl = vpub?.publicUrl || null
+        }
+      } catch {}
+    }
+
 
     const { error: insErr } = await supabase.from("reels").insert({
       user_id: myId,
@@ -276,6 +301,10 @@ export default function ReelComposer({ onClose, onDone, remixOf }) {
       tagged_user_ids: taggedUsers.map((u) => u.id),
       thumbnail_url: thumbnailUrl,
           remix_of: remixOf?.id || null,
+      speed: speedState,
+      audio_track_id: audioTrackState?.id || null,
+      voiceover_url: voiceoverUrl,
+      voiceover_start_sec: voiceoverStartState,
     })
     if (insErr) { setError(insErr.message); setBusy(false); return }
     setProgress(100); setBusy(false); setStage("capture"); onDone?.()
@@ -323,8 +352,9 @@ export default function ReelComposer({ onClose, onDone, remixOf }) {
     }
   }, [file, preview])
 
-  if (trimming && preview && file) {
+  if ((trimming || stage === "trim") && preview && file) {
     return (
+      <>
       <ReelTrim
         src={preview}
         initialFile={file}
@@ -336,6 +366,7 @@ export default function ReelComposer({ onClose, onDone, remixOf }) {
           setTrimEnd(null)
           setRecordSec(0)
           setDuration(0)
+          setStage("capture")
         }}
         onDone={(trim) => {
           setTrimStart(trim.trimStart || 0)
@@ -343,11 +374,44 @@ export default function ReelComposer({ onClose, onDone, remixOf }) {
           setMirroredState(!!trim.mirrored)
           setAspectRatioState(trim.aspectRatio || "9:16")
           setTextOverlaysState(trim.textOverlays || [])
+          setStickerOverlaysState(trim.stickerOverlays || [])
+          setFilterIdState(trim.filterId || "none")
+          setSpeedState(trim.speed || 1)
+          setAudioTrackState(trim.audioTrack || null)
+          setCoverTime(trim.coverTime || 0)
+          setCoverBlobState(trim.coverBlob || null)
+          setVoiceoverBlobState(trim.voiceoverBlob || null)
+          setVoiceoverStartState(trim.voiceoverStartSec || 0)
           setClipsState(trim.clips || [])
+          setStage("trim")
           setTrimming(false)
-          setStage("decorate")
+          setPublishSheetOpen(true)
         }}
       />
+        {publishSheetOpen && (
+          <ReelPublishSheet
+            preview={preview}
+            caption={caption} setCaption={setCaption}
+            coverTime={coverTime} setCoverTime={setCoverTime} duration={duration}
+            audienceState={audienceState} setAudienceState={setAudienceState}
+            allowComments={allowComments} setAllowComments={setAllowComments}
+            allowRemix={allowRemix} setAllowRemix={setAllowRemix}
+            locationState={locationState} setLocationState={setLocationState}
+            taggedUsers={taggedUsers}
+            onOpenTagPicker={() => setTagPickerOpen(true)}
+            error={error} busy={busy} progress={progress}
+            onSubmit={submit}
+            onClose={() => setPublishSheetOpen(false)}
+          />
+        )}
+        {tagPickerOpen && (
+          <TagPicker
+            initial={taggedUsers}
+            onClose={() => setTagPickerOpen(false)}
+            onSave={(users) => setTaggedUsers(users)}
+          />
+        )}
+      </>
     )
   }
 
@@ -388,48 +452,7 @@ export default function ReelComposer({ onClose, onDone, remixOf }) {
     )
   }
 
-  if (stage === "decorate" && clipsState.length > 0) {
-    return (
-      <>
-        <ReelDecorate
-          clips={clipsState}
-          initialOverlays={textOverlaysState}
-          onBack={() => setStage("trim")}
-          onNext={({ textOverlays, stickerOverlays, filterId }) => {
-            setTextOverlaysState(textOverlays || [])
-            setStickerOverlaysState(stickerOverlays || [])
-            setFilterIdState(filterId || "none")
-            setPublishSheetOpen(true)
-          }}
-        />
-        {publishSheetOpen && (
-          <ReelPublishSheet
-            preview={preview}
-            caption={caption} setCaption={setCaption}
-            coverTime={coverTime} setCoverTime={setCoverTime} duration={duration}
-            audienceState={audienceState} setAudienceState={setAudienceState}
-            allowComments={allowComments} setAllowComments={setAllowComments}
-            allowRemix={allowRemix} setAllowRemix={setAllowRemix}
-            locationState={locationState} setLocationState={setLocationState}
-            taggedUsers={taggedUsers}
-            onOpenTagPicker={() => setTagPickerOpen(true)}
-            error={error} busy={busy} progress={progress}
-            onSubmit={submit}
-            onClose={() => setPublishSheetOpen(false)}
-          />
-        )}
-        {tagPickerOpen && (
-          <TagPicker
-            initial={taggedUsers}
-            onClose={() => setTagPickerOpen(false)}
-            onSave={(users) => setTaggedUsers(users)}
-          />
-        )}
-      </>
-    )
-  }
-
-  if (preview && file) {
+  if (false && preview && file) {
     const coverThumb = (() => {
       const list = clipsState.length > 0 ? clipsState : [{ url: preview, trimStart: 0, trimEnd: duration || 0 }]
       return list[0].url
