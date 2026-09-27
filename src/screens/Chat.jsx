@@ -55,6 +55,7 @@ export default function Chat() {
   const [replyingTo, setReplyingTo] = useState(null)
   const [storyReply, setStoryReply] = useState(null)
   const [reactionPickerFor, setReactionPickerFor] = useState(null)
+  const [actionsForMsg, setActionsForMsg] = useState(null)
   const [attachment, setAttachment] = useState(null)
   const [attachmentPreview, setAttachmentPreview] = useState('')
   const [otherTyping, setOtherTyping] = useState(false)
