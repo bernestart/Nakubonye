@@ -24,6 +24,7 @@ export default function PostComposer({ onClose, onDone }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const [progress, setProgress] = useState(0)
+  const [stage, setStage] = useState("compose") // compose | preview
 
   function pickImages(e) {
     const files = Array.from(e.target.files || [])
@@ -52,6 +53,26 @@ export default function PostComposer({ onClose, onDone }) {
       URL.revokeObjectURL(cur[idx])
       return cur.filter((_, i) => i !== idx)
     })
+  }
+
+  function moveImage(idx, dir) {
+    const target = idx + dir
+    if (target < 0 || target >= imageFiles.length) return
+    setImageFiles((cur) => {
+      const next = [...cur]
+      ;[next[idx], next[target]] = [next[target], next[idx]]
+      return next
+    })
+    setImagePreviews((cur) => {
+      const next = [...cur]
+      ;[next[idx], next[target]] = [next[target], next[idx]]
+      return next
+    })
+  }
+
+  function setCover(idx) {
+    if (idx === 0) return
+    moveImage(idx, -idx) // move to index 0 repeatedly
   }
 
   async function submit() {
@@ -93,6 +114,107 @@ export default function PostComposer({ onClose, onDone }) {
   const activeAud = AUDIENCES.find((a) => a.id === audience) || AUDIENCES[0]
   const canPost = (content.trim() || imageFiles.length > 0) && !busy
 
+  if (stage === "preview") {
+    return (
+      <div className="fixed inset-0 z-[220] bg-[#0B0B14] flex flex-col" style={{ height: "100dvh" }}>
+        <header className="flex items-center justify-between px-3 py-3 shrink-0"
+                style={{ paddingTop: "max(12px, env(safe-area-inset-top))" }}>
+          <button
+            onClick={() => setStage("compose")}
+            className="h-10 px-4 rounded-full bg-white/[0.06] text-cream font-semibold text-[13.5px]"
+          >
+            ← Back
+          </button>
+          <h2 className="text-cream font-bold text-[16px]">Preview</h2>
+          <button
+            onClick={submit}
+            disabled={busy}
+            className="h-10 px-4 rounded-full text-white font-bold text-[13.5px] inline-flex items-center gap-2 disabled:opacity-40"
+            style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
+          >
+            <Send size={14} /> {busy ? "Posting…" : "Post"}
+          </button>
+        </header>
+
+        <div className="flex-1 overflow-y-auto px-4 pb-4">
+          <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">
+            {imagePreviews.length} {imagePreviews.length === 1 ? "image" : "images"}
+          </p>
+
+          <div className="flex flex-col gap-3">
+            {imagePreviews.map((src, i) => (
+              <div key={i} className="rounded-2xl overflow-hidden bg-black border border-white/8">
+                <div className="relative">
+                  <img src={src} alt="" className="w-full max-h-[50vh] object-contain" />
+                  {i === 0 && (
+                    <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md text-[10px] font-black bg-gradient-to-r from-pink-500 to-purple-500 text-white">
+                      COVER
+                    </span>
+                  )}
+                  <span className="absolute top-2 right-2 px-2 py-0.5 rounded-md text-[10px] font-bold bg-black/70 text-white">
+                    {i + 1} / {imagePreviews.length}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-1 px-2 py-2 border-t border-white/8 bg-white/[0.02]">
+                  <button
+                    onClick={() => { tap("light"); moveImage(i, -1) }}
+                    disabled={i === 0}
+                    className="h-8 px-3 rounded-full bg-white/[0.06] border border-white/10 text-cream font-bold text-[11.5px] disabled:opacity-30"
+                  >
+                    ← Move
+                  </button>
+                  {i !== 0 ? (
+                    <button
+                      onClick={() => { tap("light"); setCover(i) }}
+                      className="h-8 px-3 rounded-full bg-purple-500/20 border border-purple-500/40 text-purple-200 font-bold text-[11.5px]"
+                    >
+                      Set cover
+                    </button>
+                  ) : (
+                    <span className="text-[11.5px] text-purple-300 font-bold">Cover image</span>
+                  )}
+                  <button
+                    onClick={() => { tap("light"); moveImage(i, 1) }}
+                    disabled={i === imagePreviews.length - 1}
+                    className="h-8 px-3 rounded-full bg-white/[0.06] border border-white/10 text-cream font-bold text-[11.5px] disabled:opacity-30"
+                  >
+                    Move →
+                  </button>
+                  <button
+                    onClick={() => { tap("light"); removeImage(i) }}
+                    className="h-8 w-8 rounded-full bg-red-500/15 border border-red-500/40 text-red-300 grid place-items-center"
+                    aria-label="Remove"
+                  >
+                    <X size={14} strokeWidth={2.6} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {error && (
+            <div className="mt-3 text-red-400 text-[12.5px] bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2">
+              {error}
+            </div>
+          )}
+
+          {busy && progress > 0 && (
+            <div className="mt-3 h-1.5 rounded-full bg-white/10 overflow-hidden">
+              <div className="h-full bg-purple-500 transition-all" style={{ width: progress + "%" }} />
+            </div>
+          )}
+
+          {content.trim() && (
+            <div className="mt-4 p-3 rounded-2xl bg-white/[0.03] border border-white/8">
+              <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-1">Caption</p>
+              <p className="text-cream text-[13.5px] whitespace-pre-wrap">{content}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="fixed inset-0 z-[220] bg-[#0B0B14] flex flex-col" style={{ height: "100dvh" }}>
       <header className="flex items-center justify-between px-3 py-3 shrink-0"
@@ -105,14 +227,24 @@ export default function PostComposer({ onClose, onDone }) {
           <X size={20} />
         </button>
         <h2 className="text-cream font-bold text-[16px]">Create post</h2>
-        <button
-          onClick={submit}
-          disabled={!canPost}
-          className="h-10 px-4 rounded-full text-white font-bold text-[13.5px] inline-flex items-center gap-2 disabled:opacity-40"
-          style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
-        >
-          <Send size={14} /> {busy ? "Posting…" : "Post"}
-        </button>
+        {stage === "compose" && imageFiles.length > 0 ? (
+          <button
+            onClick={() => { tap("light"); setStage("preview") }}
+            className="h-10 px-4 rounded-full text-white font-bold text-[13.5px]"
+            style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
+          >
+            Next
+          </button>
+        ) : (
+          <button
+            onClick={submit}
+            disabled={!canPost}
+            className="h-10 px-4 rounded-full text-white font-bold text-[13.5px] inline-flex items-center gap-2 disabled:opacity-40"
+            style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
+          >
+            <Send size={14} /> {busy ? "Posting…" : "Post"}
+          </button>
+        )}
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 pb-4">
