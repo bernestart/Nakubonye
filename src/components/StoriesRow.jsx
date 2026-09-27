@@ -17,6 +17,7 @@ export default function StoriesRow() {
   const [myStory, setMyStory] = useState(null)
   const [myPhoto, setMyPhoto] = useState(null)
   const [composerOpen, setComposerOpen] = useState(false)
+  const [pendingStories, setPendingStories] = useState([])
   const [viewerState, setViewerState] = useState(null)
   const [storiesCursor, setStoriesCursor] = useState(null)
   const [storiesHasMore, setStoriesHasMore] = useState(true)
@@ -237,6 +238,12 @@ export default function StoriesRow() {
     return <img src={first.media_url} alt="" className="w-full h-full object-cover" />
   }
 
+  function addPendingStory(item) { setPendingStories((c) => [item, ...c]) }
+  function resolvePendingStory(tempId) { setPendingStories((c) => c.filter((x) => x._tempId !== tempId)) }
+  function failPendingStory(tempId, error) {
+    setPendingStories((c) => c.map((x) => x._tempId === tempId ? { ...x, _status: "failed", _error: error } : x))
+  }
+
   return (
     <>
       <div ref={stripRef} className="flex gap-2.5 overflow-x-auto px-3 py-2.5" style={{ scrollbarWidth: "none" }}>
@@ -354,12 +361,52 @@ export default function StoriesRow() {
             </div>
           </button>
         )}
+        {pendingStories.map((ps) => (
+          <div key={ps._tempId} className="shrink-0 relative overflow-hidden"
+            style={{
+              width: TILE_W, height: TILE_H, borderRadius: 14,
+              border: "2px solid transparent",
+              background: "linear-gradient(#0B0B14,#0B0B14) padding-box, linear-gradient(135deg,#C084FC,#EC4899) border-box",
+            }}
+          >
+            {ps.media_type === "video"
+              ? <video src={ps.media_url} muted playsInline preload="metadata" className="w-full h-full object-cover" />
+              : <img src={ps.media_url} alt="" className="w-full h-full object-cover" />}
+
+            {ps._status === "uploading" && (
+              <div className="absolute inset-0 grid place-items-center bg-black/45">
+                <span className="w-7 h-7 rounded-full border-2 border-white border-t-transparent animate-spin" />
+              </div>
+            )}
+
+            {ps._status === "failed" && (
+              <div className="absolute inset-0 grid place-items-center bg-black/65 px-2">
+                <div className="text-center">
+                  <p className="text-red-300 text-[10px] font-bold mb-1.5 leading-tight">Upload failed</p>
+                  <div className="flex gap-1 justify-center">
+                    <button onClick={() => setPendingStories((c) => c.filter((x) => x._tempId !== ps._tempId))}
+                      className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/10 text-cream">Discard</button>
+                    <button onClick={() => ps._retry?.()}
+                      className="text-[9px] font-bold px-1.5 py-0.5 rounded text-white"
+                      style={{ background: "linear-gradient(135deg,#EC4899,#A855F7)" }}>Retry</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="absolute bottom-1 left-1 right-1 text-[10px] font-bold text-white drop-shadow truncate">Your story</div>
+          </div>
+        ))}
       </div>
 
       {composerOpen && (
         <StoryComposer
           onClose={() => setComposerOpen(false)}
           onDone={() => { setComposerOpen(false); load() }}
+          onOptimistic={addPendingStory}
+          onResolve={(tempId) => { resolvePendingStory(tempId); load() }}
+          onFail={failPendingStory}
+          onRetryStart={(tempId) => setPendingStories((c) => c.map((x) => x._tempId === tempId ? { ...x, _status: "uploading", _error: null } : x))}
         />
       )}
 

@@ -31,28 +31,76 @@ export default function StoryComposer({ onClose, onDone }) {
     if (f.type.startsWith("image/")) setEditorOpen(true)
   }
 
+  async function runPublish(tempId, useFile, ext, contentType, mediaType, captionSnapshot) {
+    try {
+      const path = "stories/" + myId + "/" + crypto.randomUUID() + "." + ext
+      const { error: upErr } = await supabase.storage
+        .from("chat-media")
+        .upload(path, useFile, { upsert: false, contentType })
+      if (upErr) throw new Error(upErr.message)
+      const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
+      const { error: insErr } = await supabase.from("stories").insert({
+        user_id: myId,
+        media_url: pub?.publicUrl,
+        media_type: mediaType,
+        caption: captionSnapshot || null,
+      })
+      if (insErr) throw new Error(insErr.message)
+      onResolve?.(tempId)
+    } catch (e) {
+      onFail?.(tempId, e.message || String(e))
+    }
+  }
+
+  function publishNow(blob, ext, contentType, mediaType, captionSnapshot) {
+    if (!myId || !blob) return
+    const tempId = "pending-story-" + crypto.randomUUID()
+    const previewUrl = URL.createObjectURL(blob)
+    const retry = () => {
+      onRetryStart?.(tempId)
+      runPublish(tempId, blob, ext, contentType, mediaType, captionSnapshot)
+    }
+    onOptimistic?.({
+      _tempId: tempId,
+      user_id: myId,
+      display_name: "You",
+      media_url: previewUrl,
+      media_type: mediaType,
+      caption: captionSnapshot || null,
+      _status: "uploading",
+      _retry: retry,
+      created_at: new Date().toISOString(),
+    })
+    onClose?.()
+    runPublish(tempId, blob, ext, contentType, mediaType, captionSnapshot)
+  }
+
   async function submit() {
     if (!file || !myId) return
     setBusy(true); setError("")
     const useFile = editedBlob || file
     const ext = editedBlob ? "jpg" : (file.name.split(".").pop()?.toLowerCase() || "jpg")
     const contentType = editedBlob ? "image/jpeg" : file.type
-    const path = "stories/" + myId + "/" + crypto.randomUUID() + "." + ext
-    const { error: upErr } = await supabase.storage
-      .from("chat-media")
-      .upload(path, useFile, { upsert: false, contentType })
-    if (upErr) { setError(upErr.message); setBusy(false); return }
-    const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
     const mediaType = !editedBlob && file.type.startsWith("video/") ? "video" : "image"
-    const { error: insErr } = await supabase.from("stories").insert({
+    const tempId = "pending-story-" + crypto.randomUUID()
+    const captionSnapshot = caption.trim()
+    const retry = () => {
+      onRetryStart?.(tempId)
+      runPublish(tempId, useFile, ext, contentType, mediaType, captionSnapshot)
+    }
+    onOptimistic?.({
+      _tempId: tempId,
       user_id: myId,
-      media_url: pub?.publicUrl,
+      display_name: "You",
+      media_url: preview,
       media_type: mediaType,
-      caption: caption.trim() || null,
+      caption: captionSnapshot || null,
+      _status: "uploading",
+      _retry: retry,
+      created_at: new Date().toISOString(),
     })
-    if (insErr) { setError(insErr.message); setBusy(false); return }
-    setBusy(false)
-    onDone?.()
+    onClose?.()
+    await runPublish(tempId, useFile, ext, contentType, mediaType, captionSnapshot)
   }
 
   useEffect(() => {
@@ -66,9 +114,9 @@ export default function StoryComposer({ onClose, onDone }) {
         onCancel={() => { setEditorOpen(false); setPreview(""); setFile(null); setEditedBlob(null) }}
         onSave={(blob, meta) => {
           setEditedBlob(blob)
-          setPreview(URL.createObjectURL(blob))
           if (meta?.caption) setCaption(meta.caption)
           setEditorOpen(false)
+          publishNow(blob, "jpg", "image/jpeg", "image", meta?.caption || "")
         }}
       />
     )
