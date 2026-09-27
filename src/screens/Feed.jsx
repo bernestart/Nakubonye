@@ -12,6 +12,7 @@ import AppHeader from "../components/AppHeader"
 import StoriesRow from "../components/StoriesRow"
 import PostCommentsSheet from "../components/PostCommentsSheet"
 import PostActionsSheet from "../components/PostActionsSheet"
+import FollowButton from "../components/FollowButton"
 import PostComposer from "../components/PostComposer"
 import BrandGlow from "../components/BrandGlow"
 
@@ -780,6 +781,9 @@ export default function Feed() {
                       {new Date(p.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                     </p>
                   </div>
+                  {p.author_id !== myId && (
+                    <FollowButton userId={p.author_id} size="sm" />
+                  )}
                   <button
                     onClick={() => { tap("light"); setActionsFor(p) }}
                     className="w-8 h-8 rounded-full grid place-items-center text-muted shrink-0"
