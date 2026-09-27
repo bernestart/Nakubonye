@@ -249,11 +249,19 @@ export default function ProfileView() {
                   {person.id && (
                     <div className="mt-2 flex items-center gap-3">
                       <FollowButton userId={person.id} />
-                      <span className="text-white/75 text-[11.5px] font-medium">
+                      <button
+                        onClick={() => { tap("light"); nav("/user/" + person.id + "/followers") }}
+                        className="text-white/75 text-[11.5px] font-medium"
+                      >
                         <strong className="text-white">{followersCount}</strong> followers
-                        {" · "}
+                      </button>
+                      <span className="text-white/40">·</span>
+                      <button
+                        onClick={() => { tap("light"); nav("/user/" + person.id + "/following") }}
+                        className="text-white/75 text-[11.5px] font-medium"
+                      >
                         <strong className="text-white">{followingCount}</strong> following
-                      </span>
+                      </button>
                     </div>
                   )}
                 </div>

@@ -27,6 +27,7 @@ import Verify from './screens/Verify'
 import Roadmap from './screens/Roadmap'
 import Feed from './screens/Feed'
 import Reels from './screens/Reels'
+import FollowList from './screens/FollowList'
 import Create from './screens/Create'
 import Search from './screens/Search'
 import Online from './screens/Online'
@@ -166,6 +167,8 @@ export default function App() {
         <Route path="/onboarding" element={<Guard><Onboarding /></Guard>} />
         <Route path="/feed" element={<Guard><Feed /></Guard>} />
         <Route path="/reels" element={<Guard><Reels /></Guard>} />
+        <Route path="/user/:userId/followers" element={<Guard><FollowList /></Guard>} />
+        <Route path="/user/:userId/following" element={<Guard><FollowList /></Guard>} />
         <Route path="/create" element={<Guard><Create /></Guard>} />
         <Route path="/search" element={<Guard><Search /></Guard>} />
         <Route path="/online" element={<Guard><Online /></Guard>} />
