@@ -18,7 +18,7 @@ import BrandGlow from "../components/BrandGlow"
 
 export default function Feed() {
   const nav = useNavigate()
-  const { session } = useAuth()
+  const { session, profile } = useAuth()
   const myId = session?.user?.id
   const [posts, setPosts] = useState([])
   const [communities, setCommunities] = useState(new Map())
@@ -32,6 +32,8 @@ export default function Feed() {
   const [commentsFor, setCommentsFor] = useState(null)
   const [actionsFor, setActionsFor] = useState(null)
   const [suggested, setSuggested] = useState([])
+  const [trending, setTrending] = useState([])
+  const [trendingLabel, setTrendingLabel] = useState("Trending")
   const [composerChooserOpen, setComposerChooserOpen] = useState(false)
   const [postComposerOpen, setPostComposerOpen] = useState(false)
   const [myPhotoUrl, setMyPhotoUrl] = useState(null)
@@ -120,6 +122,40 @@ export default function Feed() {
       created_at: r.created_at,
       _source: "reel",
     }))
+
+    // 3c-bis. Trending — top reels by views in last 24h
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    const { data: trendingRows } = await supabase
+      .from("reels")
+      .select("id, user_id, caption, video_url, thumbnail_url, view_count, like_count, created_at")
+      .eq("is_active", true)
+      .eq("audience", "public")
+      .gt("created_at", dayAgo)
+      .order("view_count", { ascending: false })
+      .limit(6)
+
+    let trendingList = (trendingRows || []).filter((r) => r.user_id !== myId)
+
+    // If not enough in last 24h, fall back to last 7 days
+    if (trendingList.length < 3) {
+      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+      const { data: weekRows } = await supabase
+        .from("reels")
+        .select("id, user_id, caption, video_url, thumbnail_url, view_count, like_count, created_at")
+        .eq("is_active", true)
+        .eq("audience", "public")
+        .gt("created_at", weekAgo)
+        .order("view_count", { ascending: false })
+        .limit(6)
+      trendingList = (weekRows || []).filter((r) => r.user_id !== myId)
+    }
+
+    setTrending(trendingList)
+
+    // City label
+    if (profile?.city) setTrendingLabel("Trending in " + profile.city)
+    else setTrendingLabel("Trending today")
+
 
     // 3d. Load my hidden post IDs and filter them out
     const { data: hideRows } = await supabase
@@ -575,6 +611,57 @@ export default function Feed() {
             <div className="mb-3 -mx-3">
               <StoriesRow />
             </div>
+
+            {/* TRENDING RAIL */}
+            {trending.length > 0 && (
+              <div className="mb-3">
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase flex items-center gap-1">
+                    🔥 {trendingLabel}
+                  </p>
+                  <button
+                    onClick={() => { tap("light"); nav("/reels") }}
+                    className="text-purple-300 text-[12px] font-bold"
+                  >
+                    See all →
+                  </button>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                  {trending.map((r, i) => (
+                    <button
+                      key={r.id}
+                      onClick={() => { tap("light"); nav("/reels") }}
+                      className="shrink-0 relative rounded-xl overflow-hidden bg-black"
+                      style={{ width: 104, height: 156 }}
+                    >
+                      {r.thumbnail_url ? (
+                        <img
+                          src={r.thumbnail_url}
+                          alt=""
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <video
+                          src={r.video_url}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                      <span className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full grid place-items-center text-white text-[11px] font-black"
+                            style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}>
+                        {i + 1}
+                      </span>
+                      <span className="absolute bottom-1.5 left-1.5 right-1.5 text-white text-[10px] font-semibold truncate" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.9)" }}>
+                        {r.view_count || 0} views
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
           </>
         )}
