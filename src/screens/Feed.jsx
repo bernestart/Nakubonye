@@ -744,18 +744,39 @@ export default function Feed() {
                           className="absolute inset-0 w-full h-full object-cover"
                           style={{ transform: p.mirrored ? "scaleX(-1)" : "none" }}
                         />
+                      ) : p.video_url ? (
+                        <>
+                          {/* Fallback gradient behind the video so it never shows pure black */}
+                          <div
+                            className="absolute inset-0"
+                            style={{
+                              background: "linear-gradient(160deg, #2A1B4A 0%, #4C1D95 40%, #831843 100%)",
+                            }}
+                          />
+                          <video
+                            src={p.video_url}
+                            muted
+                            playsInline
+                            preload="auto"
+                            onLoadedMetadata={(e) => {
+                              try { e.target.currentTime = p.cover_frame_time || 0.5 } catch {}
+                            }}
+                            onSeeked={(e) => {
+                              try { e.target.pause() } catch {}
+                            }}
+                            className="absolute inset-0 w-full h-full object-cover"
+                            style={{ transform: p.mirrored ? "scaleX(-1)" : "none" }}
+                          />
+                        </>
                       ) : (
-                        <video
-                          src={p.video_url}
-                          muted
-                          playsInline
-                          preload="auto"
-                          onLoadedData={(e) => {
-                            try { e.target.currentTime = p.cover_frame_time || 0.1 } catch {}
-                          }}
-                          className="absolute inset-0 w-full h-full object-cover"
-                          style={{ transform: p.mirrored ? "scaleX(-1)" : "none" }}
-                        />
+                        <div
+                          className="absolute inset-0 grid place-items-center p-6 text-center"
+                          style={{ background: "linear-gradient(160deg, #2A1B4A 0%, #4C1D95 40%, #831843 100%)" }}
+                        >
+                          <p className="text-white/85 text-[15px] font-semibold leading-tight line-clamp-4" style={{ textShadow: "0 1px 6px rgba(0,0,0,0.7)" }}>
+                            {p.content || "Watch this reel"}
+                          </p>
+                        </div>
                       )}
 
                       {/* Play overlay */}
