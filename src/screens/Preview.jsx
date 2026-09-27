@@ -23,6 +23,7 @@ export default function Preview() {
   const [myPosts, setMyPosts] = useState([])
   const [followersCount, setFollowersCount] = useState(0)
   const [followingCount, setFollowingCount] = useState(0)
+  const [matchesCount, setMatchesCount] = useState(0)
   const [activeTab, setActiveTab] = useState("posts")
   const [playingReel, setPlayingReel] = useState(null)
   const [viewingPhoto, setViewingPhoto] = useState(null)
@@ -31,7 +32,7 @@ export default function Preview() {
   const load = useCallback(async () => {
     if (!myId) return
 
-    const [photoRes, promptRes, linksRes, reelRes, saveRes, personalRes, communityRes, f1, f2] = await Promise.all([
+    const [photoRes, promptRes, linksRes, reelRes, saveRes, personalRes, communityRes, f1, f2, f3] = await Promise.all([
       supabase.from('profile_photos').select('storage_path, is_primary, display_order').eq('user_id', myId)
         .order('is_primary', { ascending: false }).order('display_order', { ascending: true }),
       supabase.from('profile_prompts').select('prompt_key, answer, display_order').eq('profile_id', myId)
@@ -46,6 +47,7 @@ export default function Preview() {
         .eq('author_id', myId).order('created_at', { ascending: false }).limit(30),
       supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', myId),
       supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', myId),
+      supabase.from('matches').select('*', { count: 'exact', head: true }).or(`user_one_id.eq.${myId},user_two_id.eq.${myId}`),
     ])
 
     setPhotos((photoRes.data || []).map((p) => publicPhotoUrl(p.storage_path)).filter(Boolean))
@@ -53,6 +55,7 @@ export default function Preview() {
     setReels(reelRes.data || [])
     setFollowersCount(f1.count || 0)
     setFollowingCount(f2.count || 0)
+    setMatchesCount(f3?.count || 0)
 
     if (linksRes.data?.length) {
       const ids = linksRes.data.map((l) => l.interest_id)
@@ -111,6 +114,8 @@ export default function Preview() {
           followersCount={followersCount}
           followingCount={followingCount}
           postsCount={myPosts.length}
+          matchesCount={matchesCount}
+          onMatchesClick={() => nav("/matches")}
           onFollowersClick={() => nav(`/user/${myId}/followers`)}
           onFollowingClick={() => nav(`/user/${myId}/following`)}
           actions={

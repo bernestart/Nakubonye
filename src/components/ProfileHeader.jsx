@@ -11,10 +11,12 @@ export default function ProfileHeader({
   followersCount = 0,
   followingCount = 0,
   postsCount = 0,
+  matchesCount = 0,
   actions,
   onFollowersClick,
   onFollowingClick,
   onSettingsClick,
+  onMatchesClick,
   topBarLeft,
   topBarRight,
 }) {
@@ -100,6 +102,15 @@ export default function ProfileHeader({
               <p className="text-cream text-[15px] font-extrabold leading-none">{followingCount}</p>
               <p className="text-muted text-[11px] mt-0.5">Following</p>
             </button>
+            {onMatchesClick && (
+              <button
+                onClick={() => { tap("light"); onMatchesClick() }}
+                className="text-left"
+              >
+                <p className="text-cream text-[15px] font-extrabold leading-none">{matchesCount}</p>
+                <p className="text-muted text-[11px] mt-0.5">Matches</p>
+              </button>
+            )}
           </div>
         </div>
       </div>
