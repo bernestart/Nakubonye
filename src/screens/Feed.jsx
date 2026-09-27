@@ -37,6 +37,15 @@ export default function Feed() {
   const [trendingLabel, setTrendingLabel] = useState("Trending")
   const [composerChooserOpen, setComposerChooserOpen] = useState(false)
   const [postComposerOpen, setPostComposerOpen] = useState(false)
+  const [pendingPosts, setPendingPosts] = useState([])
+  function addPendingPost(item) { setPendingPosts((c) => [...c, item]) }
+  function resolvePendingPost(tempId, realPost) {
+    setPendingPosts((c) => c.filter((x) => x._tempId !== tempId))
+    if (realPost) setPosts((c) => [realPost, ...c])
+  }
+  function failPendingPost(tempId, error) {
+    setPendingPosts((c) => c.map((x) => x._tempId === tempId ? { ...x, _status: 'failed', _error: error } : x))
+  }
   const [myPhotoUrl, setMyPhotoUrl] = useState(null)
   const [cursor, setCursor] = useState(null)
   const [hasMore, setHasMore] = useState(true)
@@ -700,7 +709,35 @@ export default function Feed() {
             </div>
           </div>
         ) : (
-          posts.map((p, idx) => {
+          <>
+            {pendingPosts.map((pp) => (
+              <article key={pp._tempId} className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
+                <div className="flex items-center gap-2.5 px-3 pt-3 pb-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-cream font-bold text-[13.5px] truncate">{pp.displayName || "You"}</p>
+                    <p className="text-subtle text-[11px]">{pp._status === "failed" ? "Upload failed" : "Uploading…"}</p>
+                  </div>
+                  {pp._status === "failed" ? (
+                    <span className="px-2 h-7 rounded-full bg-red-500/20 border border-red-500/50 text-red-300 text-[11px] font-bold grid place-items-center">Failed</span>
+                  ) : (
+                    <span className="w-6 h-6 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
+                  )}
+                </div>
+                {pp.content && <p className="px-3 pb-3 text-cream text-[14px] leading-[1.5] whitespace-pre-wrap">{pp.content}</p>}
+                {pp.imagePreview && <img src={pp.imagePreview} alt="" className="w-full max-h-[60vh] object-cover" />}
+                {pp._status === "failed" && (
+                  <div className="px-3 py-2.5 border-t border-red-500/20 bg-red-500/5">
+                    <p className="text-red-300 text-[12px] mb-2 truncate">{pp._error || "Upload failed"}</p>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setPendingPosts((c) => c.filter((x) => x._tempId !== pp._tempId))} className="h-8 px-3 rounded-full bg-white/[0.06] border border-white/12 text-muted font-bold text-[11.5px]">Discard</button>
+                      <button onClick={() => pp._retry?.()} className="h-8 px-3 rounded-full text-white font-bold text-[11.5px]" style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}>Retry</button>
+                    </div>
+                  </div>
+                )}
+              </article>
+            ))}
+
+            {posts.map((p, idx) => {
             // REELS render as video cards
             if (p._source === "reel") {
               const rProf = profiles.get(p.author_id)
@@ -1017,7 +1054,8 @@ export default function Feed() {
               )}
               </Fragment>
             )
-          })
+          })}
+          </>
         )}
 
         {/* Infinite scroll sentinel */}
@@ -1096,6 +1134,14 @@ export default function Feed() {
         <PostComposer
           onClose={() => setPostComposerOpen(false)}
           onDone={() => { setPostComposerOpen(false); load() }}
+          onOptimistic={addPendingPost}
+          onResolve={(tempId) => { resolvePendingPost(tempId); load() }}
+          onFail={failPendingPost}
+          onRetryStart={(tempId) =>
+            setPendingPosts((c) =>
+              c.map((x) => x._tempId === tempId ? { ...x, _status: "uploading", _error: null } : x)
+            )
+          }
         />
       )}
 

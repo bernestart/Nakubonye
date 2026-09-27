@@ -12,10 +12,11 @@ const AUDIENCES = [
 
 const MAX_IMAGES = 10
 
-export default function PostComposer({ onClose, onDone }) {
+export default function PostComposer({ onClose, onDone, onOptimistic, onResolve, onFail, onRetryStart }) {
   const { session } = useAuth()
   const myId = session?.user?.id
   const fileRef = useRef(null)
+  const handedOffRef = useRef(false)
   const [content, setContent] = useState("")
   const [imageFiles, setImageFiles] = useState([])
   const [imagePreviews, setImagePreviews] = useState([])
@@ -75,40 +76,65 @@ export default function PostComposer({ onClose, onDone }) {
     moveImage(idx, -idx) // move to index 0 repeatedly
   }
 
+  async function runPublish(tempId, body, files, previewUrls, audienceSnapshot) {
+    try {
+      const uploadedPaths = []
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i]
+        const ext = (f.name.split(".").pop() || "jpg").toLowerCase()
+        const path = `${myId}/${crypto.randomUUID()}.${ext}`
+        const { error: upErr } = await supabase.storage
+          .from("community-media")
+          .upload(path, f, { upsert: false, contentType: f.type })
+        if (upErr) throw new Error(upErr.message)
+        uploadedPaths.push(path)
+      }
+      const { error: insErr } = await supabase.from("user_posts").insert({
+        user_id: myId,
+        content: body || null,
+        image_path: uploadedPaths[0] || null,
+        image_paths: uploadedPaths,
+        audience: audienceSnapshot,
+      })
+      if (insErr) throw new Error(insErr.message)
+      onResolve?.(tempId)
+    } catch (e) {
+      onFail?.(tempId, e.message || String(e))
+    }
+  }
+
   async function submit() {
     const body = content.trim()
     if ((!body && imageFiles.length === 0) || !myId || busy) return
     setBusy(true); setError(""); setProgress(0)
 
-    const uploadedPaths = []
-    for (let i = 0; i < imageFiles.length; i++) {
-      const f = imageFiles[i]
-      const ext = (f.name.split(".").pop() || "jpg").toLowerCase()
-      const path = `${myId}/${crypto.randomUUID()}.${ext}`
-      const { error: upErr } = await supabase.storage
-        .from("community-media")
-        .upload(path, f, { upsert: false, contentType: f.type })
-      if (upErr) { setError(upErr.message); setBusy(false); return }
-      uploadedPaths.push(path)
-      setProgress(Math.round(((i + 1) / imageFiles.length) * 90))
+    const tempId = "pending-" + crypto.randomUUID()
+    const filesSnapshot = imageFiles.slice()
+    const previewsSnapshot = imagePreviews.slice()
+    const audienceSnapshot = audience
+
+    handedOffRef.current = true
+
+    const retry = () => {
+      onRetryStart?.(tempId)
+      runPublish(tempId, body, filesSnapshot, previewsSnapshot, audienceSnapshot)
     }
 
-    const { error: insErr } = await supabase.from("user_posts").insert({
-      user_id: myId,
-      content: body || null,
-      image_path: uploadedPaths[0] || null,     // legacy single-image field
-      image_paths: uploadedPaths,               // new multi-image field
-      audience,
+    onOptimistic?.({
+      _tempId: tempId,
+      content: body,
+      imagePreview: previewsSnapshot[0] || null,
+      displayName: "You",
+      _status: "uploading",
+      _retry: retry,
     })
 
-    if (insErr) { setError(insErr.message); setBusy(false); return }
-    setProgress(100)
-    setBusy(false)
-    onDone?.()
+    onClose?.()
+    await runPublish(tempId, body, filesSnapshot, previewsSnapshot, audienceSnapshot)
   }
 
   useEffect(() => () => {
-    imagePreviews.forEach((p) => URL.revokeObjectURL(p))
+    if (!handedOffRef.current) imagePreviews.forEach((p) => URL.revokeObjectURL(p))
   }, [])
 
   const activeAud = AUDIENCES.find((a) => a.id === audience) || AUDIENCES[0]
