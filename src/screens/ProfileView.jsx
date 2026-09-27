@@ -1,63 +1,55 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, MapPin, Check, X, Heart, Flag, Ban, MoreVertical, Sparkles } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { ArrowLeft, Heart, Flag, Ban, MoreVertical, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl, calcAge } from '../lib/photo'
 import { tap } from '../lib/haptic'
+import BrandGlow from '../components/BrandGlow'
+import FollowButton from '../components/FollowButton'
+import DirectMessageModal from '../components/DirectMessageModal'
 import ReportModal from '../components/ReportModal'
 import BlockConfirm from '../components/BlockConfirm'
-import DirectMessageModal from '../components/DirectMessageModal'
-import FollowButton from '../components/FollowButton'
-import ProfileDetails from '../components/ProfileDetails'
-import { PromptList } from '../components/PromptCard'
 
 export default function ProfileView() {
   const nav = useNavigate()
   const { userId } = useParams()
   const { session } = useAuth()
+  const myId = session?.user?.id
+  const isMe = myId === userId
 
   const [loading, setLoading] = useState(true)
-  const [followersCount, setFollowersCount] = useState(0)
-  const [followingCount, setFollowingCount] = useState(0)
-  const [error, setError] = useState('')
   const [person, setPerson] = useState(null)
   const [photos, setPhotos] = useState([])
   const [interests, setInterests] = useState([])
   const [prompts, setPrompts] = useState([])
-  const [activePhoto, setActivePhoto] = useState(0)
+  const [myPosts, setMyPosts] = useState([])
+  const [reels, setReels] = useState([])
+  const [followersCount, setFollowersCount] = useState(0)
+  const [followingCount, setFollowingCount] = useState(0)
   const [isMatch, setIsMatch] = useState(false)
   const [myLike, setMyLike] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [activeTab, setActiveTab] = useState('posts')
+  const [playingReel, setPlayingReel] = useState(null)
+  const [viewingPhoto, setViewingPhoto] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
   const [blockOpen, setBlockOpen] = useState(false)
   const [dmOpen, setDmOpen] = useState(false)
 
-  const myId = session?.user?.id
-  const isMe = myId === userId
-
   const load = useCallback(async () => {
     if (!myId || !userId) return
     setLoading(true); setError('')
 
-    // Record that I viewed this profile (silent, no errors surfaced)
     try { await supabase.rpc('record_profile_view', { p_viewed_id: userId }) } catch {}
 
     const { data: prof, error: profErr } = await supabase
       .from('profiles')
-      .select('id, display_name, username, date_of_birth, gender, bio, city, country, is_verified, looking_for, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children')
+      .select('id, display_name, username, date_of_birth, bio, city, country, is_verified, looking_for')
       .eq('id', userId)
       .single()
-
-    // Load follower + following counts
-    const [{ count: f1 }, { count: f2 }] = await Promise.all([
-      supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', userId),
-      supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', userId),
-    ])
-    setFollowersCount(f1 || 0)
-    setFollowingCount(f2 || 0)
 
     if (profErr || !prof) {
       setError(profErr?.message || 'Profile not found.')
@@ -66,47 +58,46 @@ export default function ProfileView() {
     }
     setPerson(prof)
 
-    const { data: photoRows } = await supabase
-      .from('profile_photos')
-      .select('storage_path, is_primary, display_order')
-      .eq('user_id', userId)
-      .order('is_primary', { ascending: false })
-      .order('display_order', { ascending: true })
+    const [photoRes, promptRes, linksRes, reelRes, personalRes, communityRes, f1, f2] = await Promise.all([
+      supabase.from('profile_photos').select('storage_path, is_primary, display_order').eq('user_id', userId)
+        .order('is_primary', { ascending: false }).order('display_order', { ascending: true }),
+      supabase.from('profile_prompts').select('prompt_key, answer, display_order').eq('profile_id', userId)
+        .order('display_order', { ascending: true }),
+      supabase.from('profile_interests').select('interest_id').eq('profile_id', userId),
+      supabase.from('reels').select('id, video_url, thumbnail_url, caption, created_at')
+        .eq('user_id', userId).eq('is_active', true).order('created_at', { ascending: false }).limit(30),
+      supabase.from('user_posts').select('id, content, image_path, created_at')
+        .eq('user_id', userId).eq('is_active', true).eq('audience', 'public').order('created_at', { ascending: false }).limit(30),
+      supabase.from('community_posts').select('id, content, image_path, created_at')
+        .eq('author_id', userId).order('created_at', { ascending: false }).limit(30),
+      supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', userId),
+      supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', userId),
+    ])
 
-    setPhotos((photoRows || []).map((p) => publicPhotoUrl(p.storage_path)).filter(Boolean))
+    setPhotos((photoRes.data || []).map((p) => publicPhotoUrl(p.storage_path)).filter(Boolean))
+    setPrompts(promptRes.data || [])
+    setReels(reelRes.data || [])
+    setFollowersCount(f1.count || 0)
+    setFollowingCount(f2.count || 0)
 
-    const { data: promptRows } = await supabase
-      .from('profile_prompts')
-      .select('prompt_key, answer, display_order')
-      .eq('profile_id', userId)
-      .order('display_order', { ascending: true })
-    setPrompts(promptRows || [])
-
-    const { data: links } = await supabase
-      .from('profile_interests')
-      .select('interest_id')
-      .eq('profile_id', userId)
-
-    if (links?.length) {
-      const ids = links.map((l) => l.interest_id)
-      const { data: rows } = await supabase
-        .from('interests').select('id, name').in('id', ids)
+    if (linksRes.data?.length) {
+      const ids = linksRes.data.map((l) => l.interest_id)
+      const { data: rows } = await supabase.from('interests').select('id, name').in('id', ids)
       setInterests((rows || []).map((r) => r.name))
-    } else {
-      setInterests([])
-    }
+    } else setInterests([])
+
+    const personal = (personalRes.data || []).map((p) => ({ ...p, _source: 'personal' }))
+    const community = (communityRes.data || []).map((p) => ({ ...p, _source: 'community' }))
+    setMyPosts([...personal, ...community].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
 
     if (!isMe) {
       const lo = myId < userId ? myId : userId
       const hi = myId < userId ? userId : myId
-      const { data: match } = await supabase
-        .from('matches').select('id')
-        .eq('user_one_id', lo).eq('user_two_id', hi).maybeSingle()
+      const [{ data: match }, { data: like }] = await Promise.all([
+        supabase.from('matches').select('id').eq('user_one_id', lo).eq('user_two_id', hi).maybeSingle(),
+        supabase.from('likes').select('id').eq('user_id', myId).eq('liked_user_id', userId).maybeSingle(),
+      ])
       setIsMatch(!!match)
-
-      const { data: like } = await supabase
-        .from('likes').select('id')
-        .eq('user_id', myId).eq('liked_user_id', userId).maybeSingle()
       setMyLike(!!like)
     }
 
@@ -116,35 +107,36 @@ export default function ProfileView() {
   useEffect(() => { load() }, [load])
 
   async function handleLike() {
-    if (busy || !myId) return
-    tap('medium'); setBusy(true)
+    if (busy || myLike || isMe) return
+    setBusy(true); tap('medium')
     const { error: err } = await supabase.rpc('like_user', { target_user_id: userId })
-    if (err) { setError(err.message); setBusy(false); return }
-    await supabase.from('swipes').upsert(
-      { swiper_id: myId, target_id: userId, action: 'like' },
-      { onConflict: 'swiper_id,target_id', ignoreDuplicates: true }
-    )
+    setBusy(false)
+    if (err) { setError(err.message); return }
     setMyLike(true)
-    setBusy(false)
   }
 
-  async function handlePass() {
-    if (busy || !myId) return
-    tap('light'); setBusy(true)
-    await supabase.from('swipes').upsert(
-      { swiper_id: myId, target_id: userId, action: 'pass' },
-      { onConflict: 'swiper_id,target_id', ignoreDuplicates: true }
+  if (loading) {
+    return (
+      <div className="mobile-shell flex items-center justify-center" style={{ position: 'fixed', inset: 0, background: '#0B0B14' }}>
+        <div className="w-8 h-8 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
+      </div>
     )
-    nav(-1)
-    setBusy(false)
   }
 
-  const lookingLabel = {
-    serious: 'Looking for something serious',
-    dating: 'Open to dating',
-    friends: 'Friendship first',
-    unsure: 'Still figuring it out',
-  }[person?.looking_for] || null
+  if (error || !person) {
+    return (
+      <div className="mobile-shell flex flex-col items-center justify-center gap-3" style={{ position: 'fixed', inset: 0, background: '#0B0B14' }}>
+        <p className="text-danger text-[14px]">{error || 'Profile not found'}</p>
+        <button onClick={() => nav(-1)} className="text-purple-300 font-bold text-[13px]">Go back</button>
+      </div>
+    )
+  }
+
+  const tabs = [
+    { id: 'posts', label: 'Posts' },
+    { id: 'reels', label: 'Reels' },
+    { id: 'photos', label: 'Photos' },
+  ]
 
   return (
     <div style={{
@@ -153,17 +145,11 @@ export default function ProfileView() {
       display: 'flex', flexDirection: 'column',
       background: '#0B0B14', overflow: 'hidden',
     }}>
-      {/* Purple ambient glow */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[520px] h-[520px] rounded-full bg-purple-600/25 blur-[120px]" />
-        <div className="absolute bottom-[-200px] right-[-100px] w-[380px] h-[380px] rounded-full bg-pink-500/15 blur-[110px]" />
-      </div>
+      <BrandGlow />
 
-      {/* Header */}
-      <header
-        style={{ height: 52, flexShrink: 0 }}
-        className="relative px-3 flex items-center justify-between"
-      >
+      {/* Top bar */}
+      <header className="shrink-0 h-12 px-3 flex items-center justify-between"
+              style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <button
           onClick={() => nav(-1)}
           className="w-9 h-9 rounded-full grid place-items-center text-muted"
@@ -173,273 +159,270 @@ export default function ProfileView() {
         </button>
         {!isMe && (
           <button
-            onClick={() => setMenuOpen(true)}
+            onClick={() => { tap('light'); setMenuOpen(true) }}
             className="w-9 h-9 rounded-full grid place-items-center text-muted"
             aria-label="More"
           >
-            <MoreVertical size={20} strokeWidth={2.2} />
+            <MoreVertical size={20} />
           </button>
         )}
-        {isMe && <div className="w-9 h-9" />}
       </header>
 
-      {error && (
-        <div className="relative mx-3 mb-2 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5">
-          {error}
+      <div className="flex-1 overflow-y-auto pb-10">
+        {/* Header */}
+        <div className="px-4 pb-3">
+          <div className="flex items-start gap-4">
+            <span className="shrink-0 block rounded-full overflow-hidden bg-elevated border-2" style={{ width: 82, height: 82, borderColor: 'rgba(168,85,247,0.4)' }}>
+              {photos[0] ? (
+                <img src={photos[0]} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span className="w-full h-full grid place-items-center text-purple-400 font-black text-2xl">
+                  {(person.display_name || person.username || '?')[0].toUpperCase()}
+                </span>
+              )}
+            </span>
+
+            <div className="flex-1 min-w-0 pt-1">
+              <div className="flex items-center gap-1.5 mb-1">
+                <h1 className="text-cream text-[18px] font-extrabold tracking-tight truncate">
+                  {person.display_name || person.username}
+                  {person.date_of_birth ? `, ${calcAge(person.date_of_birth)}` : ''}
+                </h1>
+                {person.is_verified && (
+                  <span className="w-[16px] h-[16px] rounded-full bg-[#1DA1F2] grid place-items-center shrink-0">
+                    <span className="text-white text-[10px] font-black">✓</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-muted text-[13px] truncate mb-2">@{person.username || 'user'}</p>
+
+              <div className="flex items-center gap-4">
+                <button className="text-left">
+                  <p className="text-cream text-[15px] font-extrabold leading-none">{myPosts.length}</p>
+                  <p className="text-muted text-[11px] mt-0.5">Posts</p>
+                </button>
+                <button onClick={() => { tap('light'); nav(`/user/${userId}/followers`) }} className="text-left">
+                  <p className="text-cream text-[15px] font-extrabold leading-none">{followersCount}</p>
+                  <p className="text-muted text-[11px] mt-0.5">Followers</p>
+                </button>
+                <button onClick={() => { tap('light'); nav(`/user/${userId}/following`) }} className="text-left">
+                  <p className="text-cream text-[15px] font-extrabold leading-none">{followingCount}</p>
+                  <p className="text-muted text-[11px] mt-0.5">Following</p>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {(person.bio || person.city) && (
+            <div className="mt-3">
+              {person.city && (
+                <p className="text-muted text-[12.5px] mb-1">📍 {person.city}{person.country ? `, ${person.country}` : ''}</p>
+              )}
+              {person.bio && (
+                <p className="text-cream/90 text-[13.5px] leading-[1.45] whitespace-pre-wrap">{person.bio}</p>
+              )}
+            </div>
+          )}
+
+          {/* Actions */}
+          {!isMe && (
+            <div className="mt-3 flex items-center gap-2">
+              <FollowButton userId={userId} />
+              {isMatch ? (
+                <button
+                  onClick={() => { tap('light'); nav('/messages/' + userId) }}
+                  className="flex-1 h-9 rounded-full text-white font-bold text-[13px]"
+                  style={{ background: 'linear-gradient(135deg, #EC4899 0%, #A855F7 100%)' }}
+                >
+                  Send a message
+                </button>
+              ) : myLike ? (
+                <button disabled className="flex-1 h-9 rounded-full bg-white/[0.06] border border-white/10 text-white/60 font-semibold text-[13px]">
+                  Like sent ✓
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => { tap('light'); setDmOpen(true) }}
+                    className="h-9 px-3 rounded-full bg-white/[0.06] border border-white/10 text-cream font-bold text-[12.5px] shrink-0"
+                  >
+                    Message
+                  </button>
+                  <button
+                    onClick={handleLike}
+                    disabled={busy}
+                    className="flex-1 h-9 rounded-full text-white font-bold text-[13px] flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    style={{ background: 'linear-gradient(135deg, #EC4899 0%, #A855F7 100%)' }}
+                  >
+                    <Heart size={14} strokeWidth={2.6} fill="currentColor" /> Like
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </div>
-      )}
 
-      <div className="relative flex-1 min-h-0 overflow-y-auto">
-        {loading ? (
-          <div className="grid place-items-center h-full text-muted text-[13px]">Loading profile…</div>
-        ) : !person ? null : (
-          <>
-            {/* Photo */}
-            <div className="px-4">
-              <div
-                className="relative rounded-[24px] overflow-hidden bg-surface border border-purple-500/25"
-                style={{ aspectRatio: '3 / 4', boxShadow: '0 20px 60px rgba(124,58,237,0.35), 0 0 40px rgba(124,58,237,0.15)' }}
+        {/* Tabs */}
+        <div className="px-4 border-b border-white/8">
+          <div className="flex">
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => { tap('light'); setActiveTab(t.id) }}
+                className="flex-1 py-2.5 text-[13px] font-bold relative"
+                style={{ color: activeTab === t.id ? '#fff' : '#888' }}
               >
-                {photos.length > 0 ? (
-                  <img
-                    src={photos[activePhoto]}
-                    alt={person.display_name || 'profile'}
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="absolute inset-0 grid place-items-center text-7xl opacity-20">👤</div>
+                {t.label}
+                {activeTab === t.id && (
+                  <span className="absolute left-1/4 right-1/4 bottom-0 h-0.5 rounded-full" style={{ background: 'linear-gradient(90deg, #EC4899, #A855F7)' }} />
                 )}
+              </button>
+            ))}
+          </div>
+        </div>
 
-                <div style={{
-                  position: 'absolute', left: 0, right: 0, bottom: 0, height: '48%',
-                  background: 'linear-gradient(to top, rgba(11,11,20,0.96) 0%, rgba(11,11,20,0.55) 45%, rgba(11,11,20,0) 100%)',
-                  pointerEvents: 'none',
-                }} />
-
-                {photos.length > 1 && (
-                  <div className="absolute top-3 left-3 right-3 flex gap-1.5">
-                    {photos.map((_, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setActivePhoto(i)}
-                        className="flex-1 h-1 rounded-full"
-                        style={{ background: i === activePhoto ? '#fff' : 'rgba(255,255,255,0.35)' }}
-                        aria-label={`Photo ${i + 1}`}
-                      />
-                    ))}
-                  </div>
-                )}
-
-                <div className="absolute left-5 right-5 bottom-5">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h1 className="text-white text-[28px] leading-[1.05] font-extrabold tracking-tight drop-shadow-[0_2px_14px_rgba(0,0,0,0.85)]">
-                      {person.display_name || person.username || 'Someone'}
-                      {person.date_of_birth ? `, ${calcAge(person.date_of_birth)}` : ''}
-                    </h1>
-                    {person.is_verified && (
-                      <span className="w-[22px] h-[22px] rounded-full bg-[#1DA1F2] grid place-items-center shadow-[0_2px_8px_rgba(29,161,242,0.5)] shrink-0">
-                        <Check size={13} strokeWidth={3.5} className="text-white" />
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-white/90 text-[13.5px] font-medium flex items-center gap-1.5">
-                    <MapPin size={12} />
-                    {person.city || 'Unknown'}{person.country ? `, ${person.country}` : ''}
-                  </p>
-                  {person.id && (
-                    <div className="mt-2 flex items-center gap-3">
-                      <FollowButton userId={person.id} />
-                      <button
-                        onClick={() => { tap("light"); nav("/user/" + person.id + "/followers") }}
-                        className="text-white/75 text-[11.5px] font-medium"
-                      >
-                        <strong className="text-white">{followersCount}</strong> followers
-                      </button>
-                      <span className="text-white/40">·</span>
-                      <button
-                        onClick={() => { tap("light"); nav("/user/" + person.id + "/following") }}
-                        className="text-white/75 text-[11.5px] font-medium"
-                      >
-                        <strong className="text-white">{followingCount}</strong> following
-                      </button>
+        <div className="pt-3">
+          {activeTab === 'posts' && (
+            <>
+              {(interests.length > 0 || prompts.length > 0) && (
+                <div className="px-4 mb-4 pb-4 border-b border-white/8">
+                  {interests.length > 0 && (
+                    <div className="mb-4">
+                      <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">Interests</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {interests.map((n) => (
+                          <span key={n} className="px-2.5 py-1 rounded-full text-[12px] font-semibold border border-purple-500/30 text-purple-100" style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.20) 0%, rgba(236,72,153,0.10) 100%)' }}>{n}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {prompts.length > 0 && (
+                    <div>
+                      <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">Prompts</p>
+                      <div className="flex flex-col gap-2">
+                        {prompts.map((p, i) => (
+                          <div key={i} className="rounded-2xl bg-white/[0.04] border border-white/8 p-3">
+                            <p className="text-purple-200 text-[11.5px] font-bold mb-1">{p.prompt_key}</p>
+                            <p className="text-cream text-[13.5px]">{p.answer}</p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
-              </div>
-
-              {photos.length > 1 && (
-                <div className="flex gap-2 mt-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-                  {photos.map((url, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setActivePhoto(i)}
-                      className={`w-14 h-14 rounded-xl overflow-hidden shrink-0 border-2 ${
-                        i === activePhoto ? 'border-purple-500 shadow-[0_0_16px_rgba(124,58,237,0.5)]' : 'border-white/10 opacity-60'
-                      }`}
-                    >
-                      <img src={url} alt="" className="w-full h-full object-cover" />
-                    </button>
-                  ))}
+              )}
+              {myPosts.length === 0 ? (
+                <EmptyTab icon="✏️" title="No posts yet" subtitle="When they post something, it shows here." />
+              ) : (
+                <div className="grid grid-cols-3 gap-1 px-1">
+                  {myPosts.map((p) => {
+                    const url = p.image_path ? supabase.storage.from('community-media').getPublicUrl(p.image_path).data?.publicUrl : null
+                    return (
+                      <button key={p._source + '-' + p.id} onClick={() => { tap('light'); nav('/feed') }}
+                        className="relative aspect-square rounded-lg overflow-hidden bg-white/[0.04] border border-white/8">
+                        {url ? (
+                          <img src={url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full grid place-items-center p-2">
+                            <p className="text-muted text-[10.5px] leading-tight line-clamp-3 text-center">{p.content}</p>
+                          </div>
+                        )}
+                      </button>
+                    )
+                  })}
                 </div>
               )}
-            </div>
-
-            {/* Looking for chip */}
-            {lookingLabel && (
-              <div className="px-5 mt-5">
-                <div
-                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full border border-purple-500/40"
-                  style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.20) 0%, rgba(236,72,153,0.12) 100%)' }}
-                >
-                  <Sparkles size={13} strokeWidth={2.4} className="text-purple-300" />
-                  <span className="text-purple-200 text-[12.5px] font-semibold">{lookingLabel}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Bio */}
-            {person.bio && (
-              <div className="px-5 mt-6">
-                <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">About</p>
-                <p className="text-cream/90 text-[14.5px] leading-[1.55]">{person.bio}</p>
-              </div>
-            )}
-
-            <PromptList prompts={prompts} />
-
-            {/* Details */}
-            <ProfileDetails profile={person} />
-
-            {/* Interests */}
-            {interests.length > 0 && (
-              <div className="px-5 mt-6">
-                <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-3">Interests</p>
-                <div className="flex flex-wrap gap-2">
-                  {interests.map((name) => (
-                    <span
-                      key={name}
-                      className="px-3.5 py-2 rounded-full text-[13px] font-semibold border border-purple-500/30 text-purple-100"
-                      style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.20) 0%, rgba(236,72,153,0.10) 100%)' }}
-                    >
-                      {name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div style={{ height: 130 }} />
-          </>
-        )}
-      </div>
-
-      {/* Action bar */}
-      {!isMe && person && !loading && (
-        <div
-          className="relative shrink-0 px-5 flex items-center justify-center gap-3 border-t border-purple-500/15"
-          style={{
-            height: 96,
-            paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
-            background: 'linear-gradient(to top, rgba(124,58,237,0.10), transparent)',
-          }}
-        >
-          <motion.button
-            whileTap={{ scale: 0.9 }}
-            onClick={handlePass}
-            disabled={busy}
-            className="w-[58px] h-[58px] rounded-full grid place-items-center bg-white/[0.06] border border-white/10 text-white/85 disabled:opacity-50 shrink-0"
-            aria-label="Pass"
-          >
-            <X size={26} strokeWidth={2.6} />
-          </motion.button>
-
-          {isMatch ? (
-            <button
-              onClick={() => nav('/messages/' + userId)}
-              className="flex-1 h-[52px] rounded-full text-white font-bold text-[15px]"
-              style={{
-                background: 'linear-gradient(135deg, #EC4899 0%, #A855F7 100%)',
-                boxShadow: '0 10px 28px rgba(236,72,153,0.5)',
-              }}
-            >
-              Send a message
-            </button>
-          ) : myLike ? (
-            <button
-              disabled
-              className="flex-1 h-[52px] rounded-full bg-white/[0.06] border border-white/10 text-white/60 font-semibold text-[15px]"
-            >
-              Like sent ✓
-            </button>
-          ) : (
-            <>
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setDmOpen(true)}
-                className="h-[52px] px-4 rounded-full bg-white/[0.06] border border-white/10 text-cream font-bold text-[13.5px] shrink-0"
-              >
-                Message
-              </motion.button>
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                onClick={handleLike}
-                disabled={busy}
-                className="flex-1 h-[52px] rounded-full text-white font-bold text-[15px] flex items-center justify-center gap-2 disabled:opacity-50"
-                style={{
-                  background: 'linear-gradient(135deg, #EC4899 0%, #A855F7 100%)',
-                  boxShadow: '0 10px 28px rgba(236,72,153,0.5)',
-                }}
-              >
-                <Heart size={18} strokeWidth={2.6} fill="currentColor" />
-                Like
-              </motion.button>
             </>
           )}
+
+          {activeTab === 'reels' && (
+            reels.length === 0 ? (
+              <EmptyTab icon="🎬" title="No reels yet" subtitle="Nothing posted yet." />
+            ) : (
+              <div className="grid grid-cols-3 gap-1 px-1">
+                {reels.map((r) => (
+                  <button key={r.id} onClick={() => setPlayingReel(r)} className="relative aspect-[9/16] rounded-lg overflow-hidden bg-black">
+                    {r.thumbnail_url ? (
+                      <img src={r.thumbnail_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <video src={r.video_url} muted playsInline preload="metadata" className="w-full h-full object-cover" />
+                    )}
+                    <span className="absolute bottom-1 left-1 text-white text-[10px] font-bold bg-black/60 rounded px-1.5 py-0.5">▶</span>
+                  </button>
+                ))}
+              </div>
+            )
+          )}
+
+          {activeTab === 'photos' && (
+            photos.length === 0 ? (
+              <EmptyTab icon="📸" title="No photos" subtitle="No photos on this profile yet." />
+            ) : (
+              <div className="grid grid-cols-3 gap-1 px-1">
+                {photos.map((url, i) => (
+                  <button key={i} onClick={() => setViewingPhoto(url)} className="relative aspect-square rounded-lg overflow-hidden bg-black">
+                    <img src={url} alt="" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )
+          )}
+        </div>
+
+        <div style={{ height: 40 }} />
+      </div>
+
+      {/* Fullscreen viewers */}
+      {playingReel && (
+        <div className="fixed inset-0 z-[500] bg-black flex items-center justify-center" onClick={() => setPlayingReel(null)}>
+          <button className="absolute top-4 right-4 w-10 h-10 rounded-full grid place-items-center bg-white/15 text-white z-10" onClick={() => setPlayingReel(null)} aria-label="Close">✕</button>
+          <video src={playingReel.video_url} autoPlay loop playsInline controls className="w-full h-full object-contain" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
 
-      {/* Overflow menu */}
+      {viewingPhoto && (
+        <div className="fixed inset-0 z-[500] bg-black flex items-center justify-center" onClick={() => setViewingPhoto(null)}>
+          <button className="absolute top-4 right-4 w-10 h-10 rounded-full grid place-items-center bg-white/15 text-white z-10" onClick={() => setViewingPhoto(null)} aria-label="Close">✕</button>
+          <img src={viewingPhoto} alt="" className="w-full h-full object-contain" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
+
+      {/* Options menu */}
       {menuOpen && (
-        <div onClick={() => setMenuOpen(false)} className="fixed inset-0 z-[100] bg-obsidian/70 backdrop-blur-sm">
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="absolute top-16 right-3 w-56 bg-surface rounded-2xl border border-white/10 shadow-2xl overflow-hidden"
-          >
-            <MenuItem icon={<Flag size={16} />} label="Report" onClick={() => { setMenuOpen(false); setReportOpen(true) }} />
-            <MenuItem icon={<Ban size={16} />} label="Block" danger onClick={() => { setMenuOpen(false); setBlockOpen(true) }} />
+        <div className="fixed inset-0 z-[400] flex items-end" onClick={() => setMenuOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5" style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}>
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-4" />
+            <div className="flex flex-col gap-2">
+              <button onClick={() => { setMenuOpen(false); setReportOpen(true) }} className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left">
+                <span className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center"><Flag size={17} className="text-purple-300" /></span>
+                <span className="text-cream font-semibold text-[14.5px]">Report</span>
+              </button>
+              <button onClick={() => { setMenuOpen(false); setBlockOpen(true) }} className="flex items-center gap-3 p-4 rounded-2xl bg-red-500/8 border border-red-500/25 text-left">
+                <span className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 grid place-items-center"><Ban size={17} className="text-red-400" /></span>
+                <span className="text-cream font-semibold text-[14.5px]">Block</span>
+              </button>
+              <button onClick={() => setMenuOpen(false)} className="w-full h-11 mt-2 text-muted font-semibold text-[13.5px]">Cancel</button>
+            </div>
           </div>
         </div>
       )}
 
       <ReportModal open={reportOpen} onClose={() => setReportOpen(false)} target={person} />
-      <BlockConfirm
-        open={blockOpen}
-        onClose={() => setBlockOpen(false)}
-        target={person}
-        onBlocked={() => nav('/discover', { replace: true })}
-      />
-
-      <DirectMessageModal
-        open={dmOpen}
-        onClose={() => setDmOpen(false)}
-        target={person}
-        onSuccess={() => {
-          setDmOpen(false)
-          nav('/messages/' + userId)
-        }}
-      />
+      <BlockConfirm open={blockOpen} onClose={() => setBlockOpen(false)} target={person} onBlocked={() => nav('/feed', { replace: true })} />
+      <DirectMessageModal open={dmOpen} onClose={() => setDmOpen(false)} target={person} onSuccess={() => { setDmOpen(false); nav('/messages/' + userId) }} />
     </div>
   )
 }
 
-function MenuItem({ icon, label, onClick, danger }) {
+function EmptyTab({ icon, title, subtitle }) {
   return (
-    <button
-      onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-3 text-left text-[14px] font-medium ${danger ? 'text-danger' : 'text-cream'} hover:bg-white/[0.04]`}
-    >
-      {icon}
-      {label}
-    </button>
+    <div className="grid place-items-center py-16 text-center px-6">
+      <div>
+        <div className="w-14 h-14 rounded-2xl bg-purple-500/12 border border-purple-500/25 grid place-items-center mx-auto mb-3 text-[22px]">{icon}</div>
+        <p className="text-cream font-bold text-[15px] mb-1">{title}</p>
+        <p className="text-muted text-[13px] leading-relaxed">{subtitle}</p>
+      </div>
+    </div>
   )
 }
