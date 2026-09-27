@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { X, Send, Circle, Square, RotateCcw, Mic, MicOff, Camera, Upload } from "lucide-react"
 import ReelTrim from "./ReelTrim"
 import ReelDecorate from "./ReelDecorate"
+import ReelPublishSheet from "./ReelPublishSheet"
 import TagPicker from "./TagPicker"
 import { supabase } from "../lib/supabase"
 import { getReelDraft, clearReelDraft } from "../lib/draftStore"
@@ -81,6 +82,7 @@ export default function ReelComposer({ onClose, onDone, remixOf }) {
   const [coverTime, setCoverTime] = useState(0)
   const [taggedUsers, setTaggedUsers] = useState([])
   const [tagPickerOpen, setTagPickerOpen] = useState(false)
+  const [publishSheetOpen, setPublishSheetOpen] = useState(false)
   const [aspectRatioState, setAspectRatioState] = useState("9:16")
   const [trimEnd, setTrimEnd] = useState(null)
 
@@ -388,17 +390,42 @@ export default function ReelComposer({ onClose, onDone, remixOf }) {
 
   if (stage === "decorate" && clipsState.length > 0) {
     return (
-      <ReelDecorate
-        clips={clipsState}
-        initialOverlays={textOverlaysState}
-        onBack={() => setStage("trim")}
-        onNext={({ textOverlays, stickerOverlays, filterId }) => {
-          setTextOverlaysState(textOverlays || [])
-          setStickerOverlaysState(stickerOverlays || [])
-          setFilterIdState(filterId || "none")
-          setStage("publish")
-        }}
-      />
+      <>
+        <ReelDecorate
+          clips={clipsState}
+          initialOverlays={textOverlaysState}
+          onBack={() => setStage("trim")}
+          onNext={({ textOverlays, stickerOverlays, filterId }) => {
+            setTextOverlaysState(textOverlays || [])
+            setStickerOverlaysState(stickerOverlays || [])
+            setFilterIdState(filterId || "none")
+            setPublishSheetOpen(true)
+          }}
+        />
+        {publishSheetOpen && (
+          <ReelPublishSheet
+            preview={preview}
+            caption={caption} setCaption={setCaption}
+            coverTime={coverTime} setCoverTime={setCoverTime} duration={duration}
+            audienceState={audienceState} setAudienceState={setAudienceState}
+            allowComments={allowComments} setAllowComments={setAllowComments}
+            allowRemix={allowRemix} setAllowRemix={setAllowRemix}
+            locationState={locationState} setLocationState={setLocationState}
+            taggedUsers={taggedUsers}
+            onOpenTagPicker={() => setTagPickerOpen(true)}
+            error={error} busy={busy} progress={progress}
+            onSubmit={submit}
+            onClose={() => setPublishSheetOpen(false)}
+          />
+        )}
+        {tagPickerOpen && (
+          <TagPicker
+            initial={taggedUsers}
+            onClose={() => setTagPickerOpen(false)}
+            onSave={(users) => setTaggedUsers(users)}
+          />
+        )}
+      </>
     )
   }
 
