@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Heart, Sparkles, MessageCircle, Zap, RefreshCw, Coins } from 'lucide-react'
+import { ArrowLeft, Heart, Sparkles, MessageCircle, Zap, RefreshCw, Coins , UserPlus } from 'lucide-react'
 import VerifiedBadge from "../components/VerifiedBadge"
 import BrandGlow from '../components/BrandGlow'
 import { supabase } from '../lib/supabase'
@@ -186,6 +186,49 @@ export default function Notifications() {
           preview: r.message,
           created_at: r.created_at,
           route: '/profile/' + r.sender_id,
+        })
+      })
+    }
+
+    // 5. New followers
+    const { data: followRows } = await supabase
+      .from('follows')
+      .select('follower_id, created_at')
+      .eq('following_id', uid)
+      .order('created_at', { ascending: false })
+      .limit(20)
+
+    if (followRows?.length) {
+      const followerIds = followRows.map((f) => f.follower_id)
+      const { data: fProfs } = await supabase
+        .from('profiles')
+        .select('id, display_name, username, is_verified')
+        .in('id', followerIds)
+      const fProfMap = new Map((fProfs || []).map((pr) => [pr.id, pr]))
+
+      const { data: fPhotos } = await supabase
+        .from('profile_photos')
+        .select('user_id, storage_path, is_primary, display_order')
+        .in('user_id', followerIds)
+        .order('is_primary', { ascending: false })
+        .order('display_order', { ascending: true })
+      const fPhotoMap = new Map()
+      ;(fPhotos || []).forEach((ph) => {
+        if (!fPhotoMap.has(ph.user_id)) fPhotoMap.set(ph.user_id, ph.storage_path)
+      })
+
+      followRows.forEach((f) => {
+        const pr = fProfMap.get(f.follower_id)
+        events.push({
+          key: 'follow-' + f.follower_id,
+          type: 'follow',
+          user_id: f.follower_id,
+          display_name: pr?.display_name,
+          username: pr?.username,
+          is_verified: !!pr?.is_verified,
+          photo_url: publicPhotoUrl(fPhotoMap.get(f.follower_id)),
+          created_at: f.created_at,
+          route: '/profile/' + f.follower_id,
         })
       })
     }
@@ -416,6 +459,7 @@ function Row({ item, onOpen }) {
 
 const TYPE_META = {
   like:    { Icon: Heart,          label: 'Liked you',          bg: '#EC4899' },
+  follow:  { Icon: UserPlus,       label: 'Started following you', bg: '#A855F7' },
   match:   { Icon: Sparkles,       label: 'It’s a match',       bg: '#7C3AED' },
   message: { Icon: MessageCircle,  label: 'New message',        bg: '#8B5CF6' },
   super:   { Icon: Zap,            label: 'Sent a Super request', bg: '#F59E0B' },
