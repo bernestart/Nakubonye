@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
+import { mixFeed } from "../lib/mixFeed"
 import BottomNav from "../components/BottomNav"
 import NotificationBell from "../components/NotificationBell"
 import AppHeader from "../components/AppHeader"
@@ -46,6 +47,7 @@ export default function Feed() {
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
   const sentinelRef = useRef(null)
+  const seenReelIds = useRef(new Set())
 
   const load = useCallback(async () => {
     if (!myId) return
@@ -164,11 +166,17 @@ export default function Feed() {
       .eq("user_id", myId)
     const hiddenKeys = new Set((hideRows || []).map((h) => h.post_type + ":" + h.post_id))
 
-    // 3e. Merge + filter + sort + take first 12
-    const list = [...communityPosts, ...personalPosts, ...reelItems]
+    // 3e. Sort posts and reels separately
+    const postsSorted = [...communityPosts, ...personalPosts]
       .filter((r) => !hiddenKeys.has((r._source || "community") + ":" + r.id))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-      .slice(0, 12)
+    const reelsSorted = reelItems
+      .filter((r) => !hiddenKeys.has("reel:" + r.id))
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+
+    // 3f. Mix — 3 posts per 1 reel
+    seenReelIds.current = new Set()
+    const list = mixFeed({ posts: postsSorted, reels: reelsSorted, pageSize: 12, reelEvery: 4, seenReelIds: seenReelIds.current })
 
     setPosts(list)
     // hasMore stays true as long as we got something —
@@ -345,10 +353,14 @@ export default function Feed() {
       .eq("user_id", myId)
     const hiddenKeys = new Set((hideRows || []).map((h) => h.post_type + ":" + h.post_id))
 
-    const merged = [...communityPosts, ...personalPosts, ...reelItems]
+    const postsSorted = [...communityPosts, ...personalPosts]
       .filter((r) => !hiddenKeys.has((r._source || "community") + ":" + r.id))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-      .slice(0, 12)
+    const reelsSorted = reelItems
+      .filter((r) => !hiddenKeys.has("reel:" + r.id))
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+
+    const merged = mixFeed({ posts: postsSorted, reels: reelsSorted, pageSize: 12, reelEvery: 4, seenReelIds: seenReelIds.current })
 
     if (merged.length === 0) {
       setHasMore(false)
