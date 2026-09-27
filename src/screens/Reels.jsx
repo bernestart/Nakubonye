@@ -177,30 +177,33 @@ export default function Reels() {
   }, [currentIdx, reels, hiddenIds, myId])
 
   useEffect(() => {
-    reels.forEach((_, i) => {
+    const visible = reels.filter((r) => !hiddenIds.has(r.id))
+    visible.forEach((_, i) => {
       const v = videoRefs.current[i]
       if (!v) return
       if (i === currentIdx) {
-        const reel = reels[i]
+        const reel = visible[i]
         if (reel) clipIdxRefs.current[reel.id] = clipIdxRefs.current[reel.id] || 0
+        // Reset to clip start then play
         v.play().catch(() => {})
       } else {
-        v.pause()
+        try { v.pause() } catch {}
       }
     })
-  }, [currentIdx, reels])
+  }, [currentIdx, reels, hiddenIds])
 
   // IntersectionObserver to detect which reel is in view
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
+    const visibleCount = reels.filter((r) => !hiddenIds.has(r.id)).length
     const onScroll = () => {
       const idx = Math.round(el.scrollTop / el.clientHeight)
-      if (idx !== currentIdx && idx >= 0 && idx < reels.length) setCurrentIdx(idx)
+      if (idx !== currentIdx && idx >= 0 && idx < visibleCount) setCurrentIdx(idx)
     }
     el.addEventListener("scroll", onScroll, { passive: true })
     return () => el.removeEventListener("scroll", onScroll)
-  }, [currentIdx, reels.length])
+  }, [currentIdx, reels, hiddenIds])
 
   async function toggleSave(reelId) {
     if (!myId) return
@@ -336,7 +339,7 @@ export default function Reels() {
                   loop={false}
                   muted={muted}
                   playsInline
-                  preload="metadata"
+                  preload="auto"
                   onLoadedMetadata={(e) => {
                     const list = Array.isArray(reel.clips) && reel.clips.length > 0
                       ? reel.clips
