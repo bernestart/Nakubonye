@@ -3,8 +3,9 @@ import { X, ImagePlus, RefreshCw, Send, Pencil } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import StoryEditor from "./StoryEditor"
+import { createPortal } from "react-dom"
 
-export default function StoryComposer({ onClose, onDone }) {
+export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve, onFail, onRetryStart }) {
   const { session } = useAuth()
   const myId = session?.user?.id
   const fileRef = useRef(null)
@@ -125,16 +126,13 @@ export default function StoryComposer({ onClose, onDone }) {
         src={preview}
         onCancel={() => { setEditorOpen(false); setPreview(""); setFile(null); setEditedBlob(null) }}
         onSave={(blob, meta) => {
-          setEditedBlob(blob)
-          if (meta?.caption) setCaption(meta.caption)
-          setEditorOpen(false)
           publishNow(blob, "jpg", "image/jpeg", "image", meta?.caption || "")
         }}
       />
     )
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[2000] bg-black">
       <input ref={fileRef} type="file" accept="image/*,video/*" hidden onChange={pick} />
 
@@ -196,6 +194,7 @@ export default function StoryComposer({ onClose, onDone }) {
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   )
 }

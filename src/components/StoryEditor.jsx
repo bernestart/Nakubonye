@@ -4,6 +4,7 @@ import {
   AtSign, Download, MoreHorizontal, Send, Undo2, Redo2, Trash2, Eraser, Crop, RotateCw, RotateCcw, FlipHorizontal, FlipVertical,
   Users, Plus, Smile, Check,
 } from "lucide-react"
+import { createPortal } from "react-dom"
 
 const COLORS = ["#ffffff", "#000000", "#EC4899", "#A855F7", "#F59E0B", "#22C55E", "#3B82F6", "#EF4444", "#06B6D4", "#8B5CF6", "#F97316", "#EAB308", "#84CC16", "#10B981", "#F43F5E", "#6366F1"]
 
@@ -434,7 +435,7 @@ export default function StoryEditor({ src, onCancel, onSave }) {
     { label: "More",     icon: <MoreHorizontal size={16} />, on: () => showToast("More options coming soon") },
   ]
 
-  return (
+  return createPortal(
     <>
     <input
       ref={colorInputRef}
@@ -973,6 +974,7 @@ export default function StoryEditor({ src, onCancel, onSave }) {
         </div>
       )}
     </div>
-    </>
+    </>,
+    document.body
   )
 }
