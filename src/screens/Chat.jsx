@@ -92,6 +92,7 @@ export default function Chat() {
   const [canMsg, setCanMsg] = useState(true)
   const [canMsgReason, setCanMsgReason] = useState('')
   const [canSeeOnline, setCanSeeOnline] = useState(true)
+  const [canSeeReadReceipts, setCanSeeReadReceipts] = useState(true)
   const [recordSeconds, setRecordSeconds] = useState(0)
   const recorderRef = useRef(null)
   const recordChunksRef = useRef([])
@@ -220,6 +221,15 @@ export default function Chat() {
       .from('conversation_reads').select('last_read_at')
       .eq('conversation_id', convId).eq('user_id', otherId).maybeSingle()
     setTheirLastRead(theirRead?.last_read_at || null)
+
+    // Read receipts: symmetric — off if either side turned them off
+    const [mineRes, theirsRes] = await Promise.all([
+      supabase.from('user_settings').select('show_read_receipts').eq('user_id', myId).maybeSingle(),
+      supabase.from('user_settings').select('show_read_receipts').eq('user_id', otherId).maybeSingle(),
+    ])
+    const mineOn = mineRes.data?.show_read_receipts !== false
+    const theirsOn = theirsRes.data?.show_read_receipts !== false
+    setCanSeeReadReceipts(mineOn && theirsOn)
 
     // Capture MY previous read mark BEFORE overwriting it — used for the "new messages" divider
     const { data: myPrevRead } = await supabase
@@ -588,7 +598,7 @@ export default function Chat() {
             const replyToMsg = m.reply_to_id ? messages.find((x) => x.id === m.reply_to_id) : null
             const reacts = reactions[m.id] || []
             const myReact = reacts.find((r) => r.user_id === myId)
-            const readByThem = theirLastRead && new Date(theirLastRead) >= new Date(m.created_at)
+            const readByThem = canSeeReadReceipts && theirLastRead && new Date(theirLastRead) >= new Date(m.created_at)
             const deleted = !!m.deleted_at
 
             return (
