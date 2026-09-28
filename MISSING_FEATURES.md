@@ -52,3 +52,9 @@ Format: `[ ] [source] Feature — where it should live`
 - [ ] `Notifications.jsx` screen exists but reads from a nonexistent table.
 - [ ] 7 `notif_*` toggles in `user_settings` are dormant.
 - [ ] Plan: create table + triggers + RLS + wire screen. ~3 sessions.
+
+## Saved screen is a placeholder
+
+- [ ] `/saved` currently renders `_ComingSoon` — no actual saved posts/reels screen.
+- [ ] User can save posts but there's no page listing them.
+- [ ] Needs: `post_saves` / `reel_saves` tables (check what exists), Saved screen with two tabs, unsave button.
