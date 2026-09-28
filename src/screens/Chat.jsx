@@ -51,6 +51,20 @@ export default function Chat() {
     const sr = location.state?.storyReply
     if (sr) setStoryReply(sr)
   }, [location.state?.prefill, location.state?.storyReply])
+
+  useEffect(() => {
+    if (!otherId || !session?.user?.id) return
+    ;(async () => {
+      const { data, error } = await supabase.rpc('can_send_message', {
+        sender: session.user.id,
+        recipient: otherId,
+      })
+      if (error) { setCanMsg(true); return }
+      const allowed = data === true
+      setCanMsg(allowed)
+      setCanMsgReason(allowed ? '' : "You can't message this user")
+    })()
+  }, [otherId, session?.user?.id])
   const [sending, setSending] = useState(false)
   const [replyingTo, setReplyingTo] = useState(null)
   const [storyReply, setStoryReply] = useState(null)
@@ -64,6 +78,8 @@ export default function Chat() {
   const [blockOpen, setBlockOpen] = useState(false)
 
   const [recording, setRecording] = useState(false)
+  const [canMsg, setCanMsg] = useState(true)
+  const [canMsgReason, setCanMsgReason] = useState('')
   const [recordSeconds, setRecordSeconds] = useState(0)
   const recorderRef = useRef(null)
   const recordChunksRef = useRef([])
@@ -338,6 +354,7 @@ export default function Chat() {
   }
 
   async function stopRecording(send_it) {
+    if (send_it && !canMsg) { setError(canMsgReason || "You can't message this user"); return }
     const mr = recorderRef.current
     if (!mr) return
     clearInterval(recordTimerRef.current)
@@ -374,6 +391,7 @@ export default function Chat() {
   }
 
   async function send() {
+    if (!canMsg) { setError(canMsgReason || "You can't message this user"); return }
     const body = text.trim()
     if (!body && !attachment) return
     if (sending || !conversationId) return
@@ -791,7 +809,11 @@ export default function Chat() {
       <div
         className="shrink-0 px-3 pt-3 pb-3 flex items-end gap-2 relative"
         style={{ background: 'linear-gradient(to top, #0B0B14 70%, rgba(11,11,20,0) 100%)' }}
-        style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
+        style={{
+          paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
+          pointerEvents: canMsg ? 'auto' : 'none',
+          opacity: canMsg ? 1 : 0.4,
+        }}
       >
         <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={pickAttachment} />
         <button
@@ -825,7 +847,7 @@ export default function Chat() {
               onChange={(e) => { setText(e.target.value); notifyTyping(e.target.value) }}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
               rows={1}
-              placeholder="Write a message…"
+              placeholder={canMsg ? "Write a message…" : "Messaging is not allowed"}
               className="flex-1 bg-elevated border border-white/8 rounded-[22px] px-4 py-2.5 text-cream text-[14.5px] placeholder:text-subtle focus:outline-none focus:border-purple-500 resize-none max-h-32 leading-[1.4]"
               style={{ minHeight: 44 }}
             />
