@@ -45,3 +45,10 @@ Format: `[ ] [source] Feature — where it should live`
 ---
 
 **Rule:** add to this file any time we find something we decide not to fix right now. Revisit after the privacy pass.
+
+## Notifications — whole system missing (table doesn't exist)
+
+- [ ] `public.notifications` table was NEVER created (confirmed via 42P01).
+- [ ] `Notifications.jsx` screen exists but reads from a nonexistent table.
+- [ ] 7 `notif_*` toggles in `user_settings` are dormant.
+- [ ] Plan: create table + triggers + RLS + wire screen. ~3 sessions.
