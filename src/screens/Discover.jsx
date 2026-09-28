@@ -170,8 +170,16 @@ export default function Discover() {
     const { data, error: likeErr } = await supabase.rpc('like_user', {
       target_user_id: card.id,
     })
+    if (likeErr) { setError(likeErr.message); setBusy(false); setCards((c) => [card, ...c]); setUndoStack((st) => st.slice(0, -1)); return }
+    if (data?.denied) {
+      // User not accepting requests — put card back silently
+      setCards((c) => [card, ...c])
+      setUndoStack((st) => st.slice(0, -1))
+      setError(data.reason || "This user isn't accepting new requests")
+      setBusy(false)
+      return
+    }
     await recordSwipe(card.id, 'like')
-    if (likeErr) { setError(likeErr.message); setBusy(false); return }
     if (data?.matched) { tap('match'); setMatchModal(card) }
     setBusy(false)
   }
