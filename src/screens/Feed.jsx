@@ -135,6 +135,52 @@ export default function Feed() {
       _source: "reel",
     }))
 
+
+    // Listings (public, active)
+    const { data: lmListingsLoad } = await supabase
+      .from("listings")
+      .select("id, seller_id, title, description, price, currency, category, location, image_paths, created_at")
+      .eq("status", "active")
+      
+      .order("created_at", { ascending: false })
+      .limit(10)
+    const listingItems = (lmListingsLoad || []).map((r) => ({
+      id: r.id,
+      user_id: r.seller_id,
+      author_id: r.seller_id,
+      title: r.title,
+      content: r.description,
+      price: r.price,
+      currency: r.currency,
+      location: r.location,
+      image_paths: r.image_paths,
+      created_at: r.created_at,
+      _source: "listing",
+    }))
+
+    // Services (active)
+    const { data: svcRows_lmListingsLoad } = await supabase
+      .from("services")
+      .select("id, provider_id, title, description, price, currency, category, duration_minutes, location, image_paths, created_at")
+      .eq("status", "active")
+      
+      .order("created_at", { ascending: false })
+      .limit(10)
+    const serviceItems = (svcRows_lmListingsLoad || []).map((r) => ({
+      id: r.id,
+      user_id: r.provider_id,
+      author_id: r.provider_id,
+      title: r.title,
+      content: r.description,
+      price: r.price,
+      currency: r.currency,
+      duration_minutes: r.duration_minutes,
+      location: r.location,
+      image_paths: r.image_paths,
+      created_at: r.created_at,
+      _source: "service",
+    }))
+
     // 3c-bis. Trending — top reels by views in last 24h
     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
     const { data: trendingRows } = await supabase
@@ -177,7 +223,7 @@ export default function Feed() {
     const hiddenKeys = new Set((hideRows || []).map((h) => h.post_type + ":" + h.post_id))
 
     // 3e. Sort posts and reels separately
-    const postsSorted = [...communityPosts, ...personalPosts]
+    const postsSorted = [...communityPosts, ...personalPosts, ...listingItems, ...serviceItems]
       .filter((r) => !hiddenKeys.has((r._source || "community") + ":" + r.id))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     const reelsSorted = reelItems
@@ -357,6 +403,52 @@ export default function Feed() {
       _source: "reel",
     }))
 
+
+    // Listings (public, active)
+    const { data: lmListingsMore } = await supabase
+      .from("listings")
+      .select("id, seller_id, title, description, price, currency, category, location, image_paths, created_at")
+      .eq("status", "active")
+      .lt("created_at", cursor)
+      .order("created_at", { ascending: false })
+      .limit(6)
+    const listingItems = (lmListingsMore || []).map((r) => ({
+      id: r.id,
+      user_id: r.seller_id,
+      author_id: r.seller_id,
+      title: r.title,
+      content: r.description,
+      price: r.price,
+      currency: r.currency,
+      location: r.location,
+      image_paths: r.image_paths,
+      created_at: r.created_at,
+      _source: "listing",
+    }))
+
+    // Services (active)
+    const { data: svcRows_lmListingsMore } = await supabase
+      .from("services")
+      .select("id, provider_id, title, description, price, currency, category, duration_minutes, location, image_paths, created_at")
+      .eq("status", "active")
+      .lt("created_at", cursor)
+      .order("created_at", { ascending: false })
+      .limit(6)
+    const serviceItems = (svcRows_lmListingsMore || []).map((r) => ({
+      id: r.id,
+      user_id: r.provider_id,
+      author_id: r.provider_id,
+      title: r.title,
+      content: r.description,
+      price: r.price,
+      currency: r.currency,
+      duration_minutes: r.duration_minutes,
+      location: r.location,
+      image_paths: r.image_paths,
+      created_at: r.created_at,
+      _source: "service",
+    }))
+
     // --- Load hidden IDs, filter, merge, take newest 12 ---
     const { data: hideRows } = await supabase
       .from("post_hides")
@@ -364,7 +456,7 @@ export default function Feed() {
       .eq("user_id", myId)
     const hiddenKeys = new Set((hideRows || []).map((h) => h.post_type + ":" + h.post_id))
 
-    const postsSorted = [...communityPosts, ...personalPosts]
+    const postsSorted = [...communityPosts, ...personalPosts, ...listingItems, ...serviceItems]
       .filter((r) => !hiddenKeys.has((r._source || "community") + ":" + r.id))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     const reelsSorted = reelItems
@@ -894,6 +986,62 @@ export default function Feed() {
                       </div>
                     </div>
                   )}
+                </Fragment>
+              )
+            }
+
+            // LISTING render
+            if (p._source === "listing") {
+              const img = p.image_paths?.[0]
+                ? supabase.storage.from("listing-media").getPublicUrl(p.image_paths[0]).data?.publicUrl
+                : null
+              return (
+                <Fragment key={"listing-" + p.id}>
+                  <article className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
+                    <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-white/[0.02]">
+                      <span className="w-6 h-6 rounded-lg grid place-items-center text-[12px]" style={{ background: "rgba(236,72,153,0.2)" }}>🛒</span>
+                      <span className="text-pink-300 text-[11.5px] font-bold tracking-wide">Marketplace</span>
+                    </div>
+                    <button onClick={() => { tap("light"); nav("/marketplace/" + p.id) }} className="w-full text-left active:opacity-90">
+                      {img && <img src={img} alt="" className="w-full max-h-[420px] object-cover" />}
+                      <div className="p-3">
+                        <p className="text-cream font-bold text-[14.5px] mb-1">{p.title}</p>
+                        <p className="text-cream font-black text-[15px]">
+                          {p.price ? `${p.price.toLocaleString()} ${p.currency || "BIF"}` : "Free"}
+                        </p>
+                        {p.location && <p className="text-subtle text-[11.5px] mt-1">📍 {p.location}</p>}
+                      </div>
+                    </button>
+                  </article>
+                </Fragment>
+              )
+            }
+
+            // SERVICE render
+            if (p._source === "service") {
+              const img = p.image_paths?.[0]
+                ? supabase.storage.from("service-media").getPublicUrl(p.image_paths[0]).data?.publicUrl
+                : null
+              return (
+                <Fragment key={"service-" + p.id}>
+                  <article className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
+                    <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-white/[0.02]">
+                      <span className="w-6 h-6 rounded-lg grid place-items-center text-[12px]" style={{ background: "rgba(168,85,247,0.2)" }}>🔧</span>
+                      <span className="text-purple-300 text-[11.5px] font-bold tracking-wide">Service</span>
+                    </div>
+                    <button onClick={() => { tap("light"); nav("/services/" + p.id) }} className="w-full text-left active:opacity-90">
+                      {img && <img src={img} alt="" className="w-full max-h-[420px] object-cover" />}
+                      <div className="p-3">
+                        <p className="text-cream font-bold text-[14.5px] mb-1">{p.title}</p>
+                        <p className="text-cream font-black text-[15px]">
+                          {p.price ? `${p.price.toLocaleString()} ${p.currency || "BIF"}` : "Free"}
+                        </p>
+                        <p className="text-subtle text-[11.5px] mt-1">
+                          {p.duration_minutes} min{p.location ? ` · 📍 ${p.location}` : ""}
+                        </p>
+                      </div>
+                    </button>
+                  </article>
                 </Fragment>
               )
             }
