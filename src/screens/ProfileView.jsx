@@ -40,6 +40,7 @@ export default function ProfileView() {
   const [dmOpen, setDmOpen] = useState(false)
   const [canView, setCanView] = useState(true)
   const [canViewMessage, setCanViewMessage] = useState('')
+  const [canSeeLocation, setCanSeeLocation] = useState(true)
 
   const load = useCallback(async () => {
     if (!myId || !userId) return
@@ -74,6 +75,17 @@ export default function ProfileView() {
       }
     }
     setCanView(true)
+
+    // Enforce location visibility
+    if (userId !== myId) {
+      const { data: locAllowed } = await supabase.rpc('can_see_location', {
+        viewer: myId,
+        owner: userId,
+      })
+      setCanSeeLocation(locAllowed !== false)
+    } else {
+      setCanSeeLocation(true)
+    }
 
 
     const [photoRes, promptRes, linksRes, reelRes, personalRes, communityRes, f1, f2] = await Promise.all([
@@ -264,9 +276,9 @@ export default function ProfileView() {
             </div>
           </div>
 
-          {(person.bio || person.city) && (
+          {(person.bio || (person.city && canSeeLocation)) && (
             <div className="mt-3">
-              {person.city && (
+              {person.city && canSeeLocation && (
                 <p className="text-muted text-[12.5px] mb-1">📍 {person.city}{person.country ? `, ${person.country}` : ''}</p>
               )}
               {person.bio && (

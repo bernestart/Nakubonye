@@ -18,6 +18,41 @@ import NotificationBell from '../components/NotificationBell'
 
 const SWIPE_THRESHOLD = 130
 
+async function decorateLocationVisibility(cards, myId) {
+  if (!cards.length || !myId) return cards
+  const ids = cards.map((c) => c.id).filter((id) => id !== myId)
+  if (!ids.length) return cards
+  const [settingsRes, blocksRes, matchesRes] = await Promise.all([
+    supabase.from('user_settings').select('user_id, who_can_see_location, show_location_on_profile').in('user_id', ids),
+    supabase.from('blocks').select('blocker_id, blocked_id').or(`blocker_id.eq.${myId},blocked_id.eq.${myId}`),
+    supabase.from('matches').select('user_one_id, user_two_id').or(`user_one_id.eq.${myId},user_two_id.eq.${myId}`),
+  ])
+  const sMap = new Map((settingsRes.data || []).map((r) => [r.user_id, r]))
+  const blockSet = new Set()
+  ;(blocksRes.data || []).forEach((b) => {
+    if (b.blocker_id === myId) blockSet.add(b.blocked_id)
+    if (b.blocked_id === myId) blockSet.add(b.blocker_id)
+  })
+  const matchSet = new Set()
+  ;(matchesRes.data || []).forEach((m) => {
+    if (m.user_one_id === myId) matchSet.add(m.user_two_id)
+    if (m.user_two_id === myId) matchSet.add(m.user_one_id)
+  })
+
+  return cards.map((c) => {
+    if (c.id === myId) return { ...c, _canSeeLocation: true }
+    if (blockSet.has(c.id)) return { ...c, _canSeeLocation: false }
+    const row = sMap.get(c.id)
+    if (!row) return { ...c, _canSeeLocation: true }
+    if (row.show_location_on_profile === false) return { ...c, _canSeeLocation: false }
+    const v = row.who_can_see_location || 'matches'
+    if (v === 'nobody') return { ...c, _canSeeLocation: false }
+    if (v === 'everyone') return { ...c, _canSeeLocation: true }
+    if (v === 'matches') return { ...c, _canSeeLocation: matchSet.has(c.id) }
+    return { ...c, _canSeeLocation: true }
+  })
+}
+
 async function decorateOnlineVisibility(cards, myId) {
   if (!cards.length || !myId) return cards
   const ownerIds = cards.map((c) => c.id).filter((id) => id !== myId)
@@ -132,7 +167,8 @@ export default function Discover() {
       list.forEach((c) => { c.hasStory = storySet.has(c.id) })
     }
 
-    setCards(await decorateOnlineVisibility(list, session?.user?.id))
+    const onlineDecorated = await decorateOnlineVisibility(list, session?.user?.id)
+    setCards(await decorateLocationVisibility(onlineDecorated, session?.user?.id))
     setLoading(false)
   }, [session?.user?.id, sameCity, sharedInterests, sameCountry, verifiedOnly, onlineOnly, communityId])
 
@@ -528,8 +564,8 @@ function SwipeCard({ card, onPass, onLike, onSuper, onWatchStory, disabled }) {
         </div>
         <p className="text-white text-[13.5px] font-medium flex items-center gap-1.5" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.9), 0 4px 16px rgba(0,0,0,0.7)' }}>
           <MapPin size={12} />
-          {card.city || 'Unknown'}
-          {card.country ? `, ${card.country}` : ''}
+          {card._canSeeLocation === false ? 'Unknown' : (card.city || 'Unknown')}
+          {card._canSeeLocation === false ? '' : (card.country ? `, ${card.country}` : '')}
           {card._canSeeOnline !== false && isOnline(card.last_seen_at) && (
             <span className="inline-flex items-center gap-1 ml-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.9)]" />
