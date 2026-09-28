@@ -121,7 +121,7 @@ export default function Feed() {
       .eq("is_active", true)
       .eq("audience", "public")
       .order("created_at", { ascending: false })
-      .limit(20)
+      .limit(4)
     const reelItems = (reelRows || []).map((r) => ({
       id: r.id,
       user_id: r.user_id,
@@ -232,7 +232,7 @@ export default function Feed() {
 
     // 3f. Mix — 3 posts per 1 reel
     seenReelIds.current = new Set()
-    const list = mixFeed({ posts: postsSorted, reels: reelsSorted, pageSize: 12, reelEvery: 4, seenReelIds: seenReelIds.current })
+    const list = mixFeed({ posts: postsSorted, reels: reelsSorted, pageSize: 20, reelEvery: 10, seenReelIds: seenReelIds.current })
 
     setPosts(list)
     // hasMore stays true as long as we got something —
@@ -389,7 +389,7 @@ export default function Feed() {
       .eq("audience", "public")
       .lt("created_at", cursor)
       .order("created_at", { ascending: false })
-      .limit(20)
+      .limit(4)
     const reelItems = (reelRows || []).map((r) => ({
       id: r.id,
       user_id: r.user_id,
@@ -463,7 +463,7 @@ export default function Feed() {
       .filter((r) => !hiddenKeys.has("reel:" + r.id))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 
-    const merged = mixFeed({ posts: postsSorted, reels: reelsSorted, pageSize: 12, reelEvery: 4, seenReelIds: seenReelIds.current })
+    const merged = mixFeed({ posts: postsSorted, reels: reelsSorted, pageSize: 20, reelEvery: 10, seenReelIds: seenReelIds.current })
 
     if (merged.length === 0) {
       setHasMore(false)
