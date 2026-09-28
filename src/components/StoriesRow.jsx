@@ -286,56 +286,103 @@ export default function StoriesRow() {
   return (
     <>
       <div ref={stripRef} className="flex gap-2.5 overflow-x-auto px-3 py-2.5" style={{ scrollbarWidth: "none" }}>
-        {/* My story tile */}
+        {/* Create story — always visible */}
         <button
-          onClick={() => { tap("light"); myStory ? setViewerState({ startIndex: 0 }) : setComposerOpen(true) }}
+          type="button"
+          onClick={() => { tap("light"); setComposerOpen(true) }}
           className="shrink-0 relative overflow-hidden"
           style={{
             width: TILE_W, height: TILE_H,
             borderRadius: 14,
-            border: myStory ? "2px solid transparent" : "2px solid rgba(255,255,255,0.12)",
-            background: myStory
-              ? "linear-gradient(#0B0B14,#0B0B14) padding-box, linear-gradient(135deg,#C084FC,#EC4899) border-box"
-              : "rgba(255,255,255,0.03)",
+            background: "linear-gradient(160deg, #2E1065 0%, #7C3AED 100%)",
           }}
         >
-          {myStory ? tileBody(myStory) : (
-            myPhoto
-              ? <img src={myPhoto} alt="" className="w-full h-full object-cover opacity-70" />
-              : <div className="w-full h-full grid place-items-center bg-elevated text-purple-400 font-black text-2xl">
-                  {(profile?.display_name || "Y")[0]}
-                </div>
+          {myPhoto && (
+            <img src={myPhoto} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30" />
           )}
-
-          {/* Plus badge — big circle when no story, small corner badge when story exists */}
-          {!myStory ? (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); tap("light"); setComposerOpen(true) }}
-              aria-label="Add story"
-              className="absolute left-1/2 -translate-x-1/2"
-              style={{ top: 12, width: 34, height: 34, borderRadius: 999, background: "#fff", display: "grid", placeItems: "center", boxShadow: "0 2px 8px rgba(0,0,0,0.35)" }}
-            >
-              <Plus size={20} strokeWidth={3.2} color="#0B0B14" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); tap("light"); setComposerOpen(true) }}
-              aria-label="Add story"
-              className="absolute grid place-items-center"
-              style={{ top: 6, left: 6, width: 24, height: 24, borderRadius: 999, background: "#fff", boxShadow: "0 2px 6px rgba(0,0,0,0.4)" }}
-            >
-              <Plus size={14} strokeWidth={3.2} color="#0B0B14" />
-            </button>
-          )}
-
-          {/* Bottom gradient + label */}
-          <div className="absolute inset-x-0 bottom-0 px-2 pb-2 pt-6"
-            style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.75))" }}>
-            <span className="text-white text-[11px] font-bold truncate block text-left">My story</span>
+          <div className="absolute inset-0 grid place-items-center">
+            <div className="w-11 h-11 rounded-full grid place-items-center"
+                 style={{ background: "#1D4ED8", border: "3px solid #fff", boxShadow: "0 4px 14px rgba(0,0,0,0.4)" }}>
+              <Plus size={22} strokeWidth={3.4} color="#fff" />
+            </div>
+          </div>
+          <div className="absolute inset-x-0 bottom-0 px-2 pb-2 pt-8"
+               style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.75))" }}>
+            <span className="text-white text-[11px] font-bold truncate block text-left">Create story</span>
           </div>
         </button>
+
+        {/* Your story — only if you have one */}
+        {myStory && (
+          <button
+            type="button"
+            onClick={() => { tap("light"); setViewerState({ startIndex: 0 }) }}
+            className="shrink-0 relative overflow-hidden"
+            style={{
+              width: TILE_W, height: TILE_H,
+              borderRadius: 14,
+              border: "2px solid transparent",
+              background: "linear-gradient(#0B0B14,#0B0B14) padding-box, linear-gradient(135deg,#C084FC,#EC4899) border-box",
+            }}
+          >
+            {tileBody(myStory)}
+            <span className="absolute top-1.5 left-1.5 z-10 w-6 h-6 rounded-full grid place-items-center text-white text-[11px] font-black"
+                  style={{ background: "#1D4ED8", border: "2px solid #fff" }}>
+              {myStory.stories.length}
+            </span>
+            <div className="absolute inset-x-0 bottom-0 px-2 pb-2 pt-6"
+                 style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.75))" }}>
+              <span className="text-white text-[11px] font-bold truncate block text-left">Your story</span>
+            </div>
+          </button>
+        )}
+
+        {/* Pending stories */}
+        {pendingStories.map((ps) => (
+          <div
+            key={ps._tempId}
+            className="shrink-0 relative overflow-hidden"
+            style={{
+              width: TILE_W, height: TILE_H, borderRadius: 14,
+              border: "2px solid transparent",
+              background: "linear-gradient(#0B0B14,#0B0B14) padding-box, linear-gradient(135deg,#C084FC,#EC4899) border-box",
+            }}
+          >
+            {ps.media_type === "video" ? (
+              <video src={ps.media_url} muted playsInline preload="metadata" className="w-full h-full object-cover" />
+            ) : (
+              <img src={ps.media_url} alt="" className="w-full h-full object-cover" />
+            )}
+            {ps._status === "uploading" && (
+              <div className="absolute inset-0 grid place-items-center bg-black/45">
+                <span className="w-7 h-7 rounded-full border-2 border-white border-t-transparent animate-spin" />
+              </div>
+            )}
+            {ps._status === "failed" && (
+              <div className="absolute inset-0 grid place-items-center bg-black/65 px-2">
+                <div className="text-center">
+                  <p className="text-red-300 text-[10px] font-bold mb-1.5 leading-tight">Upload failed</p>
+                  <div className="flex gap-1 justify-center">
+                    <button
+                      onClick={() => setPendingStories((c) => c.filter((x) => x._tempId !== ps._tempId))}
+                      className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-white/10 text-cream"
+                    >
+                      Discard
+                    </button>
+                    <button
+                      onClick={() => ps._retry?.()}
+                      className="text-[9px] font-bold px-1.5 py-0.5 rounded text-white"
+                      style={{ background: "linear-gradient(135deg,#EC4899,#A855F7)" }}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div className="absolute bottom-1 left-1 right-1 text-[10px] font-bold text-white drop-shadow truncate">Your story</div>
+          </div>
+        ))}
 
         {/* Other users tiles */}
         {groups.map((g) => {
