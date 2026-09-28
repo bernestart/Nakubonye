@@ -56,6 +56,7 @@ export default function Feed() {
   const pullStartY = useRef(0)
   const isPulling = useRef(false)
   const sentinelRef = useRef(null)
+  const loadingMoreRef = useRef(false)
   const seenReelIds = useRef(new Set())
 
   const load = useCallback(async () => {
@@ -292,7 +293,8 @@ export default function Feed() {
 
   // ---- Infinite scroll: fetch next page ----
   const loadMore = useCallback(async () => {
-    if (!myId || loadingMore || !hasMore || !cursor) return
+    if (!myId || loadingMoreRef.current || !hasMore || !cursor) return
+    loadingMoreRef.current = true
     setLoadingMore(true)
 
     const myCommIds = [...communities.keys()]
@@ -458,11 +460,26 @@ export default function Feed() {
       })
     }
 
-    setPosts((prev) => [...prev, ...merged])
-    setCursor(merged[merged.length - 1].created_at)
-    setHasMore(merged.length > 0)
+    // Dedup by _source + id before appending — prevents duplicates at page boundaries
+    setPosts((prev) => {
+      const existing = new Set(prev.map((x) => `${x._source}:${x.id}`))
+      const incoming = merged.filter((x) => !existing.has(`${x._source}:${x.id}`))
+      return [...prev, ...incoming]
+    })
+
+    // Strict cursor: the oldest item across BOTH sources (posts + reels), not just merged[last]
+    const allFetched = [...postsSorted, ...reelsSorted]
+    if (allFetched.length > 0) {
+      const oldest = allFetched.reduce((min, r) => (r.created_at < min ? r.created_at : min), allFetched[0].created_at)
+      setCursor(oldest)
+    } else {
+      setHasMore(false)
+    }
+
+    setHasMore(allFetched.length > 0)
     setLoadingMore(false)
-  }, [myId, loadingMore, hasMore, cursor, communities])
+    loadingMoreRef.current = false
+  }, [myId, hasMore, cursor, communities])
 
   // ---- Sentinel observer ----
   useEffect(() => {
