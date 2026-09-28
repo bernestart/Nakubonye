@@ -45,6 +45,7 @@ import Preview from './screens/Preview'
 import ProfileSettings from './screens/ProfileSettings'
 import Marketplace from './screens/Marketplace'
 import CreateListing from './screens/CreateListing'
+import ListingDetail from './screens/ListingDetail'
 import ComingSoon from './screens/_ComingSoon'
 import ProfileViewers from './screens/ProfileViewers'
 import Admin from './screens/Admin'
@@ -191,7 +192,9 @@ export default function App() {
         <Route path="/messages/:userId" element={<Guard><Chat /></Guard>} />
         <Route path="/me"         element={<Guard><ProfileSettings /></Guard>} />
         <Route path="/saved" element={<Guard><ComingSoon title="Saved" message="Your saved posts and reels will appear here soon." /></Guard>} />
-        <Route path="/marketplace" element={<Guard><ComingSoon title="Marketplace" message="Buy and sell within your community. Launching soon." /></Guard>} />
+        <Route path="/marketplace" element={<Guard><Marketplace /></Guard>} />
+        <Route path="/marketplace/new" element={<Guard><CreateListing /></Guard>} />
+        <Route path="/marketplace/:id" element={<Guard><ListingDetail /></Guard>} />
         <Route path="/services" element={<Guard><ComingSoon title="Services" message="Offer and book local services. Launching soon." /></Guard>} />
         <Route path="/me/preview"  element={<Guard><Preview /></Guard>} />
         <Route path="/profile-views" element={<Guard><ProfileViewers /></Guard>} />
