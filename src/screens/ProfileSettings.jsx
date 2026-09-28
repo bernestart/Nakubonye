@@ -1,23 +1,28 @@
 import { useNavigate } from 'react-router-dom'
 import { tap } from '../lib/haptic'
-import { ArrowLeft, ShieldCheck, UserX, LogOut, ChevronRight, Wallet as WalletIcon, Crown, Trash2, Bell, Gift, FileText, Zap, Info, Users, Eye, Shield, Key } from 'lucide-react'
+import {
+  ArrowLeft, ChevronRight, ChevronDown, LogOut, Bell, Gift, Crown,
+  Wallet as WalletIcon, UserX, Shield, ShieldCheck, Info, FileText,
+  Eye, Zap, Key, Users, Plus, Bookmark, LayoutGrid, Play, Heart,
+  Store, Briefcase
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import StoryComposer from '../components/StoryComposer'
-import { Plus } from 'lucide-react'
-import DeleteAccountModal from '../components/DeleteAccountModal'
 import BrandGlow from '../components/BrandGlow'
 import BottomNav from '../components/BottomNav'
 
 export default function ProfileSettings() {
   const nav = useNavigate()
   const { profile, session } = useAuth()
-  const [deleteOpen, setDeleteOpen] = useState(false)
-
-  const initial = (profile?.display_name || 'U')[0].toUpperCase()
   const [composerOpen, setComposerOpen] = useState(false)
   const [hasStory, setHasStory] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [supportOpen, setSupportOpen] = useState(false)
+
+  const initial = (profile?.display_name || 'U')[0].toUpperCase()
+  const isAdmin = !!profile?.is_admin
 
   useEffect(() => {
     if (!session?.user?.id) return
@@ -49,10 +54,7 @@ export default function ProfileSettings() {
         />
       )}
 
-      <header
-        style={{ height: 52, flexShrink: 0 }}
-        className="px-3 flex items-center gap-2"
-      >
+      <header style={{ height: 52, flexShrink: 0 }} className="px-3 flex items-center gap-2">
         <button
           onClick={() => { tap('light'); nav(-1) }}
           className="w-9 h-9 rounded-full grid place-items-center text-muted"
@@ -60,16 +62,16 @@ export default function ProfileSettings() {
         >
           <ArrowLeft size={20} strokeWidth={2.3} />
         </button>
-        <span className="text-cream font-bold text-[15px]">Settings</span>
+        <span className="text-cream font-bold text-[15px]">Menu</span>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-5 py-5 pb-10">
-        {/* Profile header */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 pb-10">
+
+        {/* LAYER 1 — Identity */}
         <button
           type="button"
           onClick={() => { tap('light'); nav('/me/preview') }}
-          className="flex items-center gap-4 mb-8 text-left w-full active:opacity-70 transition-opacity"
-          aria-label="Back to preview"
+          className="w-full rounded-2xl bg-surface border border-white/8 p-3.5 flex items-center gap-4 text-left active:opacity-80 transition-opacity mb-5"
         >
           <button
             type="button"
@@ -85,70 +87,120 @@ export default function ProfileSettings() {
                   : "rgba(255,255,255,0.15)",
               }}
             >
-              <span className="block w-16 h-16 rounded-full bg-purple-600 grid place-items-center text-white text-2xl font-black overflow-hidden border-2 border-[#0B0B14]">
+              <span className="block w-14 h-14 rounded-full bg-purple-600 grid place-items-center text-white text-xl font-black overflow-hidden border-2 border-[#0B0B14]">
                 {profile?.photo_url ? (
                   <img src={profile.photo_url} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  initial
-                )}
+                ) : initial}
               </span>
             </span>
-            <span className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-purple-600 border-2 border-[#0B0B14] grid place-items-center">
-              <Plus size={12} strokeWidth={3} className="text-white" />
+            <span className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-purple-600 border-2 border-[#0B0B14] grid place-items-center">
+              <Plus size={10} strokeWidth={3} className="text-white" />
             </span>
           </button>
-          <div className="min-w-0">
-            <p className="text-cream font-bold text-[18px] truncate">
+          <div className="min-w-0 flex-1">
+            <p className="text-cream font-bold text-[16px] truncate">
               {profile?.display_name || 'Your name'}
             </p>
-            <p className="text-muted text-[13px] truncate">
-              @{profile?.username || 'username'}
-            </p>
-            <p className="text-subtle text-[11.5px] mt-0.5 truncate">
-              {session?.user?.email}
-            </p>
+            <p className="text-muted text-[12.5px] truncate">View your profile</p>
           </div>
+          <ChevronRight size={18} className="text-subtle shrink-0" />
         </button>
 
-        <div className="flex flex-col gap-2">
-          <MenuItem icon={<Users size={18} />} label="Communities" onClick={() => nav('/communities')} />
-          <MenuItem icon={<Gift size={18} />} label="Get 50 free coins" onClick={() => nav('/facebook-reward')} />
-          <MenuItem icon={<Gift size={18} />} label="Invite friends" onClick={() => nav('/invite')} />
-          <MenuItem icon={<Bell size={18} />} label="Notifications" onClick={() => nav('/notifications')} />
-          <MenuItem icon={<Shield size={18} />} label="Admin" onClick={() => nav('/admin')} />
-          <MenuItem icon={<Crown size={18} />} label="Premium" onClick={() => nav('/premium')} />
-          <MenuItem icon={<Eye size={18} />} label="Profile views" onClick={() => nav('/profile-views')} />
-          <MenuItem icon={<Zap size={18} />} label="Boost my profile" onClick={() => nav('/boost')} />
-          <MenuItem icon={<WalletIcon size={18} />} label="Wallet" onClick={() => nav('/wallet')} />
-          {profile?.is_admin && (
-            <MenuItem
-              icon={<ShieldCheck size={18} />}
-              label="Review verifications"
-              onClick={() => nav('/admin/verifications')}
-            />
-          )}
-          <MenuItem icon={<ShieldCheck size={18} />} label="Get verified" onClick={() => nav('/verify')} />
-          <MenuItem icon={<Key size={18} />} label="Account & security" onClick={() => nav('/settings/security')} />
-          <MenuItem icon={<ShieldCheck size={18} />} label="Safety Center" onClick={() => nav('/safety')} />
-          <MenuItem icon={<UserX size={18} />} label="Blocked users" onClick={() => nav('/blocked')} />
-          <MenuItem icon={<Info size={18} />} label="About Nakubonye" onClick={() => nav('/about')} />
-          <MenuItem icon={<FileText size={18} />} label="Terms of Service" onClick={() => nav('/terms')} />
-          <MenuItem icon={<ShieldCheck size={18} />} label="Privacy Policy" onClick={() => nav('/privacy')} />
-          <MenuItem
-            icon={<LogOut size={18} />}
-            label="Sign out"
-            danger
+        {/* Standalone rows above grid — Facebook pattern */}
+        <div className="flex flex-col gap-1.5 mb-4">
+          <button
+            onClick={() => { tap('light'); setComposerOpen(true) }}
+            className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-surface border border-white/8 text-left text-cream"
+          >
+            <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0">
+              <Plus size={18} />
+            </span>
+            <span className="flex-1 font-semibold text-[14.5px]">Add to your story</span>
+            <ChevronRight size={18} className="text-subtle" />
+          </button>
+          <button
+            onClick={() => { tap('light'); nav('/invite') }}
+            className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-surface border border-white/8 text-left text-cream"
+          >
+            <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0">
+              <Gift size={18} />
+            </span>
+            <span className="flex-1 font-semibold text-[14.5px]">Invite friends</span>
+            <ChevronRight size={18} className="text-subtle" />
+          </button>
+        </div>
+
+        {/* Feature tile grid — NO label */}
+        <div className="grid grid-cols-2 gap-2.5 mb-5">
+          <FeatureTile icon={<Bookmark size={20} />} label="Saved" to="/saved" nav={nav} />
+          <FeatureTile icon={<LayoutGrid size={20} />} label="Posts" to="/me/preview" nav={nav} />
+          <FeatureTile icon={<Play size={20} />} label="Reels" to="/reels" nav={nav} />
+          <FeatureTile icon={<Heart size={20} />} label="Matches" to="/matches" nav={nav} />
+          <FeatureTile icon={<Users size={20} />} label="Communities" to="/communities" nav={nav} />
+          <FeatureTile icon={<Eye size={20} />} label="Profile views" to="/profile-views" nav={nav} />
+          <FeatureTile icon={<Crown size={20} />} label="Premium" to="/premium" nav={nav} />
+          <FeatureTile icon={<WalletIcon size={20} />} label="Wallet" to="/wallet" nav={nav} />
+          <FeatureTile icon={<Zap size={20} />} label="Boost profile" to="/boost" nav={nav} />
+          <FeatureTile icon={<ShieldCheck size={20} />} label="Get verified" to="/verify" nav={nav} />
+          <FeatureTile icon={<Store size={20} />} label="Marketplace" to="/marketplace" nav={nav} />
+          <FeatureTile icon={<Briefcase size={20} />} label="Services" soon />
+        </div>
+
+        {/* Collapsible — Settings & privacy */}
+        <Collapsible
+          icon={<Key size={18} />}
+          label="Settings & privacy"
+          open={settingsOpen}
+          onToggle={() => { tap('light'); setSettingsOpen((v) => !v) }}
+        >
+          <MenuRow icon={<Key size={18} />} label="Account & security" to="/settings/security" nav={nav} />
+          <MenuRow icon={<Bell size={18} />} label="Notifications" to="/notifications" nav={nav} />
+          <MenuRow icon={<UserX size={18} />} label="Blocked users" to="/blocked" nav={nav} />
+          <MenuRow icon={<ShieldCheck size={18} />} label="Privacy Policy" to="/privacy" nav={nav} />
+          <MenuRow icon={<FileText size={18} />} label="Terms of Service" to="/terms" nav={nav} />
+        </Collapsible>
+
+        {/* Collapsible — Help & support */}
+        <Collapsible
+          icon={<Shield size={18} />}
+          label="Help & support"
+          open={supportOpen}
+          onToggle={() => { tap('light'); setSupportOpen((v) => !v) }}
+        >
+          <MenuRow icon={<Shield size={18} />} label="Safety Center" to="/safety" nav={nav} />
+          <MenuRow icon={<Info size={18} />} label="About Nakubonye" to="/about" nav={nav} />
+          <MenuRow icon={<Gift size={18} />} label="Get 50 free coins" to="/facebook-reward" nav={nav} />
+        </Collapsible>
+
+        {isAdmin && (
+          <div className="mt-3">
+            <Collapsible
+              icon={<Shield size={18} />}
+              label="Admin"
+              open={false}
+              onToggle={() => nav('/admin')}
+            >
+              <></>
+            </Collapsible>
+          </div>
+        )}
+
+        {/* Bottom rows — Sign out, Delete account (Facebook flat row style) */}
+        <div className="flex flex-col gap-1.5 mt-4">
+          <button
             onClick={async () => {
+              tap('light')
               await supabase.auth.signOut()
               nav('/', { replace: true })
             }}
-          />
-          <MenuItem
-            icon={<Trash2 size={18} />}
-            label="Delete account"
-            danger
-            onClick={() => setDeleteOpen(true)}
-          />
+            className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-surface border border-white/8 text-left text-danger"
+          >
+            <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0">
+              <LogOut size={18} />
+            </span>
+            <span className="flex-1 font-semibold text-[14.5px]">Log out</span>
+            <ChevronRight size={18} className="text-subtle" />
+          </button>
         </div>
 
         <p className="text-center text-subtle text-[11px] mt-10 leading-relaxed">
@@ -158,23 +210,65 @@ export default function ProfileSettings() {
         </p>
       </div>
 
-      <DeleteAccountModal
-        open={deleteOpen}
-        onClose={() => setDeleteOpen(false)}
-        onDeleted={() => nav('/', { replace: true })}
-      />
-
       <div style={{ height: 72, flexShrink: 0 }} />
       <BottomNav />
     </div>
   )
 }
 
-function MenuItem({ icon, label, onClick, danger }) {
+function Collapsible({ icon, label, open, onToggle, children }) {
+  return (
+    <div className="mb-2">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-surface border border-white/8 text-left text-cream"
+      >
+        <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0">
+          {icon}
+        </span>
+        <span className="flex-1 font-semibold text-[14.5px]">{label}</span>
+        {open ? <ChevronDown size={18} className="text-subtle" /> : <ChevronRight size={18} className="text-subtle" />}
+      </button>
+      {open && (
+        <div className="flex flex-col gap-1.5 mt-1.5 pl-3">
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FeatureTile({ icon, label, to, nav, soon }) {
+  const handle = () => {
+    if (soon) return
+    tap('light')
+    nav(to)
+  }
   return (
     <button
-      onClick={() => { tap('light'); onClick?.() }}
-      className={`w-full flex items-center gap-3 p-4 rounded-2xl bg-surface border border-white/8 text-left ${danger ? 'text-danger' : 'text-cream'}`}
+      type="button"
+      onClick={handle}
+      disabled={soon}
+      className={`rounded-2xl border p-3.5 flex flex-col items-start gap-2.5 text-left active:opacity-80 transition-opacity ${
+        soon ? 'bg-white/[0.02] border-white/5 opacity-50' : 'bg-surface border-white/8'
+      }`}
+    >
+      <span className="w-9 h-9 rounded-xl bg-purple-500/15 grid place-items-center text-purple-300 shrink-0">
+        {icon}
+      </span>
+      <span className="min-w-0 w-full">
+        <span className="block text-cream font-bold text-[13.5px] truncate">{label}</span>
+        {soon && <span className="block text-subtle text-[10.5px] mt-0.5">Coming soon</span>}
+      </span>
+    </button>
+  )
+}
+
+function MenuRow({ icon, label, to, nav }) {
+  return (
+    <button
+      onClick={() => { tap('light'); nav(to) }}
+      className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-surface border border-white/8 text-left text-cream"
     >
       <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0">
         {icon}

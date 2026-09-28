@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Key, Mail, Check, Eye, EyeOff, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Key, Mail, Check, Eye, EyeOff, AlertCircle, Trash2, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { tap } from '../lib/haptic'
 import BrandGlow from '../components/BrandGlow'
+import DeleteAccountModal from '../components/DeleteAccountModal'
 
 export default function AccountSecurity() {
   const nav = useNavigate()
@@ -25,6 +26,7 @@ export default function AccountSecurity() {
   const [emailBusy, setEmailBusy] = useState(false)
   const [emailErr, setEmailErr] = useState('')
   const [emailOk, setEmailOk] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   async function changePassword() {
     setPwErr(''); setPwOk(false)
@@ -244,7 +246,33 @@ export default function AccountSecurity() {
             You'll get a confirmation link at the new address. Until you click it, your current email stays active.
           </p>
         </div>
+        {/* Danger Zone */}
+        <div className="mb-6">
+          <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-3">
+            Danger zone
+          </p>
+          <button
+            onClick={() => { tap('light'); setDeleteOpen(true) }}
+            className="w-full flex items-center gap-3 p-4 rounded-2xl bg-danger/8 border border-danger/25 text-left text-danger"
+          >
+            <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0">
+              <Trash2 size={18} />
+            </span>
+            <span className="flex-1 font-semibold text-[14.5px]">Delete account</span>
+            <ChevronRight size={18} className="text-subtle" />
+          </button>
+          <p className="text-subtle text-[11.5px] mt-2 leading-relaxed">
+            Permanently deletes your profile, posts, reels, stories, and messages. This cannot be undone.
+          </p>
+        </div>
+
       </div>
+
+      <DeleteAccountModal
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onDeleted={() => nav('/', { replace: true })}
+      />
     </div>
   )
 }
