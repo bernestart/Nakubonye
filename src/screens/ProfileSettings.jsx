@@ -144,7 +144,7 @@ export default function ProfileSettings() {
           <FeatureTile icon={<Zap size={20} />} label="Boost profile" to="/boost" nav={nav} />
           <FeatureTile icon={<ShieldCheck size={20} />} label="Get verified" to="/verify" nav={nav} />
           <FeatureTile icon={<Store size={20} />} label="Marketplace" to="/marketplace" nav={nav} />
-          <FeatureTile icon={<Briefcase size={20} />} label="Services" soon />
+          <FeatureTile icon={<Briefcase size={20} />} label="Services" to="/services" nav={nav} />
         </div>
 
         {/* Collapsible — Settings & privacy */}

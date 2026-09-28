@@ -45,6 +45,7 @@ import Preview from './screens/Preview'
 import ProfileSettings from './screens/ProfileSettings'
 import Marketplace from './screens/Marketplace'
 import CreateListing from './screens/CreateListing'
+import Services from './screens/Services'
 import MyListings from './screens/MyListings'
 import EditListing from './screens/EditListing'
 import ListingDetail from './screens/ListingDetail'
@@ -199,7 +200,7 @@ export default function App() {
         <Route path="/marketplace/:id" element={<Guard><ListingDetail /></Guard>} />
         <Route path="/me/listings" element={<Guard><MyListings /></Guard>} />
         <Route path="/marketplace/:id/edit" element={<Guard><EditListing /></Guard>} />
-        <Route path="/services" element={<Guard><ComingSoon title="Services" message="Offer and book local services. Launching soon." /></Guard>} />
+        <Route path="/services" element={<Guard><Services /></Guard>} />
         <Route path="/me/preview"  element={<Guard><Preview /></Guard>} />
         <Route path="/profile-views" element={<Guard><ProfileViewers /></Guard>} />
         <Route path="/admin" element={<Guard><Admin /></Guard>} />
