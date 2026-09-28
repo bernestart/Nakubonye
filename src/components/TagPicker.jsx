@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react"
 import { X, Search } from "lucide-react"
 import { supabase } from "../lib/supabase"
+import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 
 export default function TagPicker({ initial = [], onClose, onSave }) {
+  const { session } = useAuth()
+  const myId = session?.user?.id
+  const [denied, setDenied] = useState("")
   const [query, setQuery] = useState("")
   const [results, setResults] = useState([])
   const [selected, setSelected] = useState(initial || [])
@@ -27,13 +31,24 @@ export default function TagPicker({ initial = [], onClose, onSave }) {
     return () => { cancelled = true; clearTimeout(t) }
   }, [query])
 
-  function toggle(user) {
+  async function toggle(user) {
+    setDenied("")
     if (selected.find((s) => s.id === user.id)) {
       setSelected((arr) => arr.filter((s) => s.id !== user.id))
-    } else {
-      if (selected.length >= 20) return
-      setSelected((arr) => [...arr, user])
+      return
     }
+    if (selected.length >= 20) return
+    if (myId) {
+      const { data: allowed } = await supabase.rpc('can_tag', {
+        sender: myId,
+        recipient: user.id,
+      })
+      if (allowed === false) {
+        setDenied(`${user.display_name || user.username || 'This user'} doesn't allow tags`)
+        return
+      }
+    }
+    setSelected((arr) => [...arr, user])
   }
 
   return (
@@ -112,6 +127,12 @@ export default function TagPicker({ initial = [], onClose, onSave }) {
             )
           })}
         </div>
+
+        {denied && (
+          <p className="text-red-300 text-[12.5px] text-center bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2">
+            {denied}
+          </p>
+        )}
 
         <button
           onClick={() => { onSave(selected); onClose() }}
