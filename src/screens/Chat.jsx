@@ -65,6 +65,17 @@ export default function Chat() {
       setCanMsgReason(allowed ? '' : "You can't message this user")
     })()
   }, [otherId, session?.user?.id])
+
+  useEffect(() => {
+    if (!otherId || !session?.user?.id) return
+    ;(async () => {
+      const { data } = await supabase.rpc('can_see_online', {
+        viewer: session.user.id,
+        owner: otherId,
+      })
+      setCanSeeOnline(data !== false)
+    })()
+  }, [otherId, session?.user?.id])
   const [sending, setSending] = useState(false)
   const [replyingTo, setReplyingTo] = useState(null)
   const [storyReply, setStoryReply] = useState(null)
@@ -80,6 +91,7 @@ export default function Chat() {
   const [recording, setRecording] = useState(false)
   const [canMsg, setCanMsg] = useState(true)
   const [canMsgReason, setCanMsgReason] = useState('')
+  const [canSeeOnline, setCanSeeOnline] = useState(true)
   const [recordSeconds, setRecordSeconds] = useState(0)
   const recorderRef = useRef(null)
   const recordChunksRef = useRef([])
@@ -490,7 +502,7 @@ export default function Chat() {
               {other?.display_name || other?.username || 'Someone'}
               {other?.is_verified && <VerifiedBadge size={14} className="ml-1" />}
             </p>
-            <p className="text-subtle text-[11px] font-medium">{otherTyping ? 'typing…' : isOnline(other?.last_seen_at, 2) ? (<><span className="inline-block w-2 h-2 rounded-full mr-1.5 align-middle" style={{ background: '#22C55E', boxShadow: '0 0 6px rgba(34,197,94,0.55)' }} />Online</>) : other?.last_seen_at ? 'Last seen ' + formatLastSeen(other.last_seen_at) : other?.isDirect === true ? 'Direct message' : other?.isDirect === false ? 'Matched' : ''}</p>
+            <p className="text-subtle text-[11px] font-medium">{otherTyping ? 'typing…' : !canSeeOnline ? (other?.isDirect === true ? 'Direct message' : other?.isDirect === false ? 'Matched' : '') : isOnline(other?.last_seen_at, 2) ? (<><span className="inline-block w-2 h-2 rounded-full mr-1.5 align-middle" style={{ background: '#22C55E', boxShadow: '0 0 6px rgba(34,197,94,0.55)' }} />Online</>) : other?.last_seen_at ? 'Last seen ' + formatLastSeen(other.last_seen_at) : other?.isDirect === true ? 'Direct message' : other?.isDirect === false ? 'Matched' : ''}</p>
           </div>
         </button>
         <button

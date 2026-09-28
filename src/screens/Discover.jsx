@@ -18,6 +18,44 @@ import NotificationBell from '../components/NotificationBell'
 
 const SWIPE_THRESHOLD = 130
 
+async function decorateOnlineVisibility(cards, myId) {
+  if (!cards.length || !myId) return cards
+  const ownerIds = cards.map((c) => c.id).filter((id) => id !== myId)
+  if (!ownerIds.length) return cards
+  const [settingsRes, blocksRes, matchesRes, followsRes] = await Promise.all([
+    supabase.from('user_settings').select('user_id, who_can_see_online, show_activity_status').in('user_id', ownerIds),
+    supabase.from('blocks').select('blocker_id, blocked_id').or(`blocker_id.eq.${myId},blocked_id.eq.${myId}`),
+    supabase.from('matches').select('user_one_id, user_two_id').or(`user_one_id.eq.${myId},user_two_id.eq.${myId}`),
+    supabase.from('follows').select('following_id').eq('follower_id', myId),
+  ])
+  const sMap = new Map((settingsRes.data || []).map((r) => [r.user_id, r]))
+  const blockSet = new Set()
+  ;(blocksRes.data || []).forEach((b) => {
+    if (b.blocker_id === myId) blockSet.add(b.blocked_id)
+    if (b.blocked_id === myId) blockSet.add(b.blocker_id)
+  })
+  const matchSet = new Set()
+  ;(matchesRes.data || []).forEach((m) => {
+    if (m.user_one_id === myId) matchSet.add(m.user_two_id)
+    if (m.user_two_id === myId) matchSet.add(m.user_one_id)
+  })
+  const followSet = new Set((followsRes.data || []).map((f) => f.following_id))
+
+  return cards.map((c) => {
+    if (c.id === myId) return { ...c, _canSeeOnline: true }
+    if (blockSet.has(c.id)) return { ...c, _canSeeOnline: false }
+    const row = sMap.get(c.id)
+    if (!row) return { ...c, _canSeeOnline: true }
+    if (row.show_activity_status === false) return { ...c, _canSeeOnline: false }
+    const v = row.who_can_see_online || 'everyone'
+    if (v === 'nobody') return { ...c, _canSeeOnline: false }
+    if (v === 'everyone') return { ...c, _canSeeOnline: true }
+    if (v === 'matches') return { ...c, _canSeeOnline: matchSet.has(c.id) }
+    if (v === 'following') return { ...c, _canSeeOnline: followSet.has(c.id) }
+    return { ...c, _canSeeOnline: true }
+  })
+}
+
 export default function Discover() {
   const nav = useNavigate()
   const { session, profile } = useAuth()
@@ -94,7 +132,7 @@ export default function Discover() {
       list.forEach((c) => { c.hasStory = storySet.has(c.id) })
     }
 
-    setCards(list)
+    setCards(await decorateOnlineVisibility(list, session?.user?.id))
     setLoading(false)
   }, [session?.user?.id, sameCity, sharedInterests, sameCountry, verifiedOnly, onlineOnly, communityId])
 
@@ -492,7 +530,7 @@ function SwipeCard({ card, onPass, onLike, onSuper, onWatchStory, disabled }) {
           <MapPin size={12} />
           {card.city || 'Unknown'}
           {card.country ? `, ${card.country}` : ''}
-          {isOnline(card.last_seen_at) && (
+          {card._canSeeOnline !== false && isOnline(card.last_seen_at) && (
             <span className="inline-flex items-center gap-1 ml-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.9)]" />
               <span className="text-emerald-300 text-[11px] font-semibold">Online</span>

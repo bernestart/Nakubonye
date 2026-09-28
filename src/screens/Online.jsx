@@ -7,6 +7,42 @@ import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 
+async function filterVisibleOnline(people, myId) {
+  if (!people.length || !myId) return people
+  const ids = people.map((u) => u.id)
+  const [settingsRes, blocksRes, matchesRes, followsRes] = await Promise.all([
+    supabase.from('user_settings').select('user_id, who_can_see_online, show_activity_status').in('user_id', ids),
+    supabase.from('blocks').select('blocker_id, blocked_id').or(`blocker_id.eq.${myId},blocked_id.eq.${myId}`),
+    supabase.from('matches').select('user_one_id, user_two_id').or(`user_one_id.eq.${myId},user_two_id.eq.${myId}`),
+    supabase.from('follows').select('following_id').eq('follower_id', myId),
+  ])
+  const sMap = new Map((settingsRes.data || []).map((r) => [r.user_id, r]))
+  const blockSet = new Set()
+  ;(blocksRes.data || []).forEach((b) => {
+    if (b.blocker_id === myId) blockSet.add(b.blocked_id)
+    if (b.blocked_id === myId) blockSet.add(b.blocker_id)
+  })
+  const matchSet = new Set()
+  ;(matchesRes.data || []).forEach((m) => {
+    if (m.user_one_id === myId) matchSet.add(m.user_two_id)
+    if (m.user_two_id === myId) matchSet.add(m.user_one_id)
+  })
+  const followSet = new Set((followsRes.data || []).map((f) => f.following_id))
+
+  return people.filter((u) => {
+    if (blockSet.has(u.id)) return false
+    const row = sMap.get(u.id)
+    if (!row) return true
+    if (row.show_activity_status === false) return false
+    const v = row.who_can_see_online || 'everyone'
+    if (v === 'nobody') return false
+    if (v === 'everyone') return true
+    if (v === 'matches') return matchSet.has(u.id)
+    if (v === 'following') return followSet.has(u.id)
+    return true
+  })
+}
+
 export default function Online() {
   const nav = useNavigate()
   const { session } = useAuth()
@@ -39,7 +75,7 @@ export default function Online() {
       ;(ph || []).forEach((p) => { if (!map.has(p.user_id)) map.set(p.user_id, p.storage_path) })
       list.forEach((u) => { u.photo_url = publicPhotoUrl(map.get(u.id)) })
     }
-    setPeople(list)
+    setPeople(await filterVisibleOnline(list, myId))
     setLoading(false)
   }, [myId])
 
