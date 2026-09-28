@@ -15,6 +15,8 @@ export default function ReelComments({ reelId, onClose, onCountChange }) {
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [canComment, setCanComment] = useState(true)
+  const [canCommentReason, setCanCommentReason] = useState('')
   const listRef = useRef(null)
 
   const load = useCallback(async () => {
@@ -50,12 +52,32 @@ export default function ReelComments({ reelId, onClose, onCountChange }) {
 
   useEffect(() => { load() }, [load])
 
+  useEffect(() => {
+    if (!reelId || !myId) return
+    ;(async () => {
+      const { data: reel } = await supabase
+        .from('reels')
+        .select('user_id')
+        .eq('id', reelId)
+        .maybeSingle()
+      if (!reel) return
+      const { data: allowed } = await supabase.rpc('can_comment', {
+        sender: myId,
+        recipient: reel.user_id,
+      })
+      const ok = allowed !== false
+      setCanComment(ok)
+      setCanCommentReason(ok ? '' : "This user's comments are restricted")
+    })()
+  }, [reelId, myId])
+
   // Scroll to bottom on new comments
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight
   }, [comments.length])
 
   async function submit() {
+    if (!canComment) return
     const body = text.trim()
     if (!body || !myId || busy) return
     setBusy(true); tap("light")
@@ -139,24 +161,30 @@ export default function ReelComments({ reelId, onClose, onCountChange }) {
         </div>
 
         <div className="px-3 py-3 border-t border-white/8 shrink-0" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
-          <div className="flex items-center gap-2">
-            <input
-              value={text}
-              onChange={(e) => setText(e.target.value.slice(0, 500))}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) submit() }}
-              placeholder="Add a comment…"
-              className="flex-1 h-11 rounded-full bg-white/[0.06] border border-white/10 px-4 text-cream text-[14px] placeholder:text-subtle focus:outline-none focus:border-purple-500"
-            />
-            <button
-              onClick={submit}
-              disabled={!text.trim() || busy}
-              className="w-11 h-11 rounded-full grid place-items-center disabled:opacity-40 shrink-0"
-              style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
-              aria-label="Send"
-            >
-              <Send size={18} strokeWidth={2.6} className="text-white" />
-            </button>
-          </div>
+          {!canComment ? (
+            <div className="px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-center">
+              <p className="text-red-300 text-[12.5px] font-semibold">{canCommentReason || "You can't comment here"}</p>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <input
+                value={text}
+                onChange={(e) => setText(e.target.value.slice(0, 500))}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) submit() }}
+                placeholder="Add a comment…"
+                className="flex-1 h-11 rounded-full bg-white/[0.06] border border-white/10 px-4 text-cream text-[14px] placeholder:text-subtle focus:outline-none focus:border-purple-500"
+              />
+              <button
+                onClick={submit}
+                disabled={!text.trim() || busy}
+                className="w-11 h-11 rounded-full grid place-items-center disabled:opacity-40 shrink-0"
+                style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
+                aria-label="Send"
+              >
+                <Send size={18} strokeWidth={2.6} className="text-white" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
