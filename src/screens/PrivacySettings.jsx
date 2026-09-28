@@ -88,6 +88,12 @@ export default function PrivacySettings() {
               onClick={() => openSheet('who_can_story_reply', 'Who can reply to my stories', AUDIENCE_LEVELS)}
             />
             <SelectorRow
+              icon={<Eye size={18} />}
+              label="Who can see my stories"
+              value={labelFor('who_can_see_story', AUDIENCE_LEVELS)}
+              onClick={() => openSheet('who_can_see_story', 'Who can see my stories', AUDIENCE_LEVELS)}
+            />
+            <SelectorRow
               icon={<AtSign size={18} />}
               label="Who can tag or mention me"
               value={labelFor('who_can_tag', TAG_LEVELS)}
