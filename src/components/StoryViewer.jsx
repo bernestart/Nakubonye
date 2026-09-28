@@ -202,9 +202,24 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
     if (Math.abs(dy) < 10 && tapAction) tapAction()
   }
 
+  async function canReply() {
+    if (!group?.user_id) return false
+    const { data: session } = await supabase.auth.getSession()
+    const myId = session?.session?.user?.id
+    if (!myId) return false
+    const { data: allowed, error } = await supabase.rpc('can_story_reply', {
+      sender: myId,
+      recipient: group.user_id,
+    })
+    if (error) return true // fail-open on error
+    return allowed !== false
+  }
+
   async function sendReply() {
     const body = reply.trim()
     if (!body || !group?.user_id) return
+    const ok = await canReply()
+    if (!ok) { setToast?.("This user isn't accepting story replies") || alert("This user isn't accepting story replies"); return }
     nav("/messages/" + group.user_id, {
       state: {
         prefill: body,
@@ -220,6 +235,8 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
   async function sendReaction(emoji) {
     setReactionOpen(false)
     if (!group?.user_id) return
+    const ok = await canReply()
+    if (!ok) { alert("This user isn't accepting story replies"); return }
     nav("/messages/" + group.user_id, {
       state: {
         prefill: emoji,
