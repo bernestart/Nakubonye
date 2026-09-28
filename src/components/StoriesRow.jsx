@@ -10,6 +10,40 @@ import StoryViewer from "./StoryViewer"
 const TILE_W = 105
 const TILE_H = 170
 
+async function filterStoriesByVisibility(stories, myId) {
+  const ownerIds = [...new Set(stories.map((r) => r.user_id).filter((id) => id !== myId))]
+  if (ownerIds.length === 0) return stories
+  const [settingsRes, blocksRes, matchesRes, followsRes] = await Promise.all([
+    supabase.from('user_settings').select('user_id, who_can_see_story').in('user_id', ownerIds),
+    supabase.from('blocks').select('blocker_id, blocked_id').or(`blocker_id.eq.${myId},blocked_id.eq.${myId}`),
+    supabase.from('matches').select('user_one_id, user_two_id').or(`user_one_id.eq.${myId},user_two_id.eq.${myId}`),
+    supabase.from('follows').select('following_id').eq('follower_id', myId),
+  ])
+  const settingsMap = new Map((settingsRes.data || []).map((r) => [r.user_id, r.who_can_see_story || 'everyone']))
+  const blockedSet = new Set()
+  ;(blocksRes.data || []).forEach((b) => {
+    if (b.blocker_id === myId) blockedSet.add(b.blocked_id)
+    if (b.blocked_id === myId) blockedSet.add(b.blocker_id)
+  })
+  const matchSet = new Set()
+  ;(matchesRes.data || []).forEach((m) => {
+    if (m.user_one_id === myId) matchSet.add(m.user_two_id)
+    if (m.user_two_id === myId) matchSet.add(m.user_one_id)
+  })
+  const followSet = new Set((followsRes.data || []).map((f) => f.following_id))
+
+  return stories.filter((r) => {
+    if (r.user_id === myId) return true
+    if (blockedSet.has(r.user_id)) return false
+    const aud = r.audience && r.audience !== 'default' ? r.audience : (settingsMap.get(r.user_id) || 'everyone')
+    if (aud === 'everyone' || aud === 'public') return true
+    if (aud === 'nobody' || aud === 'private') return false
+    if (aud === 'matches') return matchSet.has(r.user_id)
+    if (aud === 'following') return followSet.has(r.user_id)
+    return true
+  })
+}
+
 export default function StoriesRow() {
   const { session, profile } = useAuth()
   const myId = session?.user?.id
@@ -43,15 +77,18 @@ export default function StoriesRow() {
 
     const { data: rows } = await supabase
       .from("stories")
-      .select("id, user_id, media_url, media_type, caption, created_at, expires_at")
+      .select("id, user_id, media_url, media_type, caption, created_at, expires_at, audience")
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: false })
       .limit(30)
 
     if (!rows) return
 
+    // ─── Filter stories by visibility ───
+    const visibleStories = await filterStoriesByVisibility(rows, myId)
+
     const byUser = new Map()
-    rows.forEach((s) => {
+    visibleStories.forEach((s) => {
       if (!byUser.has(s.user_id)) byUser.set(s.user_id, [])
       byUser.get(s.user_id).push(s)
     })
@@ -98,7 +135,7 @@ export default function StoriesRow() {
     setMyStory(mine || null)
     setGroups(others)
     // Cursor for pagination — oldest story loaded
-    const oldest = rows[rows.length - 1]?.created_at || null
+    const oldest = visibleStories[visibleStories.length - 1]?.created_at || rows[rows.length - 1]?.created_at || null
     setStoriesCursor(oldest)
     setStoriesHasMore(rows.length === 30)
   }, [myId, viewed])
@@ -111,7 +148,7 @@ export default function StoriesRow() {
 
     const { data: rows } = await supabase
       .from("stories")
-      .select("id, user_id, media_url, media_type, caption, created_at, expires_at")
+      .select("id, user_id, media_url, media_type, caption, created_at, expires_at, audience")
       .gt("expires_at", new Date().toISOString())
       .lt("created_at", storiesCursor)
       .order("created_at", { ascending: false })
@@ -123,9 +160,11 @@ export default function StoriesRow() {
       return
     }
 
+    const visibleRows = await filterStoriesByVisibility(rows, myId)
+
     // Filter out stories already present by user_id (avoid duplicates)
     const existingUserIds = new Set([...groups.map((g) => g.user_id), ...(myStory ? [myStory.user_id] : [])])
-    const newRows = rows.filter((r) => !existingUserIds.has(r.user_id))
+    const newRows = visibleRows.filter((r) => !existingUserIds.has(r.user_id))
 
     if (newRows.length === 0) {
       setStoriesHasMore(rows.length === 30)

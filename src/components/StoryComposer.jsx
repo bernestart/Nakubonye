@@ -32,7 +32,7 @@ export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve
     if (f.type.startsWith("image/")) setEditorOpen(true)
   }
 
-  async function runPublish(tempId, useFile, ext, contentType, mediaType, captionSnapshot) {
+  async function runPublish(tempId, useFile, ext, contentType, mediaType, captionSnapshot, audienceSnapshot) {
     try {
       const path = "stories/" + myId + "/" + crypto.randomUUID() + "." + ext
       const { error: upErr } = await supabase.storage
@@ -45,6 +45,7 @@ export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve
         media_url: pub?.publicUrl,
         media_type: mediaType,
         caption: captionSnapshot || null,
+        audience: audienceSnapshot || 'everyone',
       })
       if (insErr) throw new Error(insErr.message)
       onResolve?.(tempId)
@@ -53,13 +54,13 @@ export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve
     }
   }
 
-  function publishNow(blob, ext, contentType, mediaType, captionSnapshot) {
+  function publishNow(blob, ext, contentType, mediaType, captionSnapshot, audienceSnapshot) {
     if (!myId || !blob) return
     const tempId = "pending-story-" + crypto.randomUUID()
     const previewUrl = URL.createObjectURL(blob)
     const retry = () => {
       onRetryStart?.(tempId)
-      runPublish(tempId, blob, ext, contentType, mediaType, captionSnapshot)
+      runPublish(tempId, blob, ext, contentType, mediaType, captionSnapshot, audienceSnapshot)
     }
     onOptimistic?.({
       _tempId: tempId,
@@ -73,7 +74,7 @@ export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve
       created_at: new Date().toISOString(),
     })
     onClose?.()
-    runPublish(tempId, blob, ext, contentType, mediaType, captionSnapshot)
+    runPublish(tempId, blob, ext, contentType, mediaType, captionSnapshot, audienceSnapshot)
   }
 
   async function submit() {
@@ -85,9 +86,10 @@ export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve
     const mediaType = !editedBlob && file.type.startsWith("video/") ? "video" : "image"
     const tempId = "pending-story-" + crypto.randomUUID()
     const captionSnapshot = caption.trim()
+    const audienceSnapshot = 'everyone'
     const retry = () => {
       onRetryStart?.(tempId)
-      runPublish(tempId, useFile, ext, contentType, mediaType, captionSnapshot)
+      runPublish(tempId, useFile, ext, contentType, mediaType, captionSnapshot, audienceSnapshot)
     }
     onOptimistic?.({
       _tempId: tempId,
@@ -101,7 +103,7 @@ export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve
       created_at: new Date().toISOString(),
     })
     onClose?.()
-    await runPublish(tempId, useFile, ext, contentType, mediaType, captionSnapshot)
+    await runPublish(tempId, useFile, ext, contentType, mediaType, captionSnapshot, audienceSnapshot)
   }
 
   useEffect(() => {
@@ -126,7 +128,7 @@ export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve
         src={preview}
         onCancel={() => { setEditorOpen(false); setPreview(""); setFile(null); setEditedBlob(null) }}
         onSave={(blob, meta) => {
-          publishNow(blob, "jpg", "image/jpeg", "image", meta?.caption || "")
+          publishNow(blob, "jpg", "image/jpeg", "image", meta?.caption || "", meta?.audience || "everyone")
         }}
       />
     )
