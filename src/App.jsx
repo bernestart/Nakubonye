@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { AuthProvider, useAuth } from './lib/auth'
+import { SettingsProvider } from './lib/settings.jsx'
 import { usePresence } from './lib/usePresence'
 import MaintenanceScreen from './components/MaintenanceScreen'
 import GlobalMatchCelebration from './components/GlobalMatchCelebration'
@@ -43,6 +44,7 @@ import ProfileView from './screens/ProfileView'
 import EditProfile from './screens/EditProfile'
 import Preview from './screens/Preview'
 import ProfileSettings from './screens/ProfileSettings'
+import PrivacySettings from './screens/PrivacySettings'
 import Marketplace from './screens/Marketplace'
 import CreateListing from './screens/CreateListing'
 import Services from './screens/Services'
@@ -163,6 +165,7 @@ function PresenceKeeper() {
 export default function App() {
   return (
     <AuthProvider>
+      <SettingsProvider>
       <PresenceKeeper />
       <WalletProvider>
       <NotificationsProvider>
@@ -214,6 +217,7 @@ export default function App() {
         <Route path="/admin" element={<Guard><Admin /></Guard>} />
         <Route path="/facebook-reward" element={<Guard><FacebookReward /></Guard>} />
         <Route path="/settings/security" element={<Guard><AccountSecurity /></Guard>} />
+        <Route path="/settings/privacy" element={<Guard><PrivacySettings /></Guard>} />
         <Route path="/safety"   element={<Guard><SafetyCenter /></Guard>} />
         <Route path="/blocked"  element={<Guard><BlockedList /></Guard>} />
         <Route path="/profile/:userId" element={<Guard><ProfileView /></Guard>} />
@@ -233,6 +237,7 @@ export default function App() {
       </VoiceCallProvider>
       </NotificationsProvider>
       </WalletProvider>
+      </SettingsProvider>
     </AuthProvider>
   )
 }

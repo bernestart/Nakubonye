@@ -154,6 +154,7 @@ export default function ProfileSettings() {
           onToggle={() => { tap('light'); setSettingsOpen((v) => !v) }}
         >
           <MenuRow icon={<Key size={18} />} label="Account & security" to="/settings/security" nav={nav} />
+          <MenuRow icon={<Shield size={18} />} label="Privacy & visibility" to="/settings/privacy" nav={nav} />
           <MenuRow icon={<Bell size={18} />} label="Notifications" to="/notifications" nav={nav} />
           <MenuRow icon={<UserX size={18} />} label="Blocked users" to="/blocked" nav={nav} />
           <MenuRow icon={<ShieldCheck size={18} />} label="Privacy Policy" to="/privacy" nav={nav} />
