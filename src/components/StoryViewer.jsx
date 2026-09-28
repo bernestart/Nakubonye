@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "../lib/auth"
 import { supabase } from "../lib/supabase"
@@ -17,7 +18,6 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
   const [storyIdx, setStoryIdx] = useState(0)
   const [progress, setProgress] = useState(0)
   const [paused, setPaused] = useState(false)
-  const [dragY, setDragY] = useState(0)
   const [reply, setReply] = useState("")
   const [reactionOpen, setReactionOpen] = useState(false)
   const [viewersOpen, setViewersOpen] = useState(false)
@@ -175,31 +175,18 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
     }, 220)
   }
 
-  function onTouchMove(e) {
-    const dy = e.touches[0].clientY - touchStartY.current
-    if (dy > 0 && e.touches.length === 1) {
-      setDragY(dy)
-      if (dy > 20) {
-        clearTimeout(longPressTimer.current)
-      }
-    }
+  function onTouchMove() {
+    // no-op — drag-to-close removed
   }
 
   function onTouchEnd(e, tapAction) {
     clearTimeout(longPressTimer.current)
-    const dy = dragY
-    setDragY(0)
-    if (dy > 100) {
-      closingRef.current = true
-      onClose?.()
-      return
-    }
     if (pressFiredRef.current) {
       resumeNow()
       pressFiredRef.current = false
       return
     }
-    if (Math.abs(dy) < 10 && tapAction) tapAction()
+    if (tapAction) tapAction()
   }
 
   async function canReply() {
@@ -256,16 +243,10 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
   if (!story) return null
 
   const groupStories = group?.stories || []
-  const dragOpacity = Math.max(0, 1 - Math.abs(dragY) / 300)
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[220] bg-black select-none overflow-hidden"
-      style={{
-        transform: `translateY(${dragY}px) scale(${1 - Math.min(dragY, 200) / 1000})`,
-        transition: dragY === 0 ? "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)" : "none",
-        opacity: dragOpacity,
-      }}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={(e) => onTouchEnd(e, null)}
@@ -438,14 +419,6 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
         className="absolute right-0 top-0 bottom-0 w-2/3 z-10"
       />
 
-      {/* Paused indicator */}
-      {paused && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none">
-          <div className="w-16 h-16 rounded-full grid place-items-center bg-black/50 backdrop-blur-md border border-white/25">
-            <span className="text-white text-[24px] leading-none" style={{ letterSpacing: -2 }}>❚❚</span>
-          </div>
-        </div>
-      )}
 
       {/* Viewers sheet (own story) */}
       {viewersOpen && (
@@ -505,6 +478,7 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   )
 }
