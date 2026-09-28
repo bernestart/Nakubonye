@@ -138,14 +138,12 @@ export default function ProfileSettings() {
           <FeatureTile icon={<Heart size={20} />} label="Matches" to="/matches" nav={nav} />
           <FeatureTile icon={<Users size={20} />} label="Communities" to="/communities" nav={nav} />
           <FeatureTile icon={<Eye size={20} />} label="Profile views" to="/profile-views" nav={nav} />
-          <FeatureTile icon={<Store size={20} />} label="My listings" to="/me/listings" nav={nav} />
           <FeatureTile icon={<Crown size={20} />} label="Premium" to="/premium" nav={nav} />
           <FeatureTile icon={<WalletIcon size={20} />} label="Wallet" to="/wallet" nav={nav} />
           <FeatureTile icon={<Zap size={20} />} label="Boost profile" to="/boost" nav={nav} />
           <FeatureTile icon={<ShieldCheck size={20} />} label="Get verified" to="/verify" nav={nav} />
           <FeatureTile icon={<Store size={20} />} label="Marketplace" to="/marketplace" nav={nav} />
           <FeatureTile icon={<Briefcase size={20} />} label="Services" to="/services" nav={nav} />
-          <FeatureTile icon={<Calendar size={20} />} label="My bookings" to="/me/bookings" nav={nav} />
         </div>
 
         {/* Collapsible — Settings & privacy */}
