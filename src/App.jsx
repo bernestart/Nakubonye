@@ -46,6 +46,7 @@ import ProfileSettings from './screens/ProfileSettings'
 import Marketplace from './screens/Marketplace'
 import CreateListing from './screens/CreateListing'
 import Services from './screens/Services'
+import MyBookings from './screens/MyBookings'
 import BookService from './screens/BookService'
 import CreateService from './screens/CreateService'
 import ServiceDetail from './screens/ServiceDetail'
@@ -207,6 +208,7 @@ export default function App() {
         <Route path="/services/new" element={<Guard><CreateService /></Guard>} />
         <Route path="/services/:id" element={<Guard><ServiceDetail /></Guard>} />
         <Route path="/services/:id/book" element={<Guard><BookService /></Guard>} />
+        <Route path="/me/bookings" element={<Guard><MyBookings /></Guard>} />
         <Route path="/me/preview"  element={<Guard><Preview /></Guard>} />
         <Route path="/profile-views" element={<Guard><ProfileViewers /></Guard>} />
         <Route path="/admin" element={<Guard><Admin /></Guard>} />

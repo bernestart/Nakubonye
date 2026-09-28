@@ -4,7 +4,7 @@ import {
   ArrowLeft, ChevronRight, ChevronDown, LogOut, Bell, Gift, Crown,
   Wallet as WalletIcon, UserX, Shield, ShieldCheck, Info, FileText,
   Eye, Zap, Key, Users, Plus, Bookmark, LayoutGrid, Play, Heart,
-  Store, Briefcase
+  Store, Briefcase, Calendar
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -145,6 +145,7 @@ export default function ProfileSettings() {
           <FeatureTile icon={<ShieldCheck size={20} />} label="Get verified" to="/verify" nav={nav} />
           <FeatureTile icon={<Store size={20} />} label="Marketplace" to="/marketplace" nav={nav} />
           <FeatureTile icon={<Briefcase size={20} />} label="Services" to="/services" nav={nav} />
+          <FeatureTile icon={<Calendar size={20} />} label="My bookings" to="/me/bookings" nav={nav} />
         </div>
 
         {/* Collapsible — Settings & privacy */}
