@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Heart, Flag, Ban, MoreVertical, X } from 'lucide-react'
+import { ArrowLeft, Heart, Flag, Ban, MoreVertical, X , MessageCircle} from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl, calcAge } from '../lib/photo'
@@ -38,6 +38,8 @@ export default function ProfileView() {
   const [reportOpen, setReportOpen] = useState(false)
   const [blockOpen, setBlockOpen] = useState(false)
   const [dmOpen, setDmOpen] = useState(false)
+  const [canView, setCanView] = useState(true)
+  const [canViewMessage, setCanViewMessage] = useState('')
 
   const load = useCallback(async () => {
     if (!myId || !userId) return
@@ -57,6 +59,22 @@ export default function ProfileView() {
       return
     }
     setPerson(prof)
+
+    // Enforce profile_visibility
+    if (userId !== myId) {
+      const { data: allowed } = await supabase.rpc('can_view_profile', {
+        viewer: myId,
+        owner: userId,
+      })
+      if (allowed === false) {
+        setCanView(false)
+        setCanViewMessage('This profile is private')
+        setLoading(false)
+        return
+      }
+    }
+    setCanView(true)
+
 
     const [photoRes, promptRes, linksRes, reelRes, personalRes, communityRes, f1, f2] = await Promise.all([
       supabase.from('profile_photos').select('storage_path, is_primary, display_order').eq('user_id', userId)
@@ -119,6 +137,39 @@ export default function ProfileView() {
     return (
       <div className="mobile-shell flex items-center justify-center" style={{ position: 'fixed', inset: 0, background: '#0B0B14' }}>
         <div className="w-8 h-8 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
+      </div>
+    )
+  }
+
+  if (!canView && !isMe) {
+    return (
+      <div className="mobile-shell" style={{ position: 'fixed', inset: 0, background: '#0B0B14', display: 'flex', flexDirection: 'column' }}>
+        <header className="px-3 py-3 flex items-center gap-2 shrink-0">
+          <button onClick={() => nav(-1)} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Back">
+            <ArrowLeft size={20} strokeWidth={2.3} />
+          </button>
+          <span className="text-cream font-bold text-[15px] flex-1 truncate">{person?.display_name || person?.username || 'Profile'}</span>
+        </header>
+        <div className="flex-1 grid place-items-center px-6 text-center">
+          <div className="max-w-[300px]">
+            <div className="w-20 h-20 rounded-full overflow-hidden bg-purple-600 grid place-items-center mx-auto mb-4">
+              {photos[0] ? (
+                <img src={photos[0]} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-white text-2xl font-black">{(person?.display_name || person?.username || 'U')[0]?.toUpperCase()}</span>
+              )}
+            </div>
+            <p className="text-cream font-black text-[17px] mb-1">{person?.display_name || person?.username}</p>
+            <p className="text-muted text-[13px] leading-relaxed mb-6">{canViewMessage || 'This profile is private'}</p>
+            <button
+              onClick={() => nav('/messages/' + userId)}
+              className="h-11 px-5 rounded-full text-white font-bold text-[13.5px] inline-flex items-center justify-center gap-2"
+              style={{ background: 'linear-gradient(135deg, #EC4899 0%, #A855F7 100%)' }}
+            >
+              <MessageCircle size={15} /> Message
+            </button>
+          </div>
+        </div>
       </div>
     )
   }
