@@ -230,9 +230,53 @@ export default function Feed() {
       .filter((r) => !hiddenKeys.has("reel:" + r.id))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 
-    // 3f. Mix — 3 posts per 1 reel
+    // 3e-bis. Fetch engagement counts for ranking
+    const commIdsRank = postsSorted.filter((r) => r._source === "community").map((r) => r.id)
+    const personalIdsRank = postsSorted.filter((r) => r._source === "personal").map((r) => r.id)
+    const likeMap = new Map()
+    const cmtMap = new Map()
+    if (commIdsRank.length > 0) {
+      const [a, b] = await Promise.all([
+        supabase.from("community_post_reactions").select("post_id").in("post_id", commIdsRank),
+        supabase.from("community_post_comments").select("post_id").in("post_id", commIdsRank),
+      ])
+      ;(a.data || []).forEach((r) => likeMap.set(r.post_id, (likeMap.get(r.post_id) || 0) + 1))
+      ;(b.data || []).forEach((c) => cmtMap.set(c.post_id, (cmtMap.get(c.post_id) || 0) + 1))
+    }
+    if (personalIdsRank.length > 0) {
+      const [a, b] = await Promise.all([
+        supabase.from("user_post_likes").select("post_id").in("post_id", personalIdsRank),
+        supabase.from("user_post_comments").select("post_id").in("post_id", personalIdsRank),
+      ])
+      ;(a.data || []).forEach((r) => likeMap.set(r.post_id, (likeMap.get(r.post_id) || 0) + 1))
+      ;(b.data || []).forEach((c) => cmtMap.set(c.post_id, (cmtMap.get(c.post_id) || 0) + 1))
+    }
+    const enrichedPosts = postsSorted.map((p) => ({
+      ...p,
+      _likeCount: likeMap.get(p.id) || 0,
+      _commentCount: cmtMap.get(p.id) || 0,
+    }))
+    const enrichedReels = reelsSorted.map((r) => ({
+      ...r,
+      _likeCount: 0,
+      _commentCount: 0,
+    }))
+
+    // 3f. Mix — ranked
     seenReelIds.current = new Set()
-    const list = mixFeed({ posts: postsSorted, reels: reelsSorted, pageSize: 20, reelEvery: 10, seenReelIds: seenReelIds.current })
+    const scoreContextLoad = {
+      myId,
+      matchIds: new Set(matchIds),
+      followIds: new Set(followIds),
+    }
+    const list = mixFeed({
+      posts: enrichedPosts,
+      reels: enrichedReels,
+      pageSize: 20,
+      reelEvery: 10,
+      seenReelIds: seenReelIds.current,
+      scoreContext: scoreContextLoad,
+    })
 
     setPosts(list)
     // hasMore stays true as long as we got something —
@@ -463,7 +507,47 @@ export default function Feed() {
       .filter((r) => !hiddenKeys.has("reel:" + r.id))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 
-    const merged = mixFeed({ posts: postsSorted, reels: reelsSorted, pageSize: 20, reelEvery: 10, seenReelIds: seenReelIds.current })
+    // Engagement for ranking
+    const commIdsRank = postsSorted.filter((r) => r._source === "community").map((r) => r.id)
+    const personalIdsRank = postsSorted.filter((r) => r._source === "personal").map((r) => r.id)
+    const likeMap = new Map()
+    const cmtMap = new Map()
+    if (commIdsRank.length > 0) {
+      const [a, b] = await Promise.all([
+        supabase.from("community_post_reactions").select("post_id").in("post_id", commIdsRank),
+        supabase.from("community_post_comments").select("post_id").in("post_id", commIdsRank),
+      ])
+      ;(a.data || []).forEach((r) => likeMap.set(r.post_id, (likeMap.get(r.post_id) || 0) + 1))
+      ;(b.data || []).forEach((c) => cmtMap.set(c.post_id, (cmtMap.get(c.post_id) || 0) + 1))
+    }
+    if (personalIdsRank.length > 0) {
+      const [a, b] = await Promise.all([
+        supabase.from("user_post_likes").select("post_id").in("post_id", personalIdsRank),
+        supabase.from("user_post_comments").select("post_id").in("post_id", personalIdsRank),
+      ])
+      ;(a.data || []).forEach((r) => likeMap.set(r.post_id, (likeMap.get(r.post_id) || 0) + 1))
+      ;(b.data || []).forEach((c) => cmtMap.set(c.post_id, (cmtMap.get(c.post_id) || 0) + 1))
+    }
+    const enrichedPosts = postsSorted.map((p) => ({
+      ...p,
+      _likeCount: likeMap.get(p.id) || 0,
+      _commentCount: cmtMap.get(p.id) || 0,
+    }))
+    const enrichedReels = reelsSorted.map((r) => ({ ...r, _likeCount: 0, _commentCount: 0 }))
+
+    const scoreContextLM = {
+      myId,
+      matchIds: new Set(matchIds),
+      followIds: new Set(followIds),
+    }
+    const merged = mixFeed({
+      posts: enrichedPosts,
+      reels: enrichedReels,
+      pageSize: 20,
+      reelEvery: 10,
+      seenReelIds: seenReelIds.current,
+      scoreContext: scoreContextLM,
+    })
 
     if (merged.length === 0) {
       setHasMore(false)
