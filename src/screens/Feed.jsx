@@ -883,24 +883,13 @@ export default function Feed() {
         {loading ? (
           <div className="grid place-items-center h-40 text-muted text-[13px]">Loading feed…</div>
         ) : posts.length === 0 ? (
-          <div className="grid place-items-center h-full text-center px-6">
-            <div>
-              <div className="w-14 h-14 rounded-2xl bg-purple-500/15 border border-purple-500/30 grid place-items-center mx-auto mb-4">
-                <Users size={22} className="text-purple-300" />
-              </div>
-              <p className="text-cream font-semibold text-[15px] mb-1.5">Your feed is empty</p>
-              <p className="text-muted text-[13px] leading-relaxed mb-4">
-                Join a community to see what people are sharing.
-              </p>
-              <button
-                onClick={() => nav("/communities")}
-                className="h-11 px-5 rounded-full text-white font-bold text-[13.5px]"
-                style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
-              >
-                Explore communities
-              </button>
-            </div>
-          </div>
+          <EmptyFeed
+            nav={nav}
+            suggested={suggested}
+            trending={trending}
+            trendingLabel={trendingLabel}
+            myId={myId}
+          />
         ) : (
           <>
             {pendingPosts.map((pp) => (
@@ -1404,6 +1393,143 @@ export default function Feed() {
       )}
 
       <BottomNav />
+    </div>
+  )
+}
+
+function EmptyFeed({ nav, suggested, trending, trendingLabel, myId }) {
+  const [listings, setListings] = useState([])
+  const [services, setServices] = useState([])
+
+  useEffect(() => {
+    ;(async () => {
+      const [ln, sv] = await Promise.all([
+        supabase.from("listings").select("id, title, price, currency, image_paths").eq("status", "active").order("created_at", { ascending: false }).limit(4),
+        supabase.from("services").select("id, title, price, currency, duration_minutes, image_paths").eq("status", "active").order("created_at", { ascending: false }).limit(4),
+      ])
+      setListings(ln.data || [])
+      setServices(sv.data || [])
+    })()
+  }, [])
+
+  return (
+    <div className="px-3 py-5 pb-24">
+      <p className="text-cream font-black text-[20px] mb-1">Welcome to Nakubonye</p>
+      <p className="text-muted text-[13px] leading-relaxed mb-6">
+        Follow people, join communities, and save listings to personalize your feed. Meanwhile, here's what's happening.
+      </p>
+
+      {suggested.length > 0 && (
+        <section className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-cream font-bold text-[15px]">People to follow</p>
+            <button onClick={() => nav("/discover")} className="text-purple-300 text-[12.5px] font-bold">See all</button>
+          </div>
+          <div className="flex gap-2.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+            {suggested.slice(0, 8).map((u) => (
+              <button key={u.id} onClick={() => { tap("light"); nav("/profile/" + u.id) }}
+                className="shrink-0 flex flex-col items-center gap-2 active:opacity-80"
+                style={{ width: 88 }}>
+                <div className="w-16 h-16 rounded-full overflow-hidden bg-purple-600 grid place-items-center border-2 border-purple-500/40">
+                  {u.photo_url ? (
+                    <img src={u.photo_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-white text-xl font-black">{(u.display_name || "?")[0]}</span>
+                  )}
+                </div>
+                <p className="text-cream text-[11.5px] font-semibold truncate w-full text-center">
+                  {(u.display_name || u.username || "User").split(" ")[0]}
+                </p>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {trending.length > 0 && (
+        <section className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-cream font-bold text-[15px]">🔥 {trendingLabel}</p>
+            <button onClick={() => nav("/reels")} className="text-purple-300 text-[12.5px] font-bold">See all</button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {trending.slice(0, 4).map((r) => (
+              <button key={r.id} onClick={() => { tap("light"); nav("/reels") }}
+                className="relative rounded-xl overflow-hidden aspect-[9/16] active:opacity-90">
+                {r.thumbnail_url && <img src={r.thumbnail_url} alt="" className="w-full h-full object-cover" />}
+                <div className="absolute inset-x-0 bottom-0 px-2 pb-2 pt-6"
+                     style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.8))" }}>
+                  <p className="text-white text-[11px] font-bold line-clamp-2 text-left">{r.caption || "Reel"}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {listings.length > 0 && (
+        <section className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-cream font-bold text-[15px]">🛒 Fresh listings</p>
+            <button onClick={() => nav("/marketplace")} className="text-purple-300 text-[12.5px] font-bold">See all</button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {listings.map((l) => {
+              const img = l.image_paths?.[0] ? supabase.storage.from("listing-media").getPublicUrl(l.image_paths[0]).data?.publicUrl : null
+              return (
+                <button key={l.id} onClick={() => { tap("light"); nav("/marketplace/" + l.id) }}
+                  className="rounded-xl overflow-hidden bg-white/[0.03] border border-white/8 text-left active:opacity-90">
+                  <div className="aspect-square bg-black/40">
+                    {img && <img src={img} alt="" className="w-full h-full object-cover" />}
+                  </div>
+                  <div className="p-2">
+                    <p className="text-cream text-[12px] font-bold line-clamp-1">{l.title}</p>
+                    <p className="text-cream font-black text-[12.5px]">
+                      {l.price ? l.price.toLocaleString() + " " + (l.currency || "BIF") : "Free"}
+                    </p>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
+      {services.length > 0 && (
+        <section className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-cream font-bold text-[15px]">🔧 Services near you</p>
+            <button onClick={() => nav("/services")} className="text-purple-300 text-[12.5px] font-bold">See all</button>
+          </div>
+          <div className="flex flex-col gap-2">
+            {services.map((s) => {
+              const img = s.image_paths?.[0] ? supabase.storage.from("service-media").getPublicUrl(s.image_paths[0]).data?.publicUrl : null
+              return (
+                <button key={s.id} onClick={() => { tap("light"); nav("/services/" + s.id) }}
+                  className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.03] border border-white/8 text-left active:opacity-90">
+                  <div className="w-14 h-14 rounded-xl overflow-hidden bg-black/40 shrink-0">
+                    {img && <img src={img} alt="" className="w-full h-full object-cover" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-cream font-bold text-[13px] truncate">{s.title}</p>
+                    <p className="text-muted text-[11.5px]">{s.duration_minutes} min</p>
+                    <p className="text-cream font-black text-[13px]">
+                      {s.price ? s.price.toLocaleString() + " " + (s.currency || "BIF") : "Free"}
+                    </p>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
+      <button
+        onClick={() => { tap("light"); nav("/communities") }}
+        className="w-full h-12 rounded-2xl text-white font-bold text-[14px] inline-flex items-center justify-center gap-2"
+        style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}>
+        Explore communities
+      </button>
     </div>
   )
 }
