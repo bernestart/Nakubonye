@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Send, MessageCircle, Paperclip, X, Smile, Mic, Square, Play, Pause, MoreVertical, Trash2, Eye, Flag, Ban, Check, CheckCheck , Phone, Video } from 'lucide-react'
+import { ArrowLeft, Send, MessageCircle, Paperclip, X, Smile, Mic, Square, Play, Pause, MoreVertical, Trash2, Eye, Flag, Ban, Check, CheckCheck , Phone, Video, Pin } from 'lucide-react'
 import VerifiedBadge from "../components/VerifiedBadge"
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
@@ -83,6 +83,7 @@ export default function Chat() {
   const [reactionPickerFor, setReactionPickerFor] = useState(null)
   const [actionsForMsg, setActionsForMsg] = useState(null)
   const [forwardingMsg, setForwardingMsg] = useState(null)
+  const [pinnedMsg, setPinnedMsg] = useState(null)
   const [attachment, setAttachment] = useState(null)
   const [attachmentPreview, setAttachmentPreview] = useState('')
   const [otherTyping, setOtherTyping] = useState(false)
@@ -247,6 +248,51 @@ export default function Chat() {
   }, [myId, otherId])
 
   useEffect(() => { boot() }, [boot])
+
+  // Load pinned message for this conversation
+  useEffect(() => {
+    if (!conversationId) return
+    let cancelled = false
+    const fetchPinned = async () => {
+      const { data: pin } = await supabase
+        .from('pinned_messages')
+        .select('message_id, pinned_by')
+        .eq('conversation_id', conversationId)
+        .maybeSingle()
+      if (cancelled) return
+      if (!pin) { setPinnedMsg(null); return }
+      const { data: msg } = await supabase
+        .from('messages')
+        .select('id, sender_id, content, created_at, media_url, media_type, deleted_at')
+        .eq('id', pin.message_id)
+        .maybeSingle()
+      if (cancelled) return
+      setPinnedMsg(msg ? { ...msg, pinned_by: pin.pinned_by } : null)
+    }
+    fetchPinned()
+    const ch = supabase
+      .channel('pin-' + conversationId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pinned_messages', filter: 'conversation_id=eq.' + conversationId }, () => fetchPinned())
+      .subscribe()
+    return () => { cancelled = true; supabase.removeChannel(ch) }
+  }, [conversationId])
+
+  // Toggle pin
+  async function togglePin(message) {
+    if (!conversationId || !myId) return
+    tap('light')
+    if (pinnedMsg?.id === message.id) {
+      await supabase.from('pinned_messages').delete().eq('conversation_id', conversationId)
+      setPinnedMsg(null)
+    } else {
+      await supabase.from('pinned_messages').upsert({
+        conversation_id: conversationId,
+        message_id: message.id,
+        pinned_by: myId,
+      }, { onConflict: 'conversation_id' })
+      setPinnedMsg({ ...message, pinned_by: myId })
+    }
+  }
 
   useEffect(() => {
     if (!conversationId) return
@@ -559,6 +605,27 @@ export default function Chat() {
       {error && (
         <div className="mx-3 mt-2 text-danger text-[12px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5 shrink-0">
           {error}
+        </div>
+      )}
+
+      {pinnedMsg && !pinnedMsg.deleted_at && (
+        <div className="shrink-0 mx-3 mt-2 mb-1 rounded-2xl bg-purple-500/10 border border-purple-500/30 px-3 py-2 flex items-center gap-2.5">
+          <Pin size={14} className="text-purple-300 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-purple-300 text-[10.5px] font-black tracking-wider uppercase">Pinned</p>
+            <p className="text-cream text-[13px] truncate">
+              {pinnedMsg.media_url && !pinnedMsg.content
+                ? "📎 Attachment"
+                : (pinnedMsg.content || "").slice(0, 120)}
+            </p>
+          </div>
+          <button
+            onClick={() => togglePin(pinnedMsg)}
+            className="shrink-0 text-muted text-[11.5px] font-semibold px-2 py-1"
+            aria-label="Unpin"
+          >
+            Unpin
+          </button>
         </div>
       )}
 
@@ -937,6 +1004,8 @@ export default function Chat() {
           onForward={(m) => { setActionsForMsg(null); setForwardingMsg(m) }}
           onDelete={deleteMessage}
           onReact={(emoji) => toggleReaction(actionsForMsg.id, emoji)}
+          isPinned={pinnedMsg?.id === actionsForMsg.id}
+          onPin={togglePin}
         />
       )}
 

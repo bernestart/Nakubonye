@@ -1,9 +1,9 @@
-import { X, Reply, Copy, Forward, Trash2, Smile } from "lucide-react"
+import { X, Reply, Copy, Forward, Trash2, Smile, Pin, PinOff } from "lucide-react"
 import { tap } from "../lib/haptic"
 
 const REACTIONS = ["❤️", "😂", "😍", "👍", "🔥", "😮", "😢", "😡"]
 
-export default function MessageActionsSheet({ message, isMine, onClose, onReply, onCopy, onForward, onDelete, onReact }) {
+export default function MessageActionsSheet({ message, isMine, isPinned, onClose, onReply, onCopy, onForward, onDelete, onReact, onPin }) {
   async function copyText() {
     try {
       await navigator.clipboard.writeText(message.content || "")
@@ -43,6 +43,13 @@ export default function MessageActionsSheet({ message, isMine, onClose, onReply,
           <ActionRow icon={<Reply size={17} />} label="Reply" onClick={() => { onReply?.(message); onClose?.() }} />
           {message.content && (
             <ActionRow icon={<Copy size={17} />} label="Copy text" onClick={copyText} />
+          )}
+          {onPin && (
+            <ActionRow
+              icon={isPinned ? <PinOff size={17} /> : <Pin size={17} />}
+              label={isPinned ? "Unpin" : "Pin"}
+              onClick={() => { onClose?.(); onPin?.(message) }}
+            />
           )}
           <ActionRow icon={<Forward size={17} />} label="Forward" onClick={() => { onForward?.(message); onClose?.() }} />
           {isMine && (
