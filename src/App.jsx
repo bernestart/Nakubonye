@@ -72,6 +72,7 @@ import Invite from './screens/Invite'
 import Communities from './screens/Communities'
 import CommunityView from './screens/CommunityView'
 import EditCommunity from './screens/EditCommunity'
+import JoinCommunity from './screens/JoinCommunity'
 import Notifications from './screens/Notifications'
 import DeleteAccountModal from './components/DeleteAccountModal'
 import CallOverlay from './components/CallOverlay'
@@ -242,6 +243,7 @@ export default function App() {
         <Route path="/communities" element={<Guard><Communities /></Guard>} />
         <Route path="/communities/:id" element={<Guard><CommunityView /></Guard>} />
         <Route path="/communities/:id/edit" element={<Guard><EditCommunity /></Guard>} />
+        <Route path="/join-community/:code" element={<JoinCommunity />} />
         <Route path="/communities/:id/discover" element={<Guard><Discover /></Guard>} />
         <Route path="/notifications" element={<Guard><Notifications /></Guard>} />
         <Route path="*" element={<Navigate to="/" replace />} />
