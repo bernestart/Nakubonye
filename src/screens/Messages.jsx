@@ -739,29 +739,19 @@ export default function Messages() {
           )}
         </div>
 
-        {/* Filter tabs */}
-        <div className="flex gap-1.5 mt-2.5">
-          {[
-            { id: "all",    label: "All" },
-            { id: "unread", label: "Unread" },
-            { id: "groups", label: "Groups" },
-          ].map((t) => (
+        {/* Active filter chip — only when a filter is applied */}
+        {tabFilter !== "all" && (
+          <div className="flex mt-2.5">
             <button
-              key={t.id}
-              onClick={() => { tap("light"); setTabFilter(t.id) }}
-              className="h-8 px-3.5 rounded-full text-[12.5px] font-bold transition-colors"
-              style={{
-                background: tabFilter === t.id
-                  ? "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)"
-                  : "rgba(255,255,255,0.05)",
-                border: tabFilter === t.id ? "none" : "1px solid rgba(255,255,255,0.08)",
-                color: tabFilter === t.id ? "#fff" : "#aaa",
-              }}
+              onClick={() => { tap("light"); setTabFilter("all") }}
+              className="h-8 px-3.5 rounded-full text-[12.5px] font-bold inline-flex items-center gap-1.5"
+              style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)", color: "#fff" }}
             >
-              {t.label}
+              {tabFilter === "unread" ? "Unread" : "Groups"}
+              <X size={12} strokeWidth={3} />
             </button>
-          ))}
-        </div>
+          </div>
+        )}
       </div>
 
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-3 pb-4"
