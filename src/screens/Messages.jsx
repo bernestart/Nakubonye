@@ -580,6 +580,29 @@ export default function Messages() {
       })
     : tabFiltered
 
+  // Build display list with section headers
+  const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000
+  const nowMs = Date.now()
+  const showSections = tabFilter === "all" && !searchQuery.trim()
+  const displayItems = []
+  let showedRecent = false
+  let showedEarlier = false
+  visibleItems.forEach((item) => {
+    const age = item.lastMessageAt ? (nowMs - new Date(item.lastMessageAt).getTime()) : Infinity
+    const isRecent = age < SEVEN_DAYS
+    if (showSections) {
+      if (isRecent && !showedRecent) {
+        displayItems.push({ __header: "Recent" })
+        showedRecent = true
+      }
+      if (!isRecent && !showedEarlier) {
+        displayItems.push({ __header: "Earlier" })
+        showedEarlier = true
+      }
+    }
+    displayItems.push(item)
+  })
+
   return (
     <div
       style={{
@@ -821,7 +844,15 @@ export default function Messages() {
           )
         ) : (
           <div className="flex flex-col gap-1 pt-1">
-            {visibleItems.map((item) => (
+            {displayItems.map((item) => {
+              if (item.__header) {
+                return (
+                  <p key={"h-" + item.__header} className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mt-4 mb-1 px-1">
+                    {item.__header}
+                  </p>
+                )
+              }
+              return (
               <div
                 key={item.userId}
                 className="relative overflow-hidden rounded-2xl"
@@ -970,7 +1001,8 @@ export default function Messages() {
                 </div>
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
