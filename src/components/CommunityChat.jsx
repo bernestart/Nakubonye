@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Send, Sparkles, Paperclip, Camera, X , Mic, Square , Pin , MoreVertical , Eraser , Bell, BellOff } from 'lucide-react'
+import { Send, Sparkles, Paperclip, Camera, X , Mic, Square , Pin , MoreVertical , Eraser , Bell, BellOff , Flag } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl } from '../lib/photo'
@@ -10,6 +10,7 @@ import EmojiPicker from './chat/EmojiPicker'
 import ImageLightbox from './chat/ImageLightbox'
 import MessageActionsSheet from './MessageActionsSheet'
 import ForwardPicker from './ForwardPicker'
+import ReportModal from './ReportModal'
 import AudioBubble from './chat/AudioBubble'
 import { useVoiceRecorder } from './chat/useVoiceRecorder'
 
@@ -47,6 +48,7 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
   const [clearedAt, setClearedAt] = useState(null)
   const [isMuted, setIsMuted] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
   const [forwardingMsg, setForwardingMsg] = useState(null)
   const [typers, setTypers] = useState({})
   const typingChannelRef = useRef(null)
@@ -569,10 +571,24 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
               <Eraser size={18} />
               <span className="font-semibold text-[14px]">Clear chat</span>
             </button>
+            <button
+              onClick={() => { setMenuOpen(false); setReportOpen(true) }}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+            >
+              <Flag size={18} />
+              <span className="font-semibold text-[14px]">Report</span>
+            </button>
+
             <button onClick={() => setMenuOpen(false)} className="w-full h-11 mt-1 text-muted font-semibold text-[13.5px]">Cancel</button>
           </div>
         </div>
       )}
+
+      <ReportModal
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        target={communityId ? { id: communityId, name: communityName, isCommunity: true } : null}
+      />
 
       {error && (
         <div className="text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5 mb-3">
