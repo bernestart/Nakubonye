@@ -46,6 +46,7 @@ import Preview from './screens/Preview'
 import ProfileSettings from './screens/ProfileSettings'
 import PrivacySettings from './screens/PrivacySettings'
 import Marketplace from './screens/Marketplace'
+import CreateGroup from './screens/CreateGroup'
 import CreateListing from './screens/CreateListing'
 import Services from './screens/Services'
 import MyBookings from './screens/MyBookings'
@@ -203,6 +204,7 @@ export default function App() {
         <Route path="/me"         element={<Guard><ProfileSettings /></Guard>} />
         <Route path="/saved" element={<Guard><ComingSoon title="Saved" message="Your saved posts and reels will appear here soon." /></Guard>} />
         <Route path="/marketplace" element={<Guard><Marketplace /></Guard>} />
+        <Route path="/groups/new" element={<Guard><CreateGroup /></Guard>} />
         <Route path="/marketplace/new" element={<Guard><CreateListing /></Guard>} />
         <Route path="/marketplace/:id" element={<Guard><ListingDetail /></Guard>} />
         <Route path="/me/listings" element={<Guard><MyListings /></Guard>} />
