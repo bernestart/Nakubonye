@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { ArrowLeft, Send, Paperclip, X, MoreVertical, Users, Camera, Trash2, Flag, LogOut, UserPlus } from "lucide-react"
+import { ArrowLeft, Send, Paperclip, X, MoreVertical, Users, Camera, Trash2, Flag, LogOut, UserPlus , Pencil } from "lucide-react"
 import { motion } from "framer-motion"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
@@ -419,6 +419,7 @@ export default function GroupChat() {
             className="absolute top-16 right-3 w-56 bg-surface rounded-2xl border border-white/10 shadow-2xl overflow-hidden"
           >
             <MenuItem icon={<Users size={16} />} label={`${members.length} members`} onClick={() => { setMenuOpen(false); nav(`/groups/${groupId}/members`) }} />
+            <MenuItem icon={<Pencil size={16} />} label="Edit group" onClick={() => { setMenuOpen(false); nav(`/groups/${groupId}/edit`) }} />
             <MenuItem icon={<UserPlus size={16} />} label="Add members" onClick={() => { setMenuOpen(false); nav(`/groups/${groupId}/add`) }} />
             <MenuItem icon={<Flag size={16} />} label="Report group" danger onClick={() => { setMenuOpen(false); alert("Coming soon") }} />
             <MenuItem icon={<LogOut size={16} />} label="Leave group" danger onClick={() => { setMenuOpen(false); leaveGroup() }} />
