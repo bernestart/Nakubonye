@@ -1,6 +1,6 @@
 import { Component, useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Check, Plus, MapPin, UserPlus } from 'lucide-react'
+import { ArrowLeft, Check, Plus, MapPin, UserPlus , MoreVertical , Share2 , LogOut , Pencil , Trash2 , Flag } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl, calcAge } from '../lib/photo'
@@ -22,6 +22,9 @@ export default function CommunityView() {
   const [busy, setBusy] = useState(false)
   const [isPremium, setIsPremium] = useState(false)
   const [tab, setTab] = useState('feed')
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [inviteCode, setInviteCode] = useState(null)
+  const [inviteEnabled, setInviteEnabled] = useState(true)
 
   const load = useCallback(async () => {
     if (!session?.user?.id || !id) return
@@ -29,12 +32,14 @@ export default function CommunityView() {
 
     const { data: c, error: cErr } = await supabase
       .from('communities')
-      .select('id, slug, name, description, emoji, cover_color, member_count')
+      .select('id, slug, name, description, emoji, cover_color, member_count, created_by, invite_code, invite_enabled')
       .eq('id', id)
       .single()
 
     if (cErr || !c) { setError(cErr?.message || 'Community not found'); setLoading(false); return }
     setCommunity(c)
+    setInviteCode(c.invite_code || null)
+    setInviteEnabled(c.invite_enabled !== false)
 
     const { data: meRow } = await supabase
       .from('community_memberships')
@@ -129,6 +134,35 @@ export default function CommunityView() {
     setBusy(false)
   }
 
+  async function shareCommunity() {
+    tap("light")
+    const url = window.location.origin + "/join-community/" + (inviteCode || "")
+    if (!inviteCode) { alert("No invite code available"); return }
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "Join " + community.name,
+          text: "Join " + community.name + " on Nakubonye",
+          url,
+        })
+      } else {
+        await navigator.clipboard.writeText(url)
+        alert("Link copied!")
+      }
+    } catch {}
+    setMenuOpen(false)
+  }
+
+  async function deleteCommunity() {
+    if (!community) return
+    if (!confirm("Delete this community permanently? Posts and chat will be removed.")) return
+    tap("medium")
+    const { error: err } = await supabase.from("communities").delete().eq("id", community.id)
+    if (err) { alert(err.message); return }
+    setMenuOpen(false)
+    nav("/communities", { replace: true })
+  }
+
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -142,10 +176,73 @@ export default function CommunityView() {
         <button onClick={() => nav(-1)} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Back">
           <ArrowLeft size={20} strokeWidth={2.3} />
         </button>
-        <span className="text-cream font-bold text-[15px] truncate">
+        <span className="text-cream font-bold text-[15px] truncate flex-1">
           {community?.name || 'Community'}
         </span>
+        <button
+          onClick={() => { tap("light"); setMenuOpen(true) }}
+          className="w-9 h-9 rounded-full grid place-items-center text-muted"
+          aria-label="Menu"
+        >
+          <MoreVertical size={20} strokeWidth={2.2} />
+        </button>
       </header>
+
+      {menuOpen && (
+        <div className="fixed inset-0 z-[500] flex items-end" onClick={() => setMenuOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
+            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+          >
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
+            <p className="text-cream font-bold text-[15px] mb-2 truncate">{community?.name}</p>
+
+            <button
+              onClick={shareCommunity}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+            >
+              <Share2 size={18} /> <span className="font-semibold text-[14px]">Share community</span>
+            </button>
+
+            {joined && (
+              <button
+                onClick={() => { setMenuOpen(false); toggle() }}
+                className="w-full flex items-center gap-3 p-4 rounded-2xl bg-danger/10 border border-danger/30 text-left text-danger"
+              >
+                <LogOut size={18} /> <span className="font-semibold text-[14px]">Leave community</span>
+              </button>
+            )}
+
+            {community?.created_by === session?.user?.id && (
+              <>
+                <button
+                  onClick={() => { setMenuOpen(false); nav("/communities/" + community.id + "/edit") }}
+                  className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+                >
+                  <Pencil size={18} /> <span className="font-semibold text-[14px]">Edit community</span>
+                </button>
+                <button
+                  onClick={deleteCommunity}
+                  className="w-full flex items-center gap-3 p-4 rounded-2xl bg-danger/10 border border-danger/30 text-left text-danger"
+                >
+                  <Trash2 size={18} /> <span className="font-semibold text-[14px]">Delete community</span>
+                </button>
+              </>
+            )}
+
+            <button
+              onClick={() => { setMenuOpen(false); alert("Report coming soon") }}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+            >
+              <Flag size={18} /> <span className="font-semibold text-[14px]">Report</span>
+            </button>
+
+            <button onClick={() => setMenuOpen(false)} className="w-full h-11 mt-1 text-muted font-semibold text-[13.5px]">Cancel</button>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto px-5 py-4 pb-10">
         {error && (
