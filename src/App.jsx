@@ -48,6 +48,7 @@ import PrivacySettings from './screens/PrivacySettings'
 import Marketplace from './screens/Marketplace'
 import CreateGroup from './screens/CreateGroup'
 import GroupChat from './screens/GroupChat'
+import JoinGroup from './screens/JoinGroup'
 import EditGroup from './screens/EditGroup'
 import GroupMembers from './screens/GroupMembers'
 import AddGroupMembers from './screens/AddGroupMembers'
@@ -211,6 +212,7 @@ export default function App() {
         <Route path="/groups/new" element={<Guard><CreateGroup /></Guard>} />
         <Route path="/groups/:id" element={<Guard><GroupChat /></Guard>} />
         <Route path="/groups/:id/edit" element={<Guard><EditGroup /></Guard>} />
+        <Route path="/join/:code" element={<Guard><JoinGroup /></Guard>} />
         <Route path="/groups/:id/members" element={<Guard><GroupMembers /></Guard>} />
         <Route path="/groups/:id/add" element={<Guard><AddGroupMembers /></Guard>} />
         <Route path="/marketplace/new" element={<Guard><CreateListing /></Guard>} />

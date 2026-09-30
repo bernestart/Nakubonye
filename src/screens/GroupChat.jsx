@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { ArrowLeft, Send, Paperclip, X, MoreVertical, Users, Camera, Trash2, Flag, LogOut, UserPlus , Pencil } from "lucide-react"
+import { ArrowLeft, Send, Paperclip, X, MoreVertical, Users, Camera, Trash2, Flag, LogOut, UserPlus , Pencil , Link2 } from "lucide-react"
 import { motion } from "framer-motion"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 import BrandGlow from "../components/BrandGlow"
+import InviteLinkSheet from "../components/InviteLinkSheet"
 
 export default function GroupChat() {
   const nav = useNavigate()
@@ -28,6 +29,7 @@ export default function GroupChat() {
   const [attachmentPreview, setAttachmentPreview] = useState("")
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [inviteOpen, setInviteOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
 
@@ -38,7 +40,7 @@ export default function GroupChat() {
     // Verify membership + load group
     const { data: g } = await supabase
       .from("groups")
-      .select("id, name, avatar_url, created_by, created_at")
+      .select("id, name, avatar_url, created_by, created_at, invite_code, invite_enabled")
       .eq("id", groupId)
       .maybeSingle()
     if (!g) { setError("Group not found"); setLoading(false); return }
@@ -420,11 +422,16 @@ export default function GroupChat() {
           >
             <MenuItem icon={<Users size={16} />} label={`${members.length} members`} onClick={() => { setMenuOpen(false); nav(`/groups/${groupId}/members`) }} />
             <MenuItem icon={<Pencil size={16} />} label="Edit group" onClick={() => { setMenuOpen(false); nav(`/groups/${groupId}/edit`) }} />
-            <MenuItem icon={<UserPlus size={16} />} label="Add members" onClick={() => { setMenuOpen(false); nav(`/groups/${groupId}/add`) }} />
+            <MenuItem icon={<Link2 size={16} />} label="Invite via link" onClick={() => { setMenuOpen(false); setInviteOpen(true) }} />
+                        <MenuItem icon={<UserPlus size={16} />} label="Add members" onClick={() => { setMenuOpen(false); nav(`/groups/${groupId}/add`) }} />
             <MenuItem icon={<Flag size={16} />} label="Report group" danger onClick={() => { setMenuOpen(false); alert("Coming soon") }} />
             <MenuItem icon={<LogOut size={16} />} label="Leave group" danger onClick={() => { setMenuOpen(false); leaveGroup() }} />
           </div>
         </div>
+      )}
+
+      {inviteOpen && group && (
+        <InviteLinkSheet group={group} onClose={() => setInviteOpen(false)} />
       )}
     </div>
   )
