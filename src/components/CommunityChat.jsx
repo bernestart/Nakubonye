@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Send, Sparkles, Paperclip, Camera, X , Mic, Square } from 'lucide-react'
+import { Send, Sparkles, Paperclip, Camera, X , Mic, Square , Pin } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl } from '../lib/photo'
@@ -35,6 +35,7 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
   const [actionsForMsg, setActionsForMsg] = useState(null)
   const [reactionPickerFor, setReactionPickerFor] = useState(null)
   const [heartBurstId, setHeartBurstId] = useState(null)
+  const [pinnedMsg, setPinnedMsg] = useState(null)
   const longPressTimer = useRef(null)
   const swipeRef = useRef({ id: null, startX: 0, dx: 0, active: false })
   const [swipeState, setSwipeState] = useState({ id: null, dx: 0 })
@@ -142,6 +143,34 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
       setReactions(byMsg)
     })()
   }, [messages])
+
+  // Load + realtime pinned message
+  useEffect(() => {
+    if (!communityId) return
+    let cancelled = false
+    const fetchPinned = async () => {
+      const { data: pin } = await supabase
+        .from("community_pinned_messages")
+        .select("message_id, pinned_by")
+        .eq("community_id", communityId)
+        .maybeSingle()
+      if (cancelled) return
+      if (!pin) { setPinnedMsg(null); return }
+      const { data: msg } = await supabase
+        .from("community_messages")
+        .select("id, sender_id, content, media_url, media_type, deleted_at")
+        .eq("id", pin.message_id)
+        .maybeSingle()
+      if (cancelled) return
+      setPinnedMsg(msg ? { ...msg, pinned_by: pin.pinned_by } : null)
+    }
+    fetchPinned()
+    const ch = supabase
+      .channel("cpinned-" + communityId)
+      .on("postgres_changes", { event: "*", schema: "public", table: "community_pinned_messages", filter: "community_id=eq." + communityId }, fetchPinned)
+      .subscribe()
+    return () => { cancelled = true; supabase.removeChannel(ch) }
+  }, [communityId])
 
   function pickAttachment(e) {
     const f = e.target.files?.[0]
@@ -354,6 +383,22 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
     lastTapRef.current = { id: m.id, time: now }
   }
 
+  async function togglePin(message) {
+    if (!communityId || !myId) return
+    tap("light")
+    if (pinnedMsg?.id === message.id) {
+      await supabase.from("community_pinned_messages").delete().eq("community_id", communityId)
+      setPinnedMsg(null)
+    } else {
+      await supabase.from("community_pinned_messages").upsert({
+        community_id: communityId,
+        message_id: message.id,
+        pinned_by: myId,
+      }, { onConflict: "community_id" })
+      setPinnedMsg({ ...message, pinned_by: myId })
+    }
+  }
+
   if (!isMember) {
     return (
       <div className="text-center py-12">
@@ -381,6 +426,27 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
       {error && (
         <div className="text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5 mb-3">
           {error}
+        </div>
+      )}
+
+      {pinnedMsg && !pinnedMsg.deleted_at && (
+        <div className="mx-1 mb-2 rounded-2xl bg-purple-500/10 border border-purple-500/30 px-3 py-2 flex items-center gap-2.5">
+          <Pin size={14} className="text-purple-300 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-purple-300 text-[10.5px] font-black tracking-wider uppercase">Pinned</p>
+            <p className="text-cream text-[13px] truncate">
+              {pinnedMsg.media_url && !pinnedMsg.content
+                ? "📎 Attachment"
+                : (pinnedMsg.content || "").slice(0, 120)}
+            </p>
+          </div>
+          <button
+            onClick={() => togglePin(pinnedMsg)}
+            className="shrink-0 text-muted text-[11.5px] font-semibold px-2 py-1"
+            aria-label="Unpin"
+          >
+            Unpin
+          </button>
         </div>
       )}
 
@@ -612,6 +678,8 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
           onForward={(m) => { setActionsForMsg(null); alert("Forward coming soon") }}
           onDelete={deleteMessage}
           onReact={(emoji) => toggleReaction(actionsForMsg.id, emoji)}
+          isPinned={pinnedMsg?.id === actionsForMsg.id}
+          onPin={togglePin}
         />
       )}
 
