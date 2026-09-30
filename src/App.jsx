@@ -48,6 +48,8 @@ import PrivacySettings from './screens/PrivacySettings'
 import Marketplace from './screens/Marketplace'
 import CreateGroup from './screens/CreateGroup'
 import GroupChat from './screens/GroupChat'
+import GroupMembers from './screens/GroupMembers'
+import AddGroupMembers from './screens/AddGroupMembers'
 import CreateListing from './screens/CreateListing'
 import Services from './screens/Services'
 import MyBookings from './screens/MyBookings'
@@ -207,6 +209,8 @@ export default function App() {
         <Route path="/marketplace" element={<Guard><Marketplace /></Guard>} />
         <Route path="/groups/new" element={<Guard><CreateGroup /></Guard>} />
         <Route path="/groups/:id" element={<Guard><GroupChat /></Guard>} />
+        <Route path="/groups/:id/members" element={<Guard><GroupMembers /></Guard>} />
+        <Route path="/groups/:id/add" element={<Guard><AddGroupMembers /></Guard>} />
         <Route path="/marketplace/new" element={<Guard><CreateListing /></Guard>} />
         <Route path="/marketplace/:id" element={<Guard><ListingDetail /></Guard>} />
         <Route path="/me/listings" element={<Guard><MyListings /></Guard>} />
