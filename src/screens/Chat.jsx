@@ -368,81 +368,83 @@ export default function Chat() {
           if (next) setOther((cur) => cur ? { ...cur, last_seen_at: next } : cur)
         })
       .subscribe()
-    function onMsgPressStart(m) {
-    longPressTimer.current = setTimeout(() => {
-      tap("medium")
-      setActionsForMsg(m)
-    }, 450)
+  return () => { supabase.removeChannel(channel) }
+  }, [conversationId, myId, otherId])
+
+  function onMsgPressStart(m) {
+  longPressTimer.current = setTimeout(() => {
+    tap("medium")
+    setActionsForMsg(m)
+  }, 450)
   }
   function onMsgPressEnd() {
+  if (longPressTimer.current) {
+    clearTimeout(longPressTimer.current)
+    longPressTimer.current = null
+  }
+  }
+
+  function onRowTouchStart(m, e) {
+  swipeRef.current = { id: m.id, startX: e.touches[0].clientX, dx: 0, active: false }
+  onMsgPressStart(m)
+  }
+
+  function onRowTouchMove(e) {
+  const sw = swipeRef.current
+  if (!sw.id) return
+  const dx = e.touches[0].clientX - sw.startX
+  // Swipe only kicks in on a rightward drag of > 8px
+  if (!sw.active && dx > 8) {
+    sw.active = true
+    // Cancel long-press since we're now swiping
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current)
       longPressTimer.current = null
     }
   }
-
-  function onRowTouchStart(m, e) {
-    swipeRef.current = { id: m.id, startX: e.touches[0].clientX, dx: 0, active: false }
-    onMsgPressStart(m)
+  if (sw.active) {
+    sw.dx = Math.min(dx, 80)
+    setSwipeState({ id: sw.id, dx: sw.dx })
+  }
   }
 
-  function onRowTouchMove(e) {
-    const sw = swipeRef.current
-    if (!sw.id) return
-    const dx = e.touches[0].clientX - sw.startX
-    // Swipe only kicks in on a rightward drag of > 8px
-    if (!sw.active && dx > 8) {
-      sw.active = true
-      // Cancel long-press since we're now swiping
+  function onRowTouchEnd(m) {
+  const sw = swipeRef.current
+  const triggered = sw.active && sw.dx >= 50
+  const wasSwipe = sw.active
+  swipeRef.current = { id: null, startX: 0, dx: 0, active: false }
+  setSwipeState({ id: null, dx: 0 })
+
+  if (triggered) {
+    tap("light")
+    setReplyingTo(m)
+    return
+  }
+
+  if (!wasSwipe) {
+    const now = Date.now()
+    const last = lastTapRef.current
+    const isDoubleTap = last.id === m.id && (now - last.time) < 300
+    if (isDoubleTap) {
+      // Double tap — react with heart
+      lastTapRef.current = { id: null, time: 0 }
+      tap("medium")
+      toggleReaction(m.id, "❤️")
+      setHeartBurst({ id: m.id, key: now })
+      setTimeout(() => setHeartBurst((cur) => cur && cur.id === m.id ? null : cur), 900)
+      // Cancel long-press
       if (longPressTimer.current) {
         clearTimeout(longPressTimer.current)
         longPressTimer.current = null
       }
-    }
-    if (sw.active) {
-      sw.dx = Math.min(dx, 80)
-      setSwipeState({ id: sw.id, dx: sw.dx })
-    }
-  }
-
-  function onRowTouchEnd(m) {
-    const sw = swipeRef.current
-    const triggered = sw.active && sw.dx >= 50
-    const wasSwipe = sw.active
-    swipeRef.current = { id: null, startX: 0, dx: 0, active: false }
-    setSwipeState({ id: null, dx: 0 })
-
-    if (triggered) {
-      tap("light")
-      setReplyingTo(m)
       return
     }
-
-    if (!wasSwipe) {
-      const now = Date.now()
-      const last = lastTapRef.current
-      const isDoubleTap = last.id === m.id && (now - last.time) < 300
-      if (isDoubleTap) {
-        // Double tap — react with heart
-        lastTapRef.current = { id: null, time: 0 }
-        tap("medium")
-        toggleReaction(m.id, "❤️")
-        setHeartBurst({ id: m.id, key: now })
-        setTimeout(() => setHeartBurst((cur) => cur && cur.id === m.id ? null : cur), 900)
-        // Cancel long-press
-        if (longPressTimer.current) {
-          clearTimeout(longPressTimer.current)
-          longPressTimer.current = null
-        }
-        return
-      }
-      lastTapRef.current = { id: m.id, time: now }
-      onMsgPressEnd()
-    }
+    lastTapRef.current = { id: m.id, time: now }
+    onMsgPressEnd()
+  }
   }
 
-  return () => { supabase.removeChannel(channel) }
-  }, [conversationId, myId, otherId])
+
 
   useEffect(() => {
     if (!conversationId || !myId) return
