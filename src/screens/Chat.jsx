@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Send, MessageCircle, Paperclip, X, Smile, Mic, Square, Play, Pause, MoreVertical, Trash2, Eye, Flag, Ban, Check, CheckCheck , Phone, Video, Pin, Bell, BellOff, Eraser } from 'lucide-react'
+import { ArrowLeft, Send, MessageCircle, Paperclip, X, Smile, Mic, Square, Play, Pause, MoreVertical, Trash2, Eye, Flag, Ban, Check, CheckCheck , Phone, Video, Pin, Bell, BellOff, Eraser , Camera, Image } from 'lucide-react'
 import VerifiedBadge from "../components/VerifiedBadge"
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
@@ -105,6 +105,8 @@ export default function Chat() {
 
   const scrollRef = useRef(null)
   const fileInputRef = useRef(null)
+  const cameraInputRef = useRef(null)
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const messagesRef = useRef([])
   const typingChannelRef = useRef(null)
   const typingTimeoutRef = useRef(null)
@@ -976,8 +978,9 @@ export default function Chat() {
         }}
       >
         <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={pickAttachment} />
+        <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" hidden onChange={pickAttachment} />
         <button
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => setAttachMenuOpen(true)}
           disabled={recording}
           className="w-10 h-10 rounded-full grid place-items-center text-muted shrink-0 disabled:opacity-40"
           aria-label="Attach photo"
@@ -1091,6 +1094,44 @@ export default function Chat() {
           onClose={() => setForwardingMsg(null)}
           onForwarded={() => {}}
         />
+      )}
+
+      {attachMenuOpen && (
+        <div className="fixed inset-0 z-[500] flex items-end" onClick={() => setAttachMenuOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
+            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+          >
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
+            <button
+              onClick={() => { setAttachMenuOpen(false); setTimeout(() => cameraInputRef.current?.click(), 100) }}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+            >
+              <span className="w-10 h-10 rounded-xl bg-purple-500/20 grid place-items-center shrink-0">
+                <Camera size={18} className="text-purple-300" />
+              </span>
+              <div className="flex-1">
+                <p className="font-bold text-[14.5px]">Take photo</p>
+                <p className="text-muted text-[11.5px] mt-0.5">Open camera</p>
+              </div>
+            </button>
+            <button
+              onClick={() => { setAttachMenuOpen(false); setTimeout(() => fileInputRef.current?.click(), 100) }}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+            >
+              <span className="w-10 h-10 rounded-xl bg-purple-500/20 grid place-items-center shrink-0">
+                <Image size={18} className="text-purple-300" />
+              </span>
+              <div className="flex-1">
+                <p className="font-bold text-[14.5px]">Choose from gallery</p>
+                <p className="text-muted text-[11.5px] mt-0.5">Pick an existing photo</p>
+              </div>
+            </button>
+            <button onClick={() => setAttachMenuOpen(false)} className="w-full h-11 mt-1 text-muted font-semibold text-[13.5px]">Cancel</button>
+          </div>
+        </div>
       )}
     </div>
   )
