@@ -3,7 +3,7 @@ import { tap } from "../lib/haptic"
 
 const REACTIONS = ["❤️", "😂", "😍", "👍", "🔥", "😮", "😢", "😡"]
 
-export default function MessageActionsSheet({ message, isMine, isPinned, onClose, onReply, onCopy, onForward, onDelete, onReact, onPin }) {
+export default function MessageActionsSheet({ message, isMine, isPinned, canUnsend, onClose, onReply, onCopy, onForward, onDelete, onReact, onPin }) {
   async function copyText() {
     try {
       await navigator.clipboard.writeText(message.content || "")
@@ -52,10 +52,10 @@ export default function MessageActionsSheet({ message, isMine, isPinned, onClose
             />
           )}
           <ActionRow icon={<Forward size={17} />} label="Forward" onClick={() => { onForward?.(message); onClose?.() }} />
-          {isMine && (
+          {isMine && canUnsend && (
             <ActionRow
               icon={<Trash2 size={17} className="text-red-400" />}
-              label="Delete"
+              label="Unsend for everyone"
               danger
               onClick={() => { onClose?.(); onDelete?.(message.id) }}
             />

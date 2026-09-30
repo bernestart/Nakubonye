@@ -500,7 +500,12 @@ export default function Chat() {
   }
 
   async function deleteMessage(messageId) {
-    if (!confirm('Delete this message? It will be removed for both of you.')) return
+    const target = messages.find((m) => m.id === messageId)
+    if (!target || !isWithinUnsendWindow(target.created_at)) {
+      setError('This message is too old to unsend')
+      return
+    }
+    if (!confirm('Unsend this message for everyone? This cannot be undone.')) return
     tap('light')
     const { error: err } = await supabase
       .from('messages')
@@ -1005,6 +1010,7 @@ export default function Chat() {
           onDelete={deleteMessage}
           onReact={(emoji) => toggleReaction(actionsForMsg.id, emoji)}
           isPinned={pinnedMsg?.id === actionsForMsg.id}
+          canUnsend={isWithinUnsendWindow(actionsForMsg.created_at)}
           onPin={togglePin}
         />
       )}
