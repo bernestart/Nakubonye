@@ -73,14 +73,18 @@ export default function Chat() {
   useEffect(() => {
     if (!otherId || !session?.user?.id) return
     ;(async () => {
-      const { data, error } = await supabase.rpc('can_send_message', {
-        sender: session.user.id,
-        recipient: otherId,
-      })
-      if (error) { setCanMsg(true); return }
-      const allowed = data === true
-      setCanMsg(allowed)
-      setCanMsgReason(allowed ? '' : "You can't message this user")
+      const uid = session.user.id
+      const [directRes, reqRes] = await Promise.all([
+        supabase.rpc('can_send_message_direct', { sender: uid, recipient: otherId }),
+        supabase.rpc('can_send_message_request', { sender: uid, recipient: otherId }),
+      ])
+      const direct = directRes.data === true
+      const request = reqRes.data === true
+      setCanMsg(direct)
+      setCanMsgRequest(request)
+      if (direct) setCanMsgReason('')
+      else if (request) setCanMsgReason("You don't know each other yet — send as a request")
+      else setCanMsgReason("You can't message this user")
     })()
   }, [otherId, session?.user?.id])
 
@@ -115,6 +119,7 @@ export default function Chat() {
   const [recording, setRecording] = useState(false)
   const [canMsg, setCanMsg] = useState(true)
   const [canMsgReason, setCanMsgReason] = useState('')
+  const [canMsgRequest, setCanMsgRequest] = useState(false)
   const [canSeeOnline, setCanSeeOnline] = useState(true)
   const [canSeeReadReceipts, setCanSeeReadReceipts] = useState(true)
   const [recordSeconds, setRecordSeconds] = useState(0)
@@ -558,8 +563,13 @@ export default function Chat() {
     if (!body && !attachment) return
     if (sending) return
 
-    // If we can't message this user normally — send as a request
+    // canMsg=false + canMsgRequest=false → hard block
+    // canMsg=false + canMsgRequest=true  → send as request
     if (!canMsg) {
+      if (!canMsgRequest) {
+        setError(canMsgReason || "You can't message this user")
+        return
+      }
       if (!myId || !otherId) return
       setSending(true); tap('light')
       let mediaUrl = null, mediaType = null, mediaName = null
@@ -1103,6 +1113,18 @@ export default function Chat() {
         </div>
       )}
 
+      {!canMsg && !canMsgRequest && (
+        <div className="shrink-0 mx-3 mb-2 px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-start gap-2">
+          <span className="text-red-300 text-[13px] font-semibold leading-tight">{canMsgReason || "You can't message this user"}</span>
+        </div>
+      )}
+
+      {!canMsg && canMsgRequest && (
+        <div className="shrink-0 mx-3 mb-2 px-4 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2">
+          <span className="text-amber-300 text-[13px] font-semibold leading-tight">{canMsgReason}</span>
+        </div>
+      )}
+
       {recording && (
         <div className="shrink-0 mx-3 mb-2 px-4 py-3 rounded-2xl bg-red-500/15 border border-red-500/40 flex items-center gap-3">
           <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
@@ -1124,8 +1146,8 @@ export default function Chat() {
         style={{ background: 'linear-gradient(to top, #0B0B14 70%, rgba(11,11,20,0) 100%)' }}
         style={{
           paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
-          pointerEvents: canMsg ? 'auto' : 'none',
-          opacity: canMsg ? 1 : 0.4,
+          pointerEvents: (canMsg || canMsgRequest) ? 'auto' : 'none',
+          opacity: (canMsg || canMsgRequest) ? 1 : 0.4,
         }}
       >
         <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={pickAttachment} />
@@ -1168,7 +1190,7 @@ export default function Chat() {
               onChange={(e) => { setText(e.target.value); notifyTyping(e.target.value) }}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
               rows={1}
-              placeholder={canMsg ? "Write a message…" : "Messaging is not allowed"}
+              placeholder={canMsg ? "Write a message…" : canMsgRequest ? "Write a request…" : "Messaging is not allowed"}
               className="flex-1 bg-elevated border border-white/8 rounded-[22px] px-4 py-2.5 text-cream text-[14.5px] placeholder:text-subtle focus:outline-none focus:border-purple-500 resize-none max-h-32 leading-[1.4]"
               style={{ minHeight: 44 }}
             />
