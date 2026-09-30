@@ -31,6 +31,8 @@ export default function Messages() {
   const [pinnedKeys, setPinnedKeys] = useState(new Set())
   const [archivedKeys, setArchivedKeys] = useState(new Set())
   const [onlineUsers, setOnlineUsers] = useState([])
+  const [storyOwners, setStoryOwners] = useState(new Set())
+  const [viewedStoryOwners, setViewedStoryOwners] = useState(new Set())
   const [reportRowFor, setReportRowFor] = useState(null)
   const rowPressTimer = useRef(null)
   const rowPressTriggered = useRef(false)
@@ -312,6 +314,103 @@ export default function Messages() {
     ;(convArch.data || []).forEach((r) => archSet.add("c:" + r.conversation_id))
     ;(grpArch.data || []).forEach((r) => archSet.add("g:" + r.group_id))
     setArchivedKeys(archSet)
+
+    // Online users — recent last_seen_at, excluding me
+    const cutoff = new Date(Date.now() - 3 * 60 * 1000).toISOString()
+    const { data: onlineRows } = await supabase
+      .from("profiles")
+      .select("id, display_name, username, last_seen_at")
+      .gt("last_seen_at", cutoff)
+      .neq("id", userId)
+      .eq("is_active", true)
+      .order("last_seen_at", { ascending: false })
+      .limit(30)
+
+    let visibleOnline = []
+    if (onlineRows && onlineRows.length > 0) {
+      const ids = onlineRows.map((r) => r.id)
+      const [settingsRes, blocksRes, matchesRes, followsRes] = await Promise.all([
+        supabase.from("user_settings").select("user_id, who_can_see_online, show_activity_status").in("user_id", ids),
+        supabase.from("blocks").select("blocker_id, blocked_id").or("blocker_id.eq." + userId + ",blocked_id.eq." + userId),
+        supabase.from("matches").select("user_one_id, user_two_id").or("user_one_id.eq." + userId + ",user_two_id.eq." + userId),
+        supabase.from("follows").select("following_id").eq("follower_id", userId),
+      ])
+      const sMap = new Map((settingsRes.data || []).map((r) => [r.user_id, r]))
+      const blockSet = new Set()
+      ;(blocksRes.data || []).forEach((b) => {
+        if (b.blocker_id === userId) blockSet.add(b.blocked_id)
+        if (b.blocked_id === userId) blockSet.add(b.blocker_id)
+      })
+      const matchSet2 = new Set()
+      ;(matchesRes.data || []).forEach((m) => {
+        if (m.user_one_id === userId) matchSet2.add(m.user_two_id)
+        if (m.user_two_id === userId) matchSet2.add(m.user_one_id)
+      })
+      const followSet = new Set((followsRes.data || []).map((f) => f.following_id))
+
+      visibleOnline = onlineRows.filter((u) => {
+        if (blockSet.has(u.id)) return false
+        const row = sMap.get(u.id)
+        if (!row) return true
+        if (row.show_activity_status === false) return false
+        const v = row.who_can_see_online || "everyone"
+        if (v === "nobody") return false
+        if (v === "everyone") return true
+        if (v === "matches") return matchSet2.has(u.id)
+        if (v === "following") return followSet.has(u.id)
+        return true
+      })
+
+      if (visibleOnline.length > 0) {
+        const vids = visibleOnline.map((u) => u.id)
+        const { data: ph } = await supabase
+          .from("profile_photos")
+          .select("user_id, storage_path, is_primary, display_order")
+          .in("user_id", vids)
+          .order("is_primary", { ascending: false })
+          .order("display_order", { ascending: true })
+        const pm = new Map()
+        ;(ph || []).forEach((p) => { if (!pm.has(p.user_id)) pm.set(p.user_id, p.storage_path) })
+        visibleOnline = visibleOnline.map((u) => ({
+          ...u,
+          photo_url: pm.get(u.id) ? publicPhotoUrl(pm.get(u.id)) : null,
+        }))
+      }
+    }
+    setOnlineUsers(visibleOnline)
+
+    // Active stories for people in my inbox
+    const dmUserIds = [...new Set(list.map((x) => x.userId).filter(Boolean))]
+    let owners = new Set()
+    let viewedOwners = new Set()
+    if (dmUserIds.length > 0) {
+      const { data: storyRows } = await supabase
+        .from("stories")
+        .select("id, user_id")
+        .in("user_id", dmUserIds)
+        .gt("expires_at", new Date().toISOString())
+      ;(storyRows || []).forEach((r) => owners.add(r.user_id))
+
+      const storyIds = (storyRows || []).map((r) => r.id)
+      if (storyIds.length > 0) {
+        const { data: viewRows } = await supabase
+          .from("story_views")
+          .select("story_id")
+          .eq("user_id", userId)
+          .in("story_id", storyIds)
+        const viewedIds = new Set((viewRows || []).map((v) => v.story_id))
+        const byOwner = new Map()
+        ;(storyRows || []).forEach((r) => {
+          if (!byOwner.has(r.user_id)) byOwner.set(r.user_id, [])
+          byOwner.get(r.user_id).push(r.id)
+        })
+        byOwner.forEach((ids, owner) => {
+          if (ids.every((id) => viewedIds.has(id))) viewedOwners.add(owner)
+        })
+      }
+    }
+    setStoryOwners(owners)
+    setViewedStoryOwners(viewedOwners)
 
     setItems(list)
     setLoading(false)
