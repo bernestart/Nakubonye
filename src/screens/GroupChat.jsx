@@ -73,7 +73,7 @@ export default function GroupChat() {
     // Load messages
     const { data: msgs } = await supabase
       .from("group_messages")
-      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, created_at")
+      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, created_at, is_system")
       .eq("group_id", groupId)
       .order("created_at", { ascending: true })
       .limit(300)
@@ -156,7 +156,7 @@ export default function GroupChat() {
     const { data: inserted, error: sendErr } = await supabase
       .from("group_messages")
       .insert(payload)
-      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, created_at")
+      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, created_at, is_system")
       .single()
 
     if (sendErr) { setError(sendErr.message); setText(body) }
@@ -175,6 +175,14 @@ export default function GroupChat() {
   async function leaveGroup() {
     if (!confirm("Leave this group?")) return
     tap("light")
+    const me = profiles.get(myId)
+    const myName = me?.display_name || me?.username || "Someone"
+    await supabase.from("group_messages").insert({
+      group_id: groupId,
+      sender_id: myId,
+      content: myName + " left the group",
+      is_system: true,
+    })
     await supabase.from("group_members").delete().eq("group_id", groupId).eq("user_id", myId)
     nav("/messages", { replace: true })
   }
@@ -245,6 +253,15 @@ export default function GroupChat() {
           </div>
         ) : (
           messages.map((m, i) => {
+            if (m.is_system) {
+              return (
+                <div key={m.id} className="flex justify-center my-2">
+                  <span className="px-3 py-1 rounded-full bg-white/[0.04] border border-white/8 text-subtle text-[11px] font-medium max-w-[80%] text-center">
+                    {m.content}
+                  </span>
+                </div>
+              )
+            }
             const mine = m.sender_id === myId
             const showDay = i === 0 || new Date(m.created_at).toDateString() !== new Date(messages[i-1].created_at).toDateString()
             const deleted = !!m.deleted_at

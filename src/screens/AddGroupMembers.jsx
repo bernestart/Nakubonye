@@ -52,6 +52,18 @@ export default function AddGroupMembers() {
     setBusy(true); setError(""); tap("light")
     const rows = selected.map((u) => ({ group_id: groupId, user_id: u.id, role: "member" }))
     const { error: insErr } = await supabase.from("group_members").insert(rows)
+    if (!insErr) {
+      // System message
+      const { data: me } = await supabase.from("profiles").select("display_name, username").eq("id", myId).maybeSingle()
+      const myName = me?.display_name || me?.username || "Someone"
+      const names = selected.map((u) => u.display_name || u.username || "Someone").join(", ")
+      await supabase.from("group_messages").insert({
+        group_id: groupId,
+        sender_id: myId,
+        content: myName + " added " + names,
+        is_system: true,
+      })
+    }
     setBusy(false)
     if (insErr) { setError(insErr.message); return }
     nav(-1)

@@ -89,6 +89,13 @@ export default function CreateGroup() {
       const { error: mErr } = await supabase.from("group_members").insert(rows)
       if (mErr) throw new Error(mErr.message)
 
+      await supabase.from("group_messages").insert({
+        group_id: group.id,
+        sender_id: myId,
+        content: "Group created",
+        is_system: true,
+      })
+
       nav(`/groups/${group.id}`, { replace: true })
     } catch (e) {
       setError(e.message || "Could not create group")

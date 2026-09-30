@@ -59,6 +59,16 @@ export default function GroupMembers() {
   async function kick(userId) {
     if (!confirm("Remove this member?")) return
     tap("light")
+    const me = profiles.get(myId)
+    const them = profiles.get(userId)
+    const myName = me?.display_name || me?.username || "Someone"
+    const theirName = them?.display_name || them?.username || "Someone"
+    await supabase.from("group_messages").insert({
+      group_id: groupId,
+      sender_id: myId,
+      content: myName + " removed " + theirName,
+      is_system: true,
+    })
     await supabase.from("group_members").delete().eq("group_id", groupId).eq("user_id", userId)
     setMenuFor(null); load()
   }
