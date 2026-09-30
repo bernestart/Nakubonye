@@ -408,7 +408,7 @@ export default function Chat() {
   const dx = e.touches[0].clientX - sw.startX
   const dy = Math.abs(e.touches[0].clientY - (sw.startY || 0))
   // Swipe only kicks in on a rightward drag of > 15px, with strong horizontal bias
-  if (!sw.active && dx > 15 && dx > dy * 1.5) {
+  if (!sw.active && dx > 15 && dx > dy * 1.2) {
     sw.active = true
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current)
@@ -852,6 +852,7 @@ export default function Chat() {
                 style={{
                   transform: swipeState.id === m.id ? `translateX(${swipeState.dx}px)` : undefined,
                   transition: swipeState.id === m.id ? "none" : "transform 180ms ease-out",
+                  touchAction: "pan-y",
                 }}
               >
                 {i === firstUnreadIdx && (
