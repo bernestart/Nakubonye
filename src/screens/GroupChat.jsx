@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { ArrowLeft, Send, Paperclip, X, MoreVertical, Users, Camera, Trash2, Flag, LogOut, UserPlus , Pencil , Link2 , Bell } from "lucide-react"
+import { ArrowLeft, Send, Paperclip, X, MoreVertical, Users, Camera, Trash2, Flag, LogOut, UserPlus , Pencil , Link2 , Bell , Mic, Square } from "lucide-react"
 import { motion } from "framer-motion"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
@@ -12,6 +12,7 @@ import Linkify from "../components/chat/Linkify"
 import AudioBubble from "../components/chat/AudioBubble"
 import EmojiPicker from "../components/chat/EmojiPicker"
 import ImageLightbox from "../components/chat/ImageLightbox"
+import { useVoiceRecorder } from "../components/chat/useVoiceRecorder"
 
 export default function GroupChat() {
   const nav = useNavigate()
@@ -36,6 +37,7 @@ export default function GroupChat() {
   const [inviteOpen, setInviteOpen] = useState(false)
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [lightboxUrl, setLightboxUrl] = useState(null)
+  const voice = useVoiceRecorder({ maxSeconds: 300 })
   const [isMuted, setIsMuted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
@@ -149,6 +151,50 @@ export default function GroupChat() {
     setAttachment(null); setAttachmentPreview("")
     if (fileInputRef.current) fileInputRef.current.value = ""
     if (cameraInputRef.current) cameraInputRef.current.value = ""
+  }
+
+  async function sendVoice() {
+    if (!myId || !voice.recording) return
+    const result = await voice.stop(true)
+    if (!result?.blob) return
+    if (result.seconds < 1) { setError("Recording too short"); return }
+    if (result.blob.size > 10 * 1024 * 1024) { setError("Voice note too long"); return }
+
+    setBusy(true)
+    const path = "group-media/" + groupId + "/" + crypto.randomUUID() + ".webm"
+    const { error: upErr } = await supabase.storage
+      .from("chat-media")
+      .upload(path, result.blob, { upsert: false, contentType: "audio/webm" })
+    if (upErr) { setBusy(false); setError(upErr.message); return }
+    const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
+
+    const { data: inserted, error: sendErr } = await supabase
+      .from("group_messages")
+      .insert({
+        group_id: groupId,
+        sender_id: myId,
+        content: "",
+        media_url: pub?.publicUrl || null,
+        media_type: "audio/webm",
+        media_name: "Voice · " + result.seconds + "s",
+      })
+      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, created_at, is_system")
+      .single()
+
+    setBusy(false)
+    if (sendErr) { setError(sendErr.message); return }
+    if (inserted) setMessages((cur) => cur.some((x) => x.id === inserted.id) ? cur : [...cur, inserted])
+  }
+
+  async function startVoice() {
+    tap("medium")
+    const ok = await voice.start()
+    if (!ok) setError("Microphone access denied")
+  }
+
+  async function cancelVoice() {
+    tap("light")
+    await voice.stop(false)
   }
 
   async function send() {
@@ -395,6 +441,15 @@ export default function GroupChat() {
         </div>
       )}
 
+      {voice.recording && (
+        <div className="shrink-0 mx-3 mb-2 px-4 py-3 rounded-2xl bg-red-500/15 border border-red-500/40 flex items-center gap-3">
+          <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+          <span className="text-cream text-[14px] font-semibold flex-1">
+            Recording · {String(Math.floor(voice.seconds / 60)).padStart(2, "0")}:{String(voice.seconds % 60).padStart(2, "0")}
+          </span>
+        </div>
+      )}
+
       <div
         className="shrink-0 px-3 pt-3 pb-3 flex items-end gap-2 relative"
         style={{ background: "linear-gradient(to top, #0B0B14 70%, rgba(11,11,20,0) 100%)", paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
@@ -419,20 +474,47 @@ export default function GroupChat() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send() } }}
+          disabled={voice.recording}
           rows={1}
-          placeholder="Message group…"
+          placeholder={voice.recording ? "Recording voice…" : "Message group…"}
           className="flex-1 bg-elevated border border-white/8 rounded-[22px] px-4 py-2.5 text-cream text-[14.5px] placeholder:text-subtle focus:outline-none focus:border-purple-500 resize-none max-h-32 leading-[1.4]"
           style={{ minHeight: 44 }}
         />
-        <motion.button
-          whileTap={{ scale: 0.9 }}
-          onClick={send}
-          disabled={busy || (!text.trim() && !attachment)}
-          className="w-11 h-11 rounded-full grid place-items-center bg-gradient-to-br from-purple-500 to-pink-500 text-white disabled:opacity-40 shrink-0"
-          aria-label="Send"
-        >
-          <Send size={18} strokeWidth={2.4} />
-        </motion.button>
+        {voice.recording ? (
+          <>
+            <button
+              onClick={cancelVoice}
+              className="flex-1 h-11 rounded-[22px] bg-white/[0.06] text-cream font-semibold text-[13.5px] flex items-center justify-center gap-2 shrink-0"
+            >
+              <X size={16} strokeWidth={2.4} /> Cancel
+            </button>
+            <button
+              onClick={sendVoice}
+              className="flex-1 h-11 rounded-[22px] bg-gradient-to-br from-purple-500 to-pink-500 text-white font-bold text-[13.5px] flex items-center justify-center gap-2 shrink-0"
+            >
+              <Square size={14} strokeWidth={2.6} fill="currentColor" /> Send
+            </button>
+          </>
+        ) : text.trim() || attachment ? (
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={send}
+            disabled={busy}
+            className="w-11 h-11 rounded-full grid place-items-center bg-gradient-to-br from-purple-500 to-pink-500 text-white disabled:opacity-40 shrink-0"
+            aria-label="Send"
+          >
+            <Send size={18} strokeWidth={2.4} />
+          </motion.button>
+        ) : (
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={startVoice}
+            className="w-11 h-11 rounded-full grid place-items-center bg-gradient-to-br from-purple-500 to-pink-500 text-white shrink-0"
+            aria-label="Record voice"
+          >
+            <Mic size={19} strokeWidth={2.4} />
+          </motion.button>
+        )}
       </div>
 
       {emojiOpen && (
