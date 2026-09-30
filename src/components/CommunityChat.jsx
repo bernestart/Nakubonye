@@ -405,8 +405,16 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
             const p = profiles.get(m.sender_id)
             const photo = photos.get(m.sender_id)
             const name = p?.display_name || p?.username || 'Someone'
+            const showDay = i === 0 || new Date(m.created_at).toDateString() !== new Date(messages[i-1].created_at).toDateString()
             return (
               <Fragment key={m.id}>
+              {showDay && (
+                <div className="flex justify-center py-3">
+                  <span className="px-3 py-1 rounded-full bg-white/[0.05] border border-white/8 text-subtle text-[10.5px] font-bold tracking-wider uppercase">
+                    {dayLabel(m.created_at)}
+                  </span>
+                </div>
+              )}
               {i === firstUnreadIdx && (
                 <div className="flex items-center gap-3 py-3 px-2">
                   <div className="flex-1 h-px bg-purple-500/30" />
@@ -707,4 +715,15 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
       <ImageLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
     </div>
   )
+}
+
+function dayLabel(iso) {
+  const d = new Date(iso)
+  const now = new Date()
+  if (d.toDateString() === now.toDateString()) return "Today"
+  const yest = new Date(now); yest.setDate(now.getDate() - 1)
+  if (d.toDateString() === yest.toDateString()) return "Yesterday"
+  const days = (now - d) / (1000 * 60 * 60 * 24)
+  if (days < 7) return d.toLocaleDateString([], { weekday: "long" })
+  return d.toLocaleDateString([], { month: "long", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined })
 }
