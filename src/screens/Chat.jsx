@@ -554,10 +554,45 @@ export default function Chat() {
   }
 
   async function send() {
-    if (!canMsg) { setError(canMsgReason || "You can't message this user"); return }
     const body = text.trim()
     if (!body && !attachment) return
-    if (sending || !conversationId) return
+    if (sending) return
+
+    // If we can't message this user normally — send as a request
+    if (!canMsg) {
+      if (!myId || !otherId) return
+      setSending(true); tap('light')
+      let mediaUrl = null, mediaType = null, mediaName = null
+      if (attachment) {
+        const ext = attachment.name.split(".").pop()?.toLowerCase() || "jpg"
+        const path = "request-media/" + crypto.randomUUID() + "." + ext
+        const { error: upErr } = await supabase.storage.from("chat-media").upload(path, attachment, { upsert: false, contentType: attachment.type })
+        if (upErr) { setSending(false); setError(upErr.message); return }
+        const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
+        mediaUrl = pub?.publicUrl || null
+        mediaType = attachment.type
+        mediaName = attachment.name
+      }
+      const { error: reqErr } = await supabase.from("message_requests").insert({
+        sender_id: myId,
+        recipient_id: otherId,
+        content: body || "",
+        media_url: mediaUrl,
+        media_type: mediaType,
+        media_name: mediaName,
+      })
+      setSending(false)
+      if (reqErr) {
+        if (reqErr.code === "23505") setError("You already sent a request. Please wait for a response.")
+        else setError(reqErr.message)
+        return
+      }
+      setText(""); clearAttachment()
+      setError("Request sent. They'll see it in their message requests.")
+      return
+    }
+
+    if (!conversationId) return
     setSending(true); tap('light')
     let mediaUrl = null, mediaType = null, mediaName = null
     if (attachment) {
