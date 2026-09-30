@@ -52,6 +52,7 @@ export default function Reels() {
   const pullingRef = useRef(false)
   const [pullDistance, setPullDistance] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
+  const [reelProgress, setReelProgress] = useState(0)
 
   const load = useCallback(async () => {
     if (!myId) return
@@ -343,6 +344,8 @@ export default function Reels() {
     })
   }, [currentIdx, reels, hiddenIds, muted])
 
+  useEffect(() => { setReelProgress(0) }, [currentIdx])
+
   // Re-apply muted to all videos when toggle changes
   useEffect(() => {
     videoRefs.current.forEach((v) => { if (v) v.muted = muted })
@@ -494,6 +497,24 @@ export default function Reels() {
               }}
             />
           </div>
+        </div>
+      )}
+
+      {/* Bottom progress bar */}
+      {!loading && reels.length > 0 && (
+        <div
+          className="absolute left-3 right-3 z-30 pointer-events-none"
+          style={{ bottom: 20, height: 3, borderRadius: 2, background: "rgba(255,255,255,0.25)", overflow: "hidden" }}
+        >
+          <div
+            style={{
+              height: "100%",
+              width: `${Math.min(100, reelProgress * 100)}%`,
+              background: "#fff",
+              borderRadius: 2,
+              transition: "width 60ms linear",
+            }}
+          />
         </div>
       )}
 
