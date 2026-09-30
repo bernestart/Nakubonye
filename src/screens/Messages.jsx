@@ -149,6 +149,7 @@ export default function Messages() {
         preview: conv?.last_message_preview || null,
         lastMessageAt: conv?.last_message_at || m.created_at,
         unread: !!unread,
+        isNewMatch: !conv?.last_message_at,
       }
     }).filter(Boolean).sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt))
 
@@ -931,6 +932,11 @@ export default function Messages() {
                 </div>
 
                 <div className="flex-1 min-w-0">
+                  {item.isNewMatch && (
+                    <p className="text-purple-300 text-[11.5px] font-semibold mb-0.5">
+                      New match
+                    </p>
+                  )}
                   <div className="flex items-center gap-1.5 mb-0.5">
                     <strong className="text-cream text-[14.5px] font-semibold truncate">
                       {item.display_name || item.username || 'Someone'}
@@ -940,8 +946,8 @@ export default function Messages() {
                     )}
                     {item.muted && <BellOff size={12} className="text-subtle shrink-0" />}
                   </div>
-                  <p className={`text-[13px] truncate ${item.unread ? 'text-cream font-medium' : 'text-muted'}`}>
-                    {item.preview || 'Say hello 👋'}
+                  <p className={`text-[13px] truncate ${item.unread ? 'text-cream font-medium' : item.isNewMatch ? 'text-purple-300 font-medium' : 'text-muted'}`}>
+                    {item.isNewMatch ? 'Say hello 👋' : (item.preview || 'Say hello 👋')}
                   </p>
                 </div>
 
