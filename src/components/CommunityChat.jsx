@@ -1,12 +1,13 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Send, Sparkles } from 'lucide-react'
+import { Send, Sparkles, Paperclip, Camera, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl } from '../lib/photo'
 import { tap } from '../lib/haptic'
 import Linkify from './chat/Linkify'
 import EmojiPicker from './chat/EmojiPicker'
+import ImageLightbox from './chat/ImageLightbox'
 
 export default function CommunityChat({ communityId, isMember, isPremium }) {
   const nav = useNavigate()
@@ -21,8 +22,14 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [emojiOpen, setEmojiOpen] = useState(false)
+  const [attachment, setAttachment] = useState(null)
+  const [attachmentPreview, setAttachmentPreview] = useState("")
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false)
+  const [lightboxUrl, setLightboxUrl] = useState(null)
 
   const scrollRef = useRef(null)
+  const fileInputRef = useRef(null)
+  const cameraInputRef = useRef(null)
   const myId = session?.user?.id
 
   const load = useCallback(async () => {
@@ -31,7 +38,7 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
 
     const { data: rows, error: err } = await supabase
       .from('community_messages')
-      .select('id, sender_id, content, created_at, highlighted_until')
+      .select('id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, created_at, highlighted_until')
       .eq('community_id', communityId)
       .order('created_at', { ascending: true })
       .limit(200)
@@ -105,23 +112,58 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
     if (el) el.scrollTop = el.scrollHeight
   }, [messages.length])
 
+  function pickAttachment(e) {
+    const f = e.target.files?.[0]
+    if (!f) return
+    if (!f.type.startsWith("image/")) { setError("Only images supported"); e.target.value = ""; return }
+    if (f.size > 8 * 1024 * 1024) { setError("Image must be under 8 MB"); e.target.value = ""; return }
+    setAttachment(f); setAttachmentPreview(URL.createObjectURL(f)); setError("")
+  }
+
+  function clearAttachment() {
+    if (attachmentPreview) URL.revokeObjectURL(attachmentPreview)
+    setAttachment(null); setAttachmentPreview("")
+    if (fileInputRef.current) fileInputRef.current.value = ""
+    if (cameraInputRef.current) cameraInputRef.current.value = ""
+  }
+
   async function send() {
     const body = text.trim()
-    if (!body || sending || !myId) return
+    if ((!body && !attachment) || sending || !myId) return
     setSending(true); tap('light')
 
-    setText('')
+    let mediaUrl = null, mediaType = null, mediaName = null
+    if (attachment) {
+      const ext = (attachment.name.split(".").pop() || "jpg").toLowerCase()
+      const path = "community-media/" + communityId + "/" + crypto.randomUUID() + "." + ext
+      const { error: upErr } = await supabase.storage
+        .from("chat-media")
+        .upload(path, attachment, { upsert: false, contentType: attachment.type })
+      if (upErr) { setSending(false); setError(upErr.message); return }
+      const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
+      mediaUrl = pub?.publicUrl || null
+      mediaType = attachment.type
+      mediaName = attachment.name
+    }
+
+    setText(""); const bodyToSend = body; clearAttachment()
+
+    const payload = {
+      community_id: communityId,
+      sender_id: myId,
+      content: bodyToSend || "",
+    }
+    if (mediaUrl) { payload.media_url = mediaUrl; payload.media_type = mediaType; payload.media_name = mediaName }
+
     const { error: err } = await supabase
       .from('community_messages')
-      .insert({
-        community_id: communityId,
-        sender_id: myId,
-        content: body,
-      })
+      .insert(payload)
 
     if (err) {
       setError(err.message)
-      setText(body)
+      setText(bodyToSend)
+    } else {
+      load()
     }
     setSending(false)
   }
@@ -236,7 +278,17 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
                         : ''
                     }`}
                   >
-                    <Linkify text={m.content} mine={mine} />
+                    {m.media_url && m.media_type?.startsWith("image/") && (
+                      <img
+                        src={m.media_url}
+                        alt=""
+                        onClick={() => setLightboxUrl(m.media_url)}
+                        className="block max-w-[220px] rounded-xl cursor-pointer active:opacity-90"
+                        style={{ maxHeight: 260, objectFit: "cover" }}
+                        loading="lazy"
+                      />
+                    )}
+                    {m.content && <Linkify text={m.content} mine={mine} />}
                   </div>
                   <div className="flex items-center gap-1 px-1 mt-0.5">
                     <p className="text-[10px] text-subtle">
@@ -264,6 +316,15 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
         )}
       </div>
 
+      {attachment && (
+        <div className="mx-1 mb-2 relative w-fit">
+          <img src={attachmentPreview} alt="" className="rounded-xl max-h-32" />
+          <button onClick={clearAttachment} className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-obsidian border border-white/20 grid place-items-center" aria-label="Remove">
+            <X size={13} strokeWidth={2.6} className="text-cream" />
+          </button>
+        </div>
+      )}
+
       {emojiOpen && (
         <EmojiPicker
           className="mx-1 mb-2"
@@ -273,6 +334,13 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
 
       {/* Composer */}
       <div className="flex items-end gap-2 pt-2 border-t border-white/8">
+        <button
+          onClick={() => setAttachMenuOpen(true)}
+          className="w-10 h-10 rounded-full grid place-items-center text-muted shrink-0"
+          aria-label="Attach"
+        >
+          <Paperclip size={19} strokeWidth={2.3} />
+        </button>
         <button
           onClick={() => { setEmojiOpen((v) => !v); tap("light") }}
           className="w-10 h-10 rounded-full grid place-items-center text-muted shrink-0"
@@ -303,6 +371,39 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
           <Send size={18} strokeWidth={2.4} />
         </button>
       </div>
+
+      <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={pickAttachment} />
+      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" hidden onChange={pickAttachment} />
+
+      {attachMenuOpen && (
+        <div className="fixed inset-0 z-[500] flex items-end" onClick={() => setAttachMenuOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
+            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+          >
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
+            <button
+              onClick={() => { setAttachMenuOpen(false); setTimeout(() => cameraInputRef.current?.click(), 100) }}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+            >
+              <Camera size={18} className="text-purple-300" />
+              <span className="font-semibold text-[14px]">Take photo</span>
+            </button>
+            <button
+              onClick={() => { setAttachMenuOpen(false); setTimeout(() => fileInputRef.current?.click(), 100) }}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+            >
+              <Paperclip size={18} className="text-purple-300" />
+              <span className="font-semibold text-[14px]">Choose from gallery</span>
+            </button>
+            <button onClick={() => setAttachMenuOpen(false)} className="w-full h-11 mt-1 text-muted font-semibold text-[13.5px]">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      <ImageLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
     </div>
   )
 }
