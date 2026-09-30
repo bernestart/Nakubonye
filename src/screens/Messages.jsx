@@ -33,6 +33,7 @@ export default function Messages() {
   const [viewedStoryOwners, setViewedStoryOwners] = useState(new Set())
   const [reportRowFor, setReportRowFor] = useState(null)
   const rowPressTimer = useRef(null)
+  const tapStartRef = useRef({ x: 0, y: 0 })
   const rowPressTriggered = useRef(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [error, setError] = useState('')
@@ -586,28 +587,7 @@ export default function Messages() {
       })
     : tabFiltered
 
-  // Build display list with section headers
-  const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000
-  const nowMs = Date.now()
-  const showSections = tabFilter === "all" && !searchQuery.trim()
-  const displayItems = []
-  let showedRecent = false
-  let showedEarlier = false
-  visibleItems.forEach((item) => {
-    const age = item.lastMessageAt ? (nowMs - new Date(item.lastMessageAt).getTime()) : Infinity
-    const isRecent = age < SEVEN_DAYS
-    if (showSections) {
-      if (isRecent && !showedRecent) {
-        displayItems.push({ __header: "Recent" })
-        showedRecent = true
-      }
-      if (!isRecent && !showedEarlier) {
-        displayItems.push({ __header: "Earlier" })
-        showedEarlier = true
-      }
-    }
-    displayItems.push(item)
-  })
+  const displayItems = visibleItems
 
   return (
     <div
@@ -876,34 +856,39 @@ export default function Messages() {
         ) : (
           <div className="flex flex-col gap-1 pt-1">
             {displayItems.map((item) => {
-              if (item.__header) {
-                return (
-                  <p key={"h-" + item.__header} className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mt-4 mb-1 px-1">
-                    {item.__header}
-                  </p>
-                )
-              }
               return (
               <div
                 key={item.userId}
-                onTouchStart={() => {
+                onTouchStart={(e) => {
                   rowPressTriggered.current = false
+                  const t = e.touches[0]
+                  tapStartRef.current = { x: t.clientX, y: t.clientY }
                   rowPressTimer.current = setTimeout(() => {
                     rowPressTriggered.current = true
                     tap("medium")
                     setRowMenuFor(item)
                   }, 500)
                 }}
-                onTouchEnd={() => {
+                onTouchMove={(e) => {
+                  const t = e.touches[0]
+                  const dx = Math.abs(t.clientX - tapStartRef.current.x)
+                  const dy = Math.abs(t.clientY - tapStartRef.current.y)
+                  // Kill long-press the moment the finger moves — scroll wins
+                  if (dx > 6 || dy > 6) {
+                    clearTimeout(rowPressTimer.current)
+                  }
+                }}
+                onTouchEnd={(e) => {
                   clearTimeout(rowPressTimer.current)
-                  if (!rowPressTriggered.current) {
+                  const t = e.changedTouches[0]
+                  const dx = Math.abs(t.clientX - tapStartRef.current.x)
+                  const dy = Math.abs(t.clientY - tapStartRef.current.y)
+                  // Only open if it was a genuine tap (barely moved)
+                  if (!rowPressTriggered.current && dx < 8 && dy < 8) {
                     tap('light')
                     if (item.isGroup) nav('/groups/' + item.groupId)
                     else nav('/messages/' + item.userId)
                   }
-                }}
-                onTouchMove={() => {
-                  clearTimeout(rowPressTimer.current)
                 }}
                 onContextMenu={(e) => { e.preventDefault(); setRowMenuFor(item) }}
                 className="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/[0.03] transition-colors text-left active:opacity-90 cursor-pointer"
