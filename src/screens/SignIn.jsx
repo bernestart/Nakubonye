@@ -49,7 +49,7 @@ export default function SignIn() {
       prof?.city &&
       (links?.length || 0) >= 3
 
-    nav(complete ? '/discover' : '/onboarding', { replace: true })
+    nav(complete ? '/feed' : '/onboarding', { replace: true })
   }
 
   return (

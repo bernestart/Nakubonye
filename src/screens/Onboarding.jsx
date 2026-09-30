@@ -280,7 +280,7 @@ export default function Onboarding() {
     try { await supabase.rpc('claim_profile_complete_bonus') } catch {}
 
     setBusy(false)
-    nav('/discover', { replace: true })
+    nav('/feed', { replace: true })
   }
 
   return (
