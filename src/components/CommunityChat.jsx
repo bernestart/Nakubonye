@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Send, Sparkles, Paperclip, Camera, X } from 'lucide-react'
+import { Send, Sparkles, Paperclip, Camera, X , Mic, Square } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl } from '../lib/photo'
@@ -8,6 +8,8 @@ import { tap } from '../lib/haptic'
 import Linkify from './chat/Linkify'
 import EmojiPicker from './chat/EmojiPicker'
 import ImageLightbox from './chat/ImageLightbox'
+import AudioBubble from './chat/AudioBubble'
+import { useVoiceRecorder } from './chat/useVoiceRecorder'
 
 export default function CommunityChat({ communityId, isMember, isPremium }) {
   const nav = useNavigate()
@@ -26,6 +28,7 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
   const [attachmentPreview, setAttachmentPreview] = useState("")
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [lightboxUrl, setLightboxUrl] = useState(null)
+  const voice = useVoiceRecorder({ maxSeconds: 300 })
 
   const scrollRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -125,6 +128,45 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
     setAttachment(null); setAttachmentPreview("")
     if (fileInputRef.current) fileInputRef.current.value = ""
     if (cameraInputRef.current) cameraInputRef.current.value = ""
+  }
+
+  async function sendVoice() {
+    if (!myId || !voice.recording) return
+    const result = await voice.stop(true)
+    if (!result?.blob) return
+    if (result.seconds < 1) { setError("Recording too short"); return }
+    if (result.blob.size > 10 * 1024 * 1024) { setError("Voice note too long"); return }
+
+    setSending(true)
+    const path = "community-media/" + communityId + "/" + crypto.randomUUID() + ".webm"
+    const { error: upErr } = await supabase.storage
+      .from("chat-media")
+      .upload(path, result.blob, { upsert: false, contentType: "audio/webm" })
+    if (upErr) { setSending(false); setError(upErr.message); return }
+    const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
+
+    const { error: err } = await supabase.from("community_messages").insert({
+      community_id: communityId,
+      sender_id: myId,
+      content: "",
+      media_url: pub?.publicUrl || null,
+      media_type: "audio/webm",
+      media_name: "Voice · " + result.seconds + "s",
+    })
+    setSending(false)
+    if (err) { setError(err.message); return }
+    load()
+  }
+
+  async function startVoice() {
+    tap("medium")
+    const ok = await voice.start()
+    if (!ok) setError("Microphone access denied")
+  }
+
+  async function cancelVoice() {
+    tap("light")
+    await voice.stop(false)
   }
 
   async function send() {
@@ -288,6 +330,9 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
                         loading="lazy"
                       />
                     )}
+                    {m.media_url && m.media_type?.startsWith("audio/") && (
+                      <AudioBubble src={m.media_url} mine={mine} />
+                    )}
                     {m.content && <Linkify text={m.content} mine={mine} />}
                   </div>
                   <div className="flex items-center gap-1 px-1 mt-0.5">
@@ -358,18 +403,44 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
             }
           }}
           rows={1}
-          placeholder="Write a message…"
+          disabled={voice.recording}
+          placeholder={voice.recording ? "Recording voice…" : "Write a message…"}
           className="flex-1 bg-elevated border border-white/8 rounded-[22px] px-4 py-2.5 text-cream text-[14px] placeholder:text-subtle focus:outline-none focus:border-purple-500 resize-none max-h-28"
           style={{ minHeight: 44 }}
         />
-        <button
-          onClick={send}
-          disabled={sending || !text.trim()}
-          className="w-11 h-11 rounded-full grid place-items-center bg-gradient-to-br from-purple-500 to-pink-500 text-white disabled:opacity-40 shrink-0"
-          aria-label="Send"
-        >
-          <Send size={18} strokeWidth={2.4} />
-        </button>
+        {voice.recording ? (
+          <>
+            <button
+              onClick={cancelVoice}
+              className="flex-1 h-11 rounded-[22px] bg-white/[0.06] text-cream font-semibold text-[13.5px] flex items-center justify-center gap-2 shrink-0"
+            >
+              <X size={16} strokeWidth={2.4} /> Cancel
+            </button>
+            <button
+              onClick={sendVoice}
+              className="flex-1 h-11 rounded-[22px] bg-gradient-to-br from-purple-500 to-pink-500 text-white font-bold text-[13.5px] flex items-center justify-center gap-2 shrink-0"
+            >
+              <Square size={14} strokeWidth={2.6} fill="currentColor" /> Send
+            </button>
+          </>
+        ) : text.trim() || attachment ? (
+          <button
+            onClick={send}
+            disabled={sending}
+            className="w-11 h-11 rounded-full grid place-items-center bg-gradient-to-br from-purple-500 to-pink-500 text-white disabled:opacity-40 shrink-0"
+            aria-label="Send"
+          >
+            <Send size={18} strokeWidth={2.4} />
+          </button>
+        ) : (
+          <button
+            onClick={startVoice}
+            className="w-11 h-11 rounded-full grid place-items-center bg-gradient-to-br from-purple-500 to-pink-500 text-white shrink-0"
+            aria-label="Record voice"
+          >
+            <Mic size={19} strokeWidth={2.4} />
+          </button>
+        )}
       </div>
 
       <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={pickAttachment} />
