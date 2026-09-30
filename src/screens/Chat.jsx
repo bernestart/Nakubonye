@@ -398,7 +398,7 @@ export default function Chat() {
   }
 
   function onRowTouchStart(m, e) {
-  swipeRef.current = { id: m.id, startX: e.touches[0].clientX, dx: 0, active: false }
+  swipeRef.current = { id: m.id, startX: e.touches[0].clientX, startY: e.touches[0].clientY, dx: 0, active: false }
   onMsgPressStart(m)
   }
 
@@ -406,10 +406,10 @@ export default function Chat() {
   const sw = swipeRef.current
   if (!sw.id) return
   const dx = e.touches[0].clientX - sw.startX
-  // Swipe only kicks in on a rightward drag of > 8px
-  if (!sw.active && dx > 8) {
+  const dy = Math.abs(e.touches[0].clientY - (sw.startY || 0))
+  // Swipe only kicks in on a rightward drag of > 15px, with strong horizontal bias
+  if (!sw.active && dx > 15 && dx > dy * 1.5) {
     sw.active = true
-    // Cancel long-press since we're now swiping
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current)
       longPressTimer.current = null
@@ -423,7 +423,7 @@ export default function Chat() {
 
   function onRowTouchEnd(m) {
   const sw = swipeRef.current
-  const triggered = sw.active && sw.dx >= 50
+  const triggered = sw.active && sw.dx >= 70
   const wasSwipe = sw.active
   swipeRef.current = { id: null, startX: 0, dx: 0, active: false }
   setSwipeState({ id: null, dx: 0 })

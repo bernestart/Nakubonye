@@ -1,4 +1,5 @@
 import { X, Reply, Copy, Forward, Trash2, Smile, Pin, PinOff } from "lucide-react"
+import { motion } from "framer-motion"
 import { tap } from "../lib/haptic"
 
 const REACTIONS = ["❤️", "😂", "😍", "👍", "🔥", "😮", "😢", "😡"]
@@ -16,9 +17,17 @@ export default function MessageActionsSheet({ message, isMine, isPinned, canUnse
 
   return (
     <div className="fixed inset-0 z-[400] flex items-end" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/60" />
-      <div
+      <motion.div
+        className="absolute inset-0 bg-black/60"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.18 }}
+      />
+      <motion.div
         onClick={(e) => e.stopPropagation()}
+        initial={{ y: "100%" }}
+        animate={{ y: 0 }}
+        transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
         className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5"
         style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
       >
@@ -68,7 +77,7 @@ export default function MessageActionsSheet({ message, isMine, isPinned, canUnse
         >
           Cancel
         </button>
-      </div>
+      </motion.div>
     </div>
   )
 }
