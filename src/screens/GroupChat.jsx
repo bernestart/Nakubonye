@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { ArrowLeft, Send, Paperclip, X, MoreVertical, Users, Camera, Trash2, Flag, LogOut, UserPlus , Pencil , Link2 , Bell , Mic, Square , Pin } from "lucide-react"
+import { ArrowLeft, Send, Paperclip, X, MoreVertical, Users, Camera, Trash2, Flag, LogOut, UserPlus , Pencil , Link2 , Bell , Mic, Square , Pin , Eraser } from "lucide-react"
 import { motion } from "framer-motion"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
@@ -53,6 +53,7 @@ export default function GroupChat() {
   const [heartBurstId, setHeartBurstId] = useState(null)
   const [pinnedMsg, setPinnedMsg] = useState(null)
   const [forwardingMsg, setForwardingMsg] = useState(null)
+  const [clearedAt, setClearedAt] = useState(null)
   const longPressTimer = useRef(null)
   const swipeRef = useRef({ id: null, startX: 0, dx: 0, active: false })
   const [swipeState, setSwipeState] = useState({ id: null, dx: 0 })
@@ -74,6 +75,14 @@ export default function GroupChat() {
       .maybeSingle()
     if (!g) { setError("Group not found"); setLoading(false); return }
     setGroup(g)
+
+    const { data: clearRow } = await supabase
+      .from("group_clears")
+      .select("cleared_at")
+      .eq("group_id", groupId)
+      .eq("user_id", myId)
+      .maybeSingle()
+    setClearedAt(clearRow?.cleared_at || null)
 
     const { data: muteRow } = await supabase
       .from('group_mutes')
@@ -429,6 +438,18 @@ export default function GroupChat() {
     }
   }
 
+  async function clearChat() {
+    if (!groupId || !myId) return
+    if (!confirm("Clear this chat? Messages will be hidden for you only.")) return
+    tap("light")
+    const now = new Date().toISOString()
+    await supabase.from("group_clears").upsert(
+      { group_id: groupId, user_id: myId, cleared_at: now },
+      { onConflict: "group_id,user_id" }
+    )
+    setClearedAt(now)
+  }
+
   async function leaveGroup() {
     if (!confirm("Leave this group?")) return
     tap("light")
@@ -452,6 +473,10 @@ export default function GroupChat() {
     const path = photos.get(uid)
     return path ? publicPhotoUrl(path) : null
   }
+
+  const visibleMessages = clearedAt
+    ? messages.filter((m) => new Date(m.created_at) > new Date(clearedAt))
+    : messages
 
   return (
     <div style={{
@@ -517,7 +542,7 @@ export default function GroupChat() {
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-3 pt-2 pb-4 flex flex-col gap-1.5">
         {loading ? (
           <div className="grid place-items-center h-32 text-muted text-[13px]">Loading…</div>
-        ) : messages.length === 0 ? (
+        ) : visibleMessages.length === 0 ? (
           <div className="grid place-items-center h-full text-center px-6">
             <div>
               <div className="w-14 h-14 rounded-2xl bg-purple-500/12 border border-purple-500/25 grid place-items-center mx-auto mb-3">
@@ -530,7 +555,7 @@ export default function GroupChat() {
             </div>
           </div>
         ) : (
-          messages.map((m, i) => {
+          visibleMessages.map((m, i) => {
             if (m.is_system) {
               return (
                 <div key={m.id} className="flex justify-center my-2">
@@ -541,11 +566,11 @@ export default function GroupChat() {
               )
             }
             const mine = m.sender_id === myId
-            const showDay = i === 0 || new Date(m.created_at).toDateString() !== new Date(messages[i-1].created_at).toDateString()
+            const showDay = i === 0 || new Date(m.created_at).toDateString() !== new Date(visibleMessages[i-1].created_at).toDateString()
             const deleted = !!m.deleted_at
             const senderName = memberName(m.sender_id)
             const senderAvatar = memberAvatar(m.sender_id)
-            const showSenderHeader = !mine && (i === 0 || messages[i-1].sender_id !== m.sender_id || showDay)
+            const showSenderHeader = !mine && (i === 0 || visibleMessages[i-1].sender_id !== m.sender_id || showDay)
             return (
               <div key={m.id}>
                 {showDay && (
@@ -861,6 +886,7 @@ export default function GroupChat() {
             <MenuItem icon={<Link2 size={16} />} label="Invite via link" onClick={() => { setMenuOpen(false); setInviteOpen(true) }} />
                         <MenuItem icon={<UserPlus size={16} />} label="Add members" onClick={() => { setMenuOpen(false); nav(`/groups/${groupId}/add`) }} />
             <MenuItem icon={<Bell size={16} />} label={isMuted ? "Unmute notifications" : "Mute notifications"} onClick={() => { setMenuOpen(false); toggleMute() }} />
+            <MenuItem icon={<Eraser size={16} />} label="Clear chat" onClick={() => { setMenuOpen(false); clearChat() }} />
             <MenuItem icon={<Flag size={16} />} label="Report group" danger onClick={() => { setMenuOpen(false); alert("Coming soon") }} />
             <MenuItem icon={<LogOut size={16} />} label="Leave group" danger onClick={() => { setMenuOpen(false); leaveGroup() }} />
           </div>
