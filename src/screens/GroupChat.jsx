@@ -1,0 +1,425 @@
+import { useCallback, useEffect, useRef, useState } from "react"
+import { useNavigate, useParams } from "react-router-dom"
+import { ArrowLeft, Send, Paperclip, X, MoreVertical, Users, Camera, Trash2, Flag, LogOut, UserPlus } from "lucide-react"
+import { motion } from "framer-motion"
+import { supabase } from "../lib/supabase"
+import { useAuth } from "../lib/auth"
+import { publicPhotoUrl } from "../lib/photo"
+import { tap } from "../lib/haptic"
+import BrandGlow from "../components/BrandGlow"
+
+export default function GroupChat() {
+  const nav = useNavigate()
+  const { id: groupId } = useParams()
+  const { session } = useAuth()
+  const myId = session?.user?.id
+  const scrollRef = useRef(null)
+  const fileInputRef = useRef(null)
+  const cameraInputRef = useRef(null)
+
+  const [loading, setLoading] = useState(true)
+  const [group, setGroup] = useState(null)
+  const [members, setMembers] = useState([])
+  const [profiles, setProfiles] = useState(new Map())
+  const [photos, setPhotos] = useState(new Map())
+  const [messages, setMessages] = useState([])
+  const [text, setText] = useState("")
+  const [attachment, setAttachment] = useState(null)
+  const [attachmentPreview, setAttachmentPreview] = useState("")
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+
+  const boot = useCallback(async () => {
+    if (!groupId || !myId) return
+    setLoading(true); setError("")
+
+    // Verify membership + load group
+    const { data: g } = await supabase
+      .from("groups")
+      .select("id, name, avatar_url, created_by, created_at")
+      .eq("id", groupId)
+      .maybeSingle()
+    if (!g) { setError("Group not found"); setLoading(false); return }
+    setGroup(g)
+
+    const { data: mem } = await supabase
+      .from("group_members")
+      .select("user_id, role, joined_at")
+      .eq("group_id", groupId)
+    const memberList = mem || []
+    setMembers(memberList)
+
+    const userIds = memberList.map((m) => m.user_id)
+    if (userIds.length > 0) {
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("id, display_name, username, is_verified")
+        .in("id", userIds)
+      setProfiles(new Map((profs || []).map((p) => [p.id, p])))
+
+      const { data: ph } = await supabase
+        .from("profile_photos")
+        .select("user_id, storage_path, is_primary, display_order")
+        .in("user_id", userIds)
+        .order("is_primary", { ascending: false })
+        .order("display_order", { ascending: true })
+      const pm = new Map()
+      ;(ph || []).forEach((p) => { if (!pm.has(p.user_id)) pm.set(p.user_id, p.storage_path) })
+      setPhotos(pm)
+    }
+
+    // Load messages
+    const { data: msgs } = await supabase
+      .from("group_messages")
+      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, created_at")
+      .eq("group_id", groupId)
+      .order("created_at", { ascending: true })
+      .limit(300)
+    setMessages(msgs || [])
+    setLoading(false)
+  }, [groupId, myId])
+
+  useEffect(() => { boot() }, [boot])
+
+  // Realtime
+  useEffect(() => {
+    if (!groupId) return
+    const ch = supabase
+      .channel("group-" + groupId)
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "group_messages", filter: "group_id=eq." + groupId },
+        (payload) => {
+          const m = payload.new
+          setMessages((cur) => cur.some((x) => x.id === m.id) ? cur : [...cur, m])
+        })
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "group_messages", filter: "group_id=eq." + groupId },
+        (payload) => {
+          const m = payload.new
+          setMessages((cur) => cur.map((x) => x.id === m.id ? { ...x, ...m } : x))
+        })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [groupId])
+
+  // Auto-scroll
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [messages.length])
+
+  function pickAttachment(e) {
+    const f = e.target.files?.[0]
+    if (!f) return
+    if (!f.type.startsWith("image/")) { setError("Only images supported"); e.target.value = ""; return }
+    if (f.size > 8 * 1024 * 1024) { setError("Image must be under 8 MB"); e.target.value = ""; return }
+    setAttachment(f); setAttachmentPreview(URL.createObjectURL(f)); setError("")
+  }
+
+  function clearAttachment() {
+    if (attachmentPreview) URL.revokeObjectURL(attachmentPreview)
+    setAttachment(null); setAttachmentPreview("")
+    if (fileInputRef.current) fileInputRef.current.value = ""
+    if (cameraInputRef.current) cameraInputRef.current.value = ""
+  }
+
+  async function send() {
+    const body = text.trim()
+    if ((!body && !attachment) || !myId) return
+    setBusy(true); tap("light")
+
+    let mediaUrl = null, mediaType = null, mediaName = null
+    if (attachment) {
+      const ext = (attachment.name.split(".").pop() || "jpg").toLowerCase()
+      const path = `group-media/${groupId}/${crypto.randomUUID()}.${ext}`
+      const { error: upErr } = await supabase.storage
+        .from("chat-media")
+        .upload(path, attachment, { upsert: false, contentType: attachment.type })
+      if (upErr) { setBusy(false); setError(upErr.message); return }
+      const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
+      mediaUrl = pub?.publicUrl || null
+      mediaType = attachment.type
+      mediaName = attachment.name
+    }
+
+    const payload = {
+      group_id: groupId,
+      sender_id: myId,
+      content: body || "",
+    }
+    if (mediaUrl) { payload.media_url = mediaUrl; payload.media_type = mediaType; payload.media_name = mediaName }
+
+    setText(""); clearAttachment()
+
+    const { data: inserted, error: sendErr } = await supabase
+      .from("group_messages")
+      .insert(payload)
+      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, created_at")
+      .single()
+
+    if (sendErr) { setError(sendErr.message); setText(body) }
+    else if (inserted) {
+      setMessages((cur) => cur.some((x) => x.id === inserted.id) ? cur : [...cur, inserted])
+    }
+    setBusy(false)
+  }
+
+  async function deleteMessage(id) {
+    if (!confirm("Delete this message for everyone?")) return
+    tap("light")
+    await supabase.from("group_messages").update({ deleted_at: new Date().toISOString(), content: "", media_url: null }).eq("id", id).eq("sender_id", myId)
+  }
+
+  async function leaveGroup() {
+    if (!confirm("Leave this group?")) return
+    tap("light")
+    await supabase.from("group_members").delete().eq("group_id", groupId).eq("user_id", myId)
+    nav("/messages", { replace: true })
+  }
+
+  const memberName = (uid) => {
+    const p = profiles.get(uid)
+    return p?.display_name || p?.username || "Someone"
+  }
+  const memberAvatar = (uid) => {
+    const path = photos.get(uid)
+    return path ? publicPhotoUrl(path) : null
+  }
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, margin: "0 auto", maxWidth: 480,
+      display: "flex", flexDirection: "column",
+      background: "#0B0B14", overflow: "hidden",
+    }}>
+      <BrandGlow />
+
+      <header style={{ height: 60, flexShrink: 0 }} className="px-3 flex items-center gap-2">
+        <button onClick={() => nav("/messages")} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Back">
+          <ArrowLeft size={20} strokeWidth={2.3} />
+        </button>
+        <button
+          type="button"
+          onClick={() => setMenuOpen(true)}
+          className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
+        >
+          <div className="w-10 h-10 rounded-full overflow-hidden bg-purple-600 grid place-items-center text-white font-black shrink-0">
+            {group?.avatar_url ? (
+              <img src={group.avatar_url} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <Users size={18} />
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className="text-cream text-[14.5px] font-semibold truncate">{group?.name || "Group"}</p>
+            <p className="text-subtle text-[11.5px] truncate">{members.length} members</p>
+          </div>
+        </button>
+        <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Menu">
+          <MoreVertical size={20} strokeWidth={2.2} />
+        </button>
+      </header>
+
+      {error && (
+        <div className="mx-3 mt-2 text-danger text-[12px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5 shrink-0">
+          {error}
+        </div>
+      )}
+
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-3 pt-2 pb-4 flex flex-col gap-1.5">
+        {loading ? (
+          <div className="grid place-items-center h-32 text-muted text-[13px]">Loading…</div>
+        ) : messages.length === 0 ? (
+          <div className="grid place-items-center h-full text-center px-6">
+            <div>
+              <div className="w-14 h-14 rounded-2xl bg-purple-500/12 border border-purple-500/25 grid place-items-center mx-auto mb-3">
+                <Users size={22} className="text-purple-300" />
+              </div>
+              <p className="text-cream font-semibold text-[14.5px] mb-1">
+                You created {group?.name}
+              </p>
+              <p className="text-muted text-[13px]">Say hi to the group 👋</p>
+            </div>
+          </div>
+        ) : (
+          messages.map((m, i) => {
+            const mine = m.sender_id === myId
+            const showDay = i === 0 || new Date(m.created_at).toDateString() !== new Date(messages[i-1].created_at).toDateString()
+            const deleted = !!m.deleted_at
+            const senderName = memberName(m.sender_id)
+            const senderAvatar = memberAvatar(m.sender_id)
+            const showSenderHeader = !mine && (i === 0 || messages[i-1].sender_id !== m.sender_id || showDay)
+            return (
+              <div key={m.id}>
+                {showDay && (
+                  <div className="flex justify-center py-3">
+                    <span className="px-3 py-1 rounded-full bg-white/[0.05] border border-white/8 text-subtle text-[10.5px] font-bold tracking-wider uppercase">
+                      {new Date(m.created_at).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}
+                    </span>
+                  </div>
+                )}
+                <div className={`flex gap-2 ${mine ? "justify-end" : "justify-start"}`}>
+                  {!mine && (
+                    <div className="w-8 shrink-0 flex flex-col justify-end">
+                      {showSenderHeader && (
+                        <div className="w-8 h-8 rounded-full overflow-hidden bg-elevated border border-white/8">
+                          {senderAvatar ? (
+                            <img src={senderAvatar} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full grid place-items-center text-purple-400 font-black text-[11px]">
+                              {senderName[0]}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div className="max-w-[78%]">
+                    {showSenderHeader && !mine && (
+                      <p className="text-[11px] text-muted font-semibold mb-0.5 px-1 truncate">{senderName}</p>
+                    )}
+                    <div
+                      className={`relative group ${
+                        deleted
+                          ? "px-3.5 py-2.5 text-[13px] italic bg-white/[0.04] border border-white/8 text-subtle rounded-2xl"
+                          : mine
+                            ? "bg-gradient-to-br from-purple-600 to-purple-500 text-white rounded-2xl rounded-br-md"
+                            : "bg-elevated text-cream border border-white/8 rounded-2xl rounded-bl-md"
+                      }`}
+                    >
+                      {deleted ? (
+                        "Message deleted"
+                      ) : (
+                        <>
+                          {m.media_url && m.media_type?.startsWith("image/") && (
+                            <img
+                              src={m.media_url}
+                              alt=""
+                              className="block max-w-[220px] rounded-xl"
+                              style={{ maxHeight: 260, objectFit: "cover" }}
+                              loading="lazy"
+                            />
+                          )}
+                          {m.content && (
+                            <div className={m.media_url ? "mt-1.5 px-3 pb-2 pt-1 text-[14.5px] leading-[1.4] break-words" : "px-3.5 py-2 text-[14.5px] leading-[1.4] break-words"}>
+                              {m.content}
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {mine && !deleted && (
+                        <button
+                          onClick={() => deleteMessage(m.id)}
+                          className="absolute -left-8 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full grid place-items-center bg-obsidian/85 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                          aria-label="Delete"
+                        >
+                          <Trash2 size={11} className="text-danger" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })
+        )}
+      </div>
+
+      {attachment && (
+        <div className="shrink-0 mx-3 mb-2 relative w-fit">
+          <img src={attachmentPreview} alt="" className="rounded-xl max-h-32" />
+          <button onClick={clearAttachment} className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-obsidian border border-white/20 grid place-items-center" aria-label="Remove">
+            <X size={13} strokeWidth={2.6} className="text-cream" />
+          </button>
+        </div>
+      )}
+
+      <div
+        className="shrink-0 px-3 pt-3 pb-3 flex items-end gap-2 relative"
+        style={{ background: "linear-gradient(to top, #0B0B14 70%, rgba(11,11,20,0) 100%)", paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
+      >
+        <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={pickAttachment} />
+        <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" hidden onChange={pickAttachment} />
+        <button
+          onClick={() => setAttachMenuOpen(true)}
+          className="w-10 h-10 rounded-full grid place-items-center text-muted shrink-0"
+          aria-label="Attach"
+        >
+          <Paperclip size={19} strokeWidth={2.3} />
+        </button>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send() } }}
+          rows={1}
+          placeholder="Message group…"
+          className="flex-1 bg-elevated border border-white/8 rounded-[22px] px-4 py-2.5 text-cream text-[14.5px] placeholder:text-subtle focus:outline-none focus:border-purple-500 resize-none max-h-32 leading-[1.4]"
+          style={{ minHeight: 44 }}
+        />
+        <motion.button
+          whileTap={{ scale: 0.9 }}
+          onClick={send}
+          disabled={busy || (!text.trim() && !attachment)}
+          className="w-11 h-11 rounded-full grid place-items-center bg-gradient-to-br from-purple-500 to-pink-500 text-white disabled:opacity-40 shrink-0"
+          aria-label="Send"
+        >
+          <Send size={18} strokeWidth={2.4} />
+        </motion.button>
+      </div>
+
+      {/* Attach menu */}
+      {attachMenuOpen && (
+        <div className="fixed inset-0 z-[500] flex items-end" onClick={() => setAttachMenuOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
+            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+          >
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
+            <button onClick={() => { setAttachMenuOpen(false); setTimeout(() => cameraInputRef.current?.click(), 100) }}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream">
+              <Camera size={18} className="text-purple-300" />
+              <span className="font-semibold text-[14px]">Take photo</span>
+            </button>
+            <button onClick={() => { setAttachMenuOpen(false); setTimeout(() => fileInputRef.current?.click(), 100) }}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream">
+              <Paperclip size={18} className="text-purple-300" />
+              <span className="font-semibold text-[14px]">Choose from gallery</span>
+            </button>
+            <button onClick={() => setAttachMenuOpen(false)} className="w-full h-11 mt-1 text-muted font-semibold text-[13.5px]">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Group menu */}
+      {menuOpen && (
+        <div onClick={() => setMenuOpen(false)} className="fixed inset-0 z-[500] bg-black/60">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="absolute top-16 right-3 w-56 bg-surface rounded-2xl border border-white/10 shadow-2xl overflow-hidden"
+          >
+            <MenuItem icon={<Users size={16} />} label={`${members.length} members`} onClick={() => { setMenuOpen(false); nav(`/groups/${groupId}/members`) }} />
+            <MenuItem icon={<UserPlus size={16} />} label="Add members" onClick={() => { setMenuOpen(false); nav(`/groups/${groupId}/add`) }} />
+            <MenuItem icon={<Flag size={16} />} label="Report group" danger onClick={() => { setMenuOpen(false); alert("Coming soon") }} />
+            <MenuItem icon={<LogOut size={16} />} label="Leave group" danger onClick={() => { setMenuOpen(false); leaveGroup() }} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MenuItem({ icon, label, onClick, danger }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-3 px-4 py-3 text-left text-[14px] font-medium ${danger ? "text-danger" : "text-cream"} hover:bg-white/[0.04]`}
+    >
+      {icon}
+      {label}
+    </button>
+  )
+}

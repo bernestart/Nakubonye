@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { MessageCircle, RefreshCw, PenSquare, BellOff, Search, X } from 'lucide-react'
+import { MessageCircle, RefreshCw, PenSquare, BellOff, Search, X , Users } from 'lucide-react'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -20,6 +20,7 @@ export default function Messages() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [newMsgOpen, setNewMsgOpen] = useState(false)
+  const [newGroupOpen, setNewGroupOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [error, setError] = useState('')
   const [pullDistance, setPullDistance] = useState(0)
@@ -262,17 +263,26 @@ export default function Messages() {
             {items.length === 0 ? "No conversations yet" : items.length + (items.length === 1 ? " conversation" : " conversations")}
           </p>
         </div>
-        <button
-          onClick={() => { tap("light"); setNewMsgOpen(true) }}
-          className="w-10 h-10 rounded-full grid place-items-center active:scale-95 transition-transform"
-          style={{
-            background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)",
-            boxShadow: "0 6px 18px rgba(236,72,153,0.45)",
-          }}
-          aria-label="New message"
-        >
-          <PenSquare size={18} color="#fff" />
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { tap("light"); nav("/groups/new") }}
+            className="w-10 h-10 rounded-full grid place-items-center active:scale-95 transition-transform bg-white/[0.06] border border-white/10"
+            aria-label="New group"
+          >
+            <Users size={18} className="text-cream" />
+          </button>
+          <button
+            onClick={() => { tap("light"); setNewMsgOpen(true) }}
+            className="w-10 h-10 rounded-full grid place-items-center active:scale-95 transition-transform"
+            style={{
+              background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)",
+              boxShadow: "0 6px 18px rgba(236,72,153,0.45)",
+            }}
+            aria-label="New message"
+          >
+            <PenSquare size={18} color="#fff" />
+          </button>
+        </div>
       </div>
 
       {error && (
