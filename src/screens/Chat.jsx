@@ -717,29 +717,36 @@ export default function Chat() {
         <button onClick={() => nav('/messages')} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Back">
           <ArrowLeft size={20} strokeWidth={2.3} />
         </button>
-        <button
-          type="button"
-          onClick={() => { if (other?.id) { tap('light'); nav('/profile/' + other.id) } }}
-          className="flex items-center gap-2.5 flex-1 min-w-0 text-left active:opacity-70 transition-opacity"
-          aria-label="View profile"
-        >
-          <div className="w-10 h-10 rounded-full overflow-hidden bg-elevated border border-white/8 shrink-0">
-            {other?.photo_url ? (
-              <img src={other.photo_url} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full grid place-items-center text-base font-black text-purple-400">
-                {(other?.display_name || '?')[0]}
-              </div>
-            )}
-          </div>
-          <div className="min-w-0">
+        <div className="flex items-center gap-2.5 flex-1 min-w-0">
+          <button
+            type="button"
+            onClick={() => { if (other?.id) { tap('light'); nav('/profile/' + other.id) } }}
+            className="shrink-0 active:opacity-70 transition-opacity"
+            aria-label="View profile"
+          >
+            <div className="w-10 h-10 rounded-full overflow-hidden bg-elevated border border-white/8">
+              {other?.photo_url ? (
+                <img src={other.photo_url} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full grid place-items-center text-base font-black text-purple-400">
+                  {(other?.display_name || '?')[0]}
+                </div>
+              )}
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => { if (other?.id) { tap('light'); nav('/messages/' + other.id + '/info') } }}
+            className="min-w-0 flex-1 text-left active:opacity-70 transition-opacity"
+            aria-label="Chat info"
+          >
             <p className="text-cream text-[14.5px] font-semibold truncate flex items-center gap-1.5">
               {other?.display_name || other?.username || 'Someone'}
               {other?.is_verified && <VerifiedBadge size={14} className="ml-1" />}
             </p>
             <p className="text-subtle text-[11px] font-medium">{otherTyping ? 'typing…' : !canSeeOnline ? (other?.isDirect === true ? 'Direct message' : other?.isDirect === false ? 'Matched' : '') : isOnline(other?.last_seen_at, 2) ? (<><span className="inline-block w-2 h-2 rounded-full mr-1.5 align-middle" style={{ background: '#22C55E', boxShadow: '0 0 6px rgba(34,197,94,0.55)' }} />Online</>) : other?.last_seen_at ? 'Last seen ' + formatLastSeen(other.last_seen_at) : other?.isDirect === true ? 'Direct message' : other?.isDirect === false ? 'Matched' : ''}</p>
-          </div>
-        </button>
+          </button>
+        </div>
         <button
           onClick={() => {
             if (!other) return
