@@ -26,6 +26,7 @@ export default function Messages() {
   const [tabFilter, setTabFilter] = useState("all")
   const [rowMenuFor, setRowMenuFor] = useState(null)
   const [pinnedKeys, setPinnedKeys] = useState(new Set())
+  const [archivedKeys, setArchivedKeys] = useState(new Set())
   const [reportRowFor, setReportRowFor] = useState(null)
   const rowPressTimer = useRef(null)
   const rowPressTriggered = useRef(false)
@@ -298,6 +299,16 @@ export default function Messages() {
     ;(grpPins.data || []).forEach((r) => pinSet.add("g:" + r.group_id))
     setPinnedKeys(pinSet)
 
+    // Load archived conversations + groups
+    const [convArch, grpArch] = await Promise.all([
+      supabase.from("conversation_archives").select("conversation_id").eq("user_id", userId),
+      supabase.from("group_archives").select("group_id").eq("user_id", userId),
+    ])
+    const archSet = new Set()
+    ;(convArch.data || []).forEach((r) => archSet.add("c:" + r.conversation_id))
+    ;(grpArch.data || []).forEach((r) => archSet.add("g:" + r.group_id))
+    setArchivedKeys(archSet)
+
     setItems(list)
     setLoading(false)
   }, [session?.user?.id])
@@ -407,6 +418,25 @@ export default function Messages() {
     setRowMenuFor(null)
   }
 
+  async function toggleRowArchive(item) {
+    tap("light")
+    const uid = session?.user?.id
+    if (!uid) return
+    const key = item.isGroup ? ("g:" + item.groupId) : ("c:" + item.conversationId)
+    const table = item.isGroup ? "group_archives" : "conversation_archives"
+    const column = item.isGroup ? "group_id" : "conversation_id"
+    const value = item.isGroup ? item.groupId : item.conversationId
+    const isArchived = archivedKeys.has(key)
+
+    if (isArchived) {
+      await supabase.from(table).delete().eq(column, value).eq("user_id", uid)
+    } else {
+      await supabase.from(table).insert({ [column]: value, user_id: uid })
+    }
+    setRowMenuFor(null)
+    load()
+  }
+
   async function blockRow(item) {
     if (item.isGroup) return
     if (!confirm("Block " + (item.display_name || "this user") + "? They won't be able to message you.")) return
@@ -418,7 +448,12 @@ export default function Messages() {
     load()
   }
 
-  const combined = [...groupItems, ...items].sort((a, b) => {
+  const combined = [...groupItems, ...items]
+    .filter((item) => {
+      const key = item.isGroup ? ("g:" + item.groupId) : ("c:" + item.conversationId)
+      return !archivedKeys.has(key)
+    })
+    .sort((a, b) => {
     const aPin = pinnedKeys.has(a.isGroup ? ("g:" + a.groupId) : ("c:" + a.conversationId))
     const bPin = pinnedKeys.has(b.isGroup ? ("g:" + b.groupId) : ("c:" + b.conversationId))
     if (aPin !== bPin) return aPin ? -1 : 1
@@ -782,6 +817,14 @@ export default function Messages() {
                 <span className="font-semibold text-[14px]">Block</span>
               </button>
             )}
+
+            <button
+              onClick={() => toggleRowArchive(rowMenuFor)}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+            >
+              <Archive size={18} />
+              <span className="font-semibold text-[14px]">Archive chat</span>
+            </button>
 
             <button onClick={() => setRowMenuFor(null)} className="w-full h-11 mt-1 text-muted font-semibold text-[13.5px]">Cancel</button>
           </div>

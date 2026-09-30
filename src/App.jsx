@@ -37,6 +37,7 @@ import AdminVerifications from './screens/AdminVerifications'
 import Likes from './screens/Likes'
 import Matches from './screens/Matches'
 import Messages from './screens/Messages'
+import ArchivedMessages from './screens/ArchivedMessages'
 import Chat from './screens/Chat'
 import SafetyCenter from './screens/SafetyCenter'
 import BlockedList from './screens/BlockedList'
@@ -207,6 +208,7 @@ export default function App() {
         <Route path="/likes"    element={<Guard><Likes /></Guard>} />
         <Route path="/matches"  element={<Guard><Matches /></Guard>} />
         <Route path="/messages" element={<Guard><Messages /></Guard>} />
+        <Route path="/messages/archived" element={<Guard><ArchivedMessages /></Guard>} />
         <Route path="/messages/:userId" element={<Guard><Chat /></Guard>} />
         <Route path="/me"         element={<Guard><ProfileSettings /></Guard>} />
         <Route path="/saved" element={<Guard><ComingSoon title="Saved" message="Your saved posts and reels will appear here soon." /></Guard>} />
