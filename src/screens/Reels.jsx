@@ -53,6 +53,8 @@ export default function Reels() {
   const [pullDistance, setPullDistance] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const [reelProgress, setReelProgress] = useState(0)
+  const [feedTab, setFeedTab] = useState("foryou")
+  const [followingIds, setFollowingIds] = useState(new Set())
 
   const load = useCallback(async () => {
     if (!myId) return
@@ -64,6 +66,14 @@ export default function Reels() {
       .order("created_at", { ascending: false })
       .limit(50)
 
+    // Fetch who I follow (used by Following tab)
+    const { data: followRows } = await supabase
+      .from("follows")
+      .select("following_id")
+      .eq("follower_id", myId)
+    const followSet = new Set((followRows || []).map((f) => f.following_id))
+    setFollowingIds(followSet)
+
     const list = (rows || []).filter((r) => {
       if (hiddenIds.has(r.id)) return false
       if (r.user_id === myId) return true
@@ -71,6 +81,10 @@ export default function Reels() {
       if (aud === "public") return true
       if (aud === "matches") return matchSet.has(r.user_id)
       if (aud === "private") return false
+      return true
+    }).filter((r) => {
+      if (feedTab === "foryou") return true
+      if (feedTab === "following") return followSet.has(r.user_id) || r.user_id === myId
       return true
     })
     setReels(list)
@@ -161,7 +175,7 @@ export default function Reels() {
     }
 
     setLoading(false)
-  }, [myId])
+  }, [myId, feedTab])
 
   function handleRefreshTouchStart(e) {
     const el = containerRef.current
@@ -460,7 +474,24 @@ export default function Reels() {
         >
           <ArrowLeft size={20} />
         </button>
-        <span className="text-white font-black text-[17px] tracking-tight">Reels</span>
+        <div className="flex items-center gap-1 pointer-events-auto">
+          {[
+            { id: "foryou", label: "For You" },
+            { id: "following", label: "Following" },
+          ].map((t) => (
+            <button
+              key={t.id}
+              onClick={() => { tap("light"); setFeedTab(t.id); setCurrentIdx(0) }}
+              className="px-3 h-8 rounded-full text-[13px] font-bold transition-colors"
+              style={{
+                color: feedTab === t.id ? "#fff" : "rgba(255,255,255,0.55)",
+                background: feedTab === t.id ? "rgba(255,255,255,0.15)" : "transparent",
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
         <button
           onClick={() => {
             setMuted((m) => {
@@ -531,8 +562,14 @@ export default function Reels() {
             <div className="w-16 h-16 rounded-2xl bg-purple-500/20 border border-purple-500/40 grid place-items-center mx-auto mb-4">
               <MessageCircle size={26} className="text-purple-300" />
             </div>
-            <p className="text-white font-bold text-[17px] mb-1.5">No reels yet</p>
-            <p className="text-white/60 text-[13.5px] mb-5">Be the first to post one.</p>
+            <p className="text-white font-bold text-[17px] mb-1.5">
+              {feedTab === "following" ? "Nothing from your follows" : "No reels yet"}
+            </p>
+            <p className="text-white/60 text-[13.5px] mb-5">
+              {feedTab === "following"
+                ? "Follow people to see their reels here."
+                : "Be the first to post one."}
+            </p>
             <button
               onClick={() => setComposerOpen(true)}
               className="h-12 px-6 rounded-full text-white font-bold text-[14px] inline-flex items-center gap-2"
