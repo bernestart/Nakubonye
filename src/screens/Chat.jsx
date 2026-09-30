@@ -19,6 +19,7 @@ import EmojiPicker from '../components/chat/EmojiPicker'
 import ImageLightbox from '../components/chat/ImageLightbox'
 import ForwardPicker from '../components/ForwardPicker'
 import MessageActionsSheet from '../components/MessageActionsSheet'
+import MessagePopover from '../components/MessagePopover'
 
 const REACTIONS = ['❤️', '😂', '😍', '👍', '🔥', '😮']
 
@@ -104,6 +105,7 @@ export default function Chat() {
   const [reactionPickerFor, setReactionPickerFor] = useState(null)
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [actionsForMsg, setActionsForMsg] = useState(null)
+  const [popoverAnchor, setPopoverAnchor] = useState({ x: 0, y: 0 })
   const [forwardingMsg, setForwardingMsg] = useState(null)
   const [pinnedMsg, setPinnedMsg] = useState(null)
   const [lightboxUrl, setLightboxUrl] = useState(null)
@@ -384,11 +386,15 @@ export default function Chat() {
   return () => { supabase.removeChannel(channel) }
   }, [conversationId, myId, otherId])
 
-  function onMsgPressStart(m) {
+  function onMsgPressStart(m, e) {
+  const t = e?.touches?.[0]
+  const x = t?.clientX ?? window.innerWidth / 2
+  const y = t?.clientY ?? window.innerHeight / 2
   longPressTimer.current = setTimeout(() => {
     tap("medium")
+    setPopoverAnchor({ x, y })
     setActionsForMsg(m)
-  }, 450)
+  }, 550)
   }
   function onMsgPressEnd() {
   if (longPressTimer.current) {
@@ -399,7 +405,7 @@ export default function Chat() {
 
   function onRowTouchStart(m, e) {
   swipeRef.current = { id: m.id, startX: e.touches[0].clientX, startY: e.touches[0].clientY, dx: 0, active: false }
-  onMsgPressStart(m)
+  onMsgPressStart(m, e)
   }
 
   function onRowTouchMove(e) {
@@ -848,7 +854,11 @@ export default function Chat() {
                 onTouchStart={(e) => onRowTouchStart(m, e)}
                 onTouchEnd={() => onRowTouchEnd(m)}
                 onTouchMove={onRowTouchMove}
-                onContextMenu={(e) => { e.preventDefault(); setActionsForMsg(m) }}
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  setPopoverAnchor({ x: e.clientX, y: e.clientY })
+                  setActionsForMsg(m)
+                }}
                 style={{
                   transform: swipeState.id === m.id ? `translateX(${swipeState.dx}px)` : undefined,
                   transition: swipeState.id === m.id ? "none" : "transform 180ms ease-out",
@@ -1255,16 +1265,17 @@ export default function Chat() {
       />
 
       {actionsForMsg && (
-        <MessageActionsSheet
+        <MessagePopover
           message={actionsForMsg}
+          anchor={popoverAnchor}
           isMine={actionsForMsg.sender_id === myId}
+          isPinned={pinnedMsg?.id === actionsForMsg.id}
+          canUnsend={isWithinUnsendWindow(actionsForMsg.created_at)}
           onClose={() => setActionsForMsg(null)}
           onReply={(m) => setReplyingTo(m)}
           onForward={(m) => { setActionsForMsg(null); setForwardingMsg(m) }}
           onDelete={deleteMessage}
           onReact={(emoji) => toggleReaction(actionsForMsg.id, emoji)}
-          isPinned={pinnedMsg?.id === actionsForMsg.id}
-          canUnsend={isWithinUnsendWindow(actionsForMsg.created_at)}
           onPin={togglePin}
         />
       )}
