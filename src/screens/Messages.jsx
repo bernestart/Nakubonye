@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { MessageCircle, RefreshCw, PenSquare } from 'lucide-react'
@@ -6,6 +6,7 @@ import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl } from '../lib/photo'
+import { isOnline } from '../lib/usePresence'
 import { tap } from '../lib/haptic'
 import BottomNav from '../components/BottomNav'
 import AppHeader from '../components/AppHeader'
@@ -20,6 +21,11 @@ export default function Messages() {
   const [loading, setLoading] = useState(true)
   const [newMsgOpen, setNewMsgOpen] = useState(false)
   const [error, setError] = useState('')
+  const [pullDistance, setPullDistance] = useState(0)
+  const pullingRef = useRef(false)
+  const pullStartY = useRef(0)
+  const [refreshing, setRefreshing] = useState(false)
+  const scrollRef = useRef(null)
 
   const load = useCallback(async () => {
     if (!session?.user?.id) return
@@ -64,7 +70,7 @@ export default function Messages() {
     const otherIds = [...new Set([...otherByMatch.values()])]
     const { data: profs } = await supabase
       .from('profiles')
-      .select('id, display_name, username, is_verified')
+      .select('id, display_name, username, is_verified, last_seen_at')
       .in('id', otherIds)
 
     const { data: photos } = await supabase
@@ -93,6 +99,7 @@ export default function Messages() {
         username: p.username,
         is_verified: p.is_verified,
         photo_url: publicPhotoUrl(pmap.get(otherId)),
+        last_seen_at: p.last_seen_at || null,
         preview: conv?.last_message_preview || null,
         lastMessageAt: conv?.last_message_at || m.created_at,
         unread: !!unread,
@@ -117,7 +124,7 @@ export default function Messages() {
       let dcPhotoMap = new Map()
       if (freshIds.length) {
         const { data: profs } = await supabase
-          .from('profiles').select('id, display_name, username, is_verified').in('id', freshIds)
+          .from('profiles').select('id, display_name, username, is_verified, last_seen_at').in('id', freshIds)
         ;(profs || []).forEach((p) => dcProfMap.set(p.id, p))
         const { data: photos } = await supabase
           .from('profile_photos')
@@ -156,8 +163,9 @@ export default function Messages() {
           username: p.username,
           is_verified: p.is_verified,
           photo_url: publicPhotoUrl(dcPhotoMap.get(other)),
+          last_seen_at: p.last_seen_at || null,
           preview: c.last_message_preview || null,
-          lastMessageAt: c.last_message_at || c.id,
+          lastMessageAt: c.last_message_at || c.created_at,
           unread: !!unread,
           isDirect: true,
         })
@@ -171,6 +179,44 @@ export default function Messages() {
   }, [session?.user?.id])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    const uid = session?.user?.id
+    if (!uid) return
+    let debounce = null
+    const schedule = () => {
+      if (debounce) clearTimeout(debounce)
+      debounce = setTimeout(() => load(), 400)
+    }
+    const ch = supabase
+      .channel('messages-list-' + uid)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, schedule)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversations' }, schedule)
+      .subscribe()
+    return () => { if (debounce) clearTimeout(debounce); supabase.removeChannel(ch) }
+  }, [session?.user?.id, load])
+
+  function onTouchStart(e) {
+    const el = scrollRef.current
+    if (!el || el.scrollTop > 0 || refreshing) return
+    pullStartY.current = e.touches[0].clientY
+    pullingRef.current = true
+  }
+  function onTouchMove(e) {
+    if (!pullingRef.current) return
+    const dy = e.touches[0].clientY - pullStartY.current
+    if (dy > 0) setPullDistance(Math.min(dy * 0.5, 100))
+  }
+  async function onTouchEnd() {
+    if (!pullingRef.current) return
+    pullingRef.current = false
+    const d = pullDistance
+    setPullDistance(0)
+    if (d < 60) return
+    setRefreshing(true)
+    try { await load() } catch {}
+    setRefreshing(false)
+  }
 
   return (
     <div
@@ -213,7 +259,15 @@ export default function Messages() {
         </div>
       )}
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-4">
+      {pullDistance > 0 && (
+        <div className="grid place-items-center py-2 text-purple-300 text-[11.5px] font-semibold" style={{ opacity: Math.min(1, pullDistance / 60) }}>
+          {pullDistance >= 60 ? "Release to refresh" : "Pull to refresh"}
+        </div>
+      )}
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-3 pb-4"
+           onTouchStart={onTouchStart}
+           onTouchMove={onTouchMove}
+           onTouchEnd={onTouchEnd}>
         {loading ? (
           <div className="flex flex-col gap-1 pt-2 animate-pulse">
             {[0,1,2,3,4,5].map((i) => (
@@ -248,6 +302,9 @@ export default function Messages() {
                       </div>
                     )}
                   </div>
+                  {item.last_seen_at && isOnline(item.last_seen_at, 3) && (
+                    <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-[#0B0B14]" style={{ boxShadow: "0 0 8px rgba(52,211,153,0.9)" }} />
+                  )}
                 </div>
 
                 <div className="flex-1 min-w-0">
