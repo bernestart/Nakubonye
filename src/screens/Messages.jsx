@@ -234,6 +234,21 @@ export default function Messages() {
       })
     }
 
+    // Compute unread for groups
+    if (groupList.length > 0) {
+      const gids2 = groupList.map((g) => g.groupId)
+      const { data: reads } = await supabase
+        .from('group_reads')
+        .select('group_id, last_read_at')
+        .eq('user_id', userId)
+        .in('group_id', gids2)
+      const readMap = new Map((reads || []).map((r) => [r.group_id, r.last_read_at]))
+      groupList.forEach((g) => {
+        const readAt = readMap.get(g.groupId)
+        g.unread = g.lastMessageAt && (!readAt || new Date(g.lastMessageAt) > new Date(readAt))
+      })
+    }
+
     setGroupItems(groupList)
 
     setItems(list)

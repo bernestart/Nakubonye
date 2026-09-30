@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { ArrowLeft, Send, Paperclip, X, MoreVertical, Users, Camera, Trash2, Flag, LogOut, UserPlus , Pencil , Link2 } from "lucide-react"
+import { ArrowLeft, Send, Paperclip, X, MoreVertical, Users, Camera, Trash2, Flag, LogOut, UserPlus , Pencil , Link2 , Bell } from "lucide-react"
 import { motion } from "framer-motion"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
@@ -30,6 +30,7 @@ export default function GroupChat() {
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
+  const [isMuted, setIsMuted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
 
@@ -45,6 +46,14 @@ export default function GroupChat() {
       .maybeSingle()
     if (!g) { setError("Group not found"); setLoading(false); return }
     setGroup(g)
+
+    const { data: muteRow } = await supabase
+      .from('group_mutes')
+      .select('group_id')
+      .eq('group_id', groupId)
+      .eq('user_id', myId)
+      .maybeSingle()
+    setIsMuted(!!muteRow)
 
     const { data: mem } = await supabase
       .from("group_members")
@@ -84,6 +93,15 @@ export default function GroupChat() {
   }, [groupId, myId])
 
   useEffect(() => { boot() }, [boot])
+
+  // Mark this group as read for me
+  useEffect(() => {
+    if (!groupId || !myId) return
+    supabase.from("group_reads").upsert(
+      { group_id: groupId, user_id: myId, last_read_at: new Date().toISOString() },
+      { onConflict: "group_id,user_id" }
+    ).then(() => {})
+  }, [groupId, myId, messages.length])
 
   // Realtime
   useEffect(() => {
@@ -172,6 +190,18 @@ export default function GroupChat() {
     if (!confirm("Delete this message for everyone?")) return
     tap("light")
     await supabase.from("group_messages").update({ deleted_at: new Date().toISOString(), content: "", media_url: null }).eq("id", id).eq("sender_id", myId)
+  }
+
+  async function toggleMute() {
+    if (!groupId || !myId) return
+    tap("light")
+    if (isMuted) {
+      await supabase.from("group_mutes").delete().eq("group_id", groupId).eq("user_id", myId)
+      setIsMuted(false)
+    } else {
+      await supabase.from("group_mutes").insert({ group_id: groupId, user_id: myId })
+      setIsMuted(true)
+    }
   }
 
   async function leaveGroup() {
@@ -424,6 +454,7 @@ export default function GroupChat() {
             <MenuItem icon={<Pencil size={16} />} label="Edit group" onClick={() => { setMenuOpen(false); nav(`/groups/${groupId}/edit`) }} />
             <MenuItem icon={<Link2 size={16} />} label="Invite via link" onClick={() => { setMenuOpen(false); setInviteOpen(true) }} />
                         <MenuItem icon={<UserPlus size={16} />} label="Add members" onClick={() => { setMenuOpen(false); nav(`/groups/${groupId}/add`) }} />
+            <MenuItem icon={<Bell size={16} />} label={isMuted ? "Unmute notifications" : "Mute notifications"} onClick={() => { setMenuOpen(false); toggleMute() }} />
             <MenuItem icon={<Flag size={16} />} label="Report group" danger onClick={() => { setMenuOpen(false); alert("Coming soon") }} />
             <MenuItem icon={<LogOut size={16} />} label="Leave group" danger onClick={() => { setMenuOpen(false); leaveGroup() }} />
           </div>
