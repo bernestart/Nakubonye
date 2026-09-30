@@ -749,50 +749,73 @@ export default function Messages() {
            onTouchStart={onTouchStart}
            onTouchMove={onTouchMove}
            onTouchEnd={onTouchEnd}>
-        {/* Active now — horizontal strip */}
-        {!loading && tabFilter === "all" && !searchQuery.trim() && onlineUsers.length > 0 && (
-          <div className="mb-3">
-            <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2 px-1">
-              Active now
-            </p>
+        {/* Story row — Messenger-style */}
+        {!loading && tabFilter === "all" && !searchQuery.trim() && (
+          <div className="mb-3 -mx-3 px-3">
             <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-              {onlineUsers.slice(0, 15).map((u) => (
-                <button
-                  key={u.id}
-                  onClick={() => { tap("light"); nav("/messages/" + u.id) }}
-                  className="shrink-0 flex flex-col items-center gap-1.5 active:opacity-80"
-                  style={{ width: 64 }}
-                >
-                  <div className="relative">
-                    {(() => {
-                      const hasStory = storyOwners.has(u.id)
-                      const storyViewed = hasStory && viewedStoryOwners.has(u.id)
-                      const ringStyle = hasStory
-                        ? storyViewed
-                          ? { border: "2px solid rgba(255,255,255,0.15)" }
-                          : { background: "linear-gradient(#0B0B14,#0B0B14) padding-box, linear-gradient(135deg,#C084FC,#EC4899) border-box", border: "2px solid transparent" }
-                        : { border: "2px solid rgba(52,211,153,0.7)" }
-                      return (
-                        <div className="w-14 h-14 rounded-full p-[2px]" style={ringStyle}>
+              {/* Create story */}
+              <button
+                onClick={() => { tap("light"); nav("/stories") }}
+                className="shrink-0 flex flex-col items-center gap-1.5 active:opacity-80"
+                style={{ width: 68 }}
+              >
+                <div className="relative">
+                  <div
+                    className="w-16 h-16 rounded-full grid place-items-center"
+                    style={{
+                      background: "linear-gradient(135deg, rgba(192,132,252,0.25) 0%, rgba(236,72,153,0.25) 100%)",
+                      border: "2px dashed rgba(192,132,252,0.6)",
+                    }}
+                  >
+                    <span className="text-purple-300 text-[26px] font-thin leading-none">+</span>
+                  </div>
+                </div>
+                <span className="text-cream text-[11.5px] font-semibold truncate w-full text-center">
+                  Your story
+                </span>
+              </button>
+
+              {/* Story bubbles from DM contacts */}
+              {(() => {
+                const owners = [...storyOwners].slice(0, 20)
+                const people = owners
+                  .map((uid) => items.find((x) => x.userId === uid))
+                  .filter(Boolean)
+                return people.map((u) => {
+                  const seen = viewedStoryOwners.has(u.userId)
+                  const ringStyle = seen
+                    ? { border: "2px solid rgba(255,255,255,0.18)" }
+                    : { background: "linear-gradient(#0B0B14,#0B0B14) padding-box, linear-gradient(135deg,#C084FC,#EC4899) border-box", border: "2px solid transparent" }
+                  return (
+                    <button
+                      key={u.userId}
+                      onClick={() => { tap("light"); nav("/stories") }}
+                      className="shrink-0 flex flex-col items-center gap-1.5 active:opacity-80"
+                      style={{ width: 68 }}
+                    >
+                      <div className="relative">
+                        <div className="w-16 h-16 rounded-full p-[2px]" style={ringStyle}>
                           <div className="w-full h-full rounded-full overflow-hidden bg-elevated">
                             {u.photo_url ? (
                               <img src={u.photo_url} alt="" className="w-full h-full object-cover" />
                             ) : (
                               <div className="w-full h-full grid place-items-center text-purple-400 font-black text-lg">
-                                {(u.display_name || u.username || "?")[0]}
+                                {(u.display_name || "?")[0]}
                               </div>
                             )}
                           </div>
                         </div>
-                      )
-                    })()}
-                    <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-[#0B0B14]" />
-                  </div>
-                  <span className="text-cream text-[11px] font-semibold truncate w-full text-center">
-                    {(u.display_name || u.username || "User").split(" ")[0]}
-                  </span>
-                </button>
-              ))}
+                        {!u.isGroup && u.last_seen_at && isOnline(u.last_seen_at, 3) && (
+                          <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-[#0B0B14]" />
+                        )}
+                      </div>
+                      <span className="text-cream text-[11.5px] font-semibold truncate w-full text-center">
+                        {(u.display_name || u.username || "User").split(" ")[0]}
+                      </span>
+                    </button>
+                  )
+                })
+              })()}
             </div>
           </div>
         )}
