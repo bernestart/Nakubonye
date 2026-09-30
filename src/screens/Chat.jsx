@@ -35,6 +35,13 @@ function formatLastSeen(ts) {
   return new Date(ts).toLocaleDateString()
 }
 
+const UNSEND_WINDOW_MS = 60 * 60 * 1000
+
+function isWithinUnsendWindow(createdAt) {
+  if (!createdAt) return false
+  return Date.now() - new Date(createdAt).getTime() < UNSEND_WINDOW_MS
+}
+
 export default function Chat() {
   const nav = useNavigate()
   const { userId: otherId } = useParams()
