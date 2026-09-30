@@ -48,6 +48,10 @@ export default function Reels() {
   const [hasMore, setHasMore] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const loadingMoreRef = useRef(false)
+  const pullStartY = useRef(0)
+  const pullingRef = useRef(false)
+  const [pullDistance, setPullDistance] = useState(0)
+  const [refreshing, setRefreshing] = useState(false)
 
   const load = useCallback(async () => {
     if (!myId) return
@@ -157,6 +161,36 @@ export default function Reels() {
 
     setLoading(false)
   }, [myId])
+
+  function handleRefreshTouchStart(e) {
+    const el = containerRef.current
+    if (!el || el.scrollTop > 0 || refreshing) return
+    pullStartY.current = e.touches[0].clientY
+    pullingRef.current = true
+  }
+
+  function handleRefreshTouchMove(e) {
+    if (!pullingRef.current) return
+    const dy = e.touches[0].clientY - pullStartY.current
+    if (dy > 0) {
+      setPullDistance(Math.min(dy * 0.5, 110))
+    }
+  }
+
+  async function handleRefreshTouchEnd() {
+    if (!pullingRef.current) return
+    pullingRef.current = false
+    const d = pullDistance
+    setPullDistance(0)
+    if (d < 70) return
+    setRefreshing(true)
+    try {
+      await load()
+      if (containerRef.current) containerRef.current.scrollTop = 0
+      setCurrentIdx(0)
+    } catch {}
+    setRefreshing(false)
+  }
 
   const loadMore = useCallback(async () => {
     if (!myId || loadingMoreRef.current || !hasMore || !cursor) return
@@ -301,13 +335,18 @@ export default function Reels() {
       if (i === currentIdx) {
         const reel = visible[i]
         if (reel) clipIdxRefs.current[reel.id] = clipIdxRefs.current[reel.id] || 0
-        // Reset to clip start then play
+        v.muted = muted
         v.play().catch(() => {})
       } else {
         try { v.pause() } catch {}
       }
     })
-  }, [currentIdx, reels, hiddenIds])
+  }, [currentIdx, reels, hiddenIds, muted])
+
+  // Re-apply muted to all videos when toggle changes
+  useEffect(() => {
+    videoRefs.current.forEach((v) => { if (v) v.muted = muted })
+  }, [muted])
 
   // IntersectionObserver to detect which reel is in view
   useEffect(() => {
@@ -434,6 +473,30 @@ export default function Reels() {
         </button>
       </div>
 
+      {/* Pull-to-refresh indicator */}
+      {(pullDistance > 0 || refreshing) && (
+        <div
+          className="absolute left-0 right-0 grid place-items-center pointer-events-none"
+          style={{
+            top: 56,
+            zIndex: 35,
+            transform: `translateY(${refreshing ? 0 : pullDistance - 40}px)`,
+            opacity: Math.min(1, (refreshing ? 100 : pullDistance) / 70),
+            transition: refreshing ? 'none' : 'opacity 100ms',
+          }}
+        >
+          <div className="w-9 h-9 rounded-full bg-black/70 backdrop-blur-md grid place-items-center">
+            <div
+              className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white"
+              style={{
+                transform: `rotate(${refreshing ? 0 : pullDistance * 3}deg)`,
+                animation: refreshing ? 'spin 0.8s linear infinite' : 'none',
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="absolute inset-0 grid place-items-center">
           <div className="text-center">
@@ -463,6 +526,9 @@ export default function Reels() {
           ref={containerRef}
           className="absolute inset-0 overflow-y-scroll"
           style={{ scrollSnapType: "y mandatory", scrollbarWidth: "none" }}
+          onTouchStart={handleRefreshTouchStart}
+          onTouchMove={handleRefreshTouchMove}
+          onTouchEnd={handleRefreshTouchEnd}
         >
           {reels.filter((r) => !hiddenIds.has(r.id)).map((reel, idx) => {
             const prof = profiles.get(reel.user_id)
@@ -494,6 +560,18 @@ export default function Reels() {
                   muted={muted}
                   playsInline
                   preload="auto"
+                  onCanPlay={(e) => {
+                    if (idx !== currentIdx) return
+                    e.target.muted = muted
+                    e.target.play().catch(() => {
+                      // Retry once after short delay (metadata race)
+                      setTimeout(() => {
+                        if (videoRefs.current[idx]) {
+                          videoRefs.current[idx].play().catch(() => {})
+                        }
+                      }, 250)
+                    })
+                  }}
                   onLoadedMetadata={(e) => {
                     const list = Array.isArray(reel.clips) && reel.clips.length > 0
                       ? reel.clips
