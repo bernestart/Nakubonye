@@ -270,20 +270,7 @@ export default function Messages() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, schedule)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversations' }, schedule)
       .subscribe()
-    const combined = [...groupItems, ...items].sort((a, b) =>
-    new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0)
-  )
-
-  const visibleItems = searchQuery.trim()
-    ? combined.filter((item) => {
-        const q = searchQuery.toLowerCase()
-        return (item.display_name || "").toLowerCase().includes(q)
-          || (item.username || "").toLowerCase().includes(q)
-          || (item.preview || "").toLowerCase().includes(q)
-      })
-    : combined
-
-  return () => { if (debounce) clearTimeout(debounce); supabase.removeChannel(ch) }
+    return () => { if (debounce) clearTimeout(debounce); supabase.removeChannel(ch) }
   }, [session?.user?.id, load])
 
   function onTouchStart(e) {
@@ -307,6 +294,19 @@ export default function Messages() {
     try { await load() } catch {}
     setRefreshing(false)
   }
+
+  const combined = [...groupItems, ...items].sort((a, b) =>
+    new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0)
+  )
+
+  const visibleItems = searchQuery.trim()
+    ? combined.filter((item) => {
+        const q = searchQuery.toLowerCase()
+        return (item.display_name || "").toLowerCase().includes(q)
+          || (item.username || "").toLowerCase().includes(q)
+          || (item.preview || "").toLowerCase().includes(q)
+      })
+    : combined
 
   return (
     <div
