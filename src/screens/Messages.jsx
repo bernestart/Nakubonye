@@ -32,6 +32,7 @@ export default function Messages() {
   const [archivedKeys, setArchivedKeys] = useState(new Set())
   const [onlineUsers, setOnlineUsers] = useState([])
   const [storyOwners, setStoryOwners] = useState(new Set())
+  const [pendingRequests, setPendingRequests] = useState(0)
   const [viewedStoryOwners, setViewedStoryOwners] = useState(new Set())
   const [reportRowFor, setReportRowFor] = useState(null)
   const rowPressTimer = useRef(null)
@@ -412,6 +413,14 @@ export default function Messages() {
     setStoryOwners(owners)
     setViewedStoryOwners(viewedOwners)
 
+    // Pending message request count
+    const { count: reqCount } = await supabase
+      .from("message_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("recipient_id", userId)
+      .eq("status", "pending")
+    setPendingRequests(reqCount || 0)
+
     setItems(list)
     setLoading(false)
   }, [session?.user?.id])
@@ -646,10 +655,16 @@ export default function Messages() {
           </button>
           <button
             onClick={() => { tap("light"); setHeaderMenuOpen(true) }}
-            className="w-10 h-10 rounded-full grid place-items-center active:scale-95 transition-transform bg-white/[0.06] border border-white/10"
+            className="relative w-10 h-10 rounded-full grid place-items-center active:scale-95 transition-transform bg-white/[0.06] border border-white/10"
             aria-label="Chats menu"
           >
             <MoreVertical size={18} className="text-cream" />
+            {pendingRequests > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full grid place-items-center text-white text-[10.5px] font-black"
+                    style={{ background: "#EC4899", boxShadow: "0 0 6px rgba(236,72,153,0.8)" }}>
+                {pendingRequests > 99 ? "99+" : pendingRequests}
+              </span>
+            )}
           </button>
         </div>
       </div>
@@ -685,7 +700,13 @@ export default function Messages() {
               className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
             >
               <Inbox size={18} />
-              <span className="font-semibold text-[14px]">Message requests</span>
+              <span className="font-semibold text-[14px] flex-1">Message requests</span>
+              {pendingRequests > 0 && (
+                <span className="min-w-[22px] h-[22px] px-1.5 rounded-full grid place-items-center text-white text-[11px] font-black"
+                      style={{ background: "#EC4899" }}>
+                  {pendingRequests > 99 ? "99+" : pendingRequests}
+                </span>
+              )}
             </button>
 
             <button
