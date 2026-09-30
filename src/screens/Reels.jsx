@@ -20,7 +20,9 @@ export default function Reels() {
   const [photos, setPhotos] = useState(new Map())
   const [likes, setLikes] = useState(new Set())
   const [likeCounts, setLikeCounts] = useState(new Map())
-  const [muted, setMuted] = useState(true)
+  const [muted, setMuted] = useState(() => {
+    try { return localStorage.getItem("reels_muted") !== "false" } catch { return true }
+  })
   const [composerOpen, setComposerOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [currentIdx, setCurrentIdx] = useState(0)
@@ -250,10 +252,17 @@ export default function Reels() {
 
   async function share(reel) {
     tap("light")
-    const url = reel.video_url
-    if (navigator.share) {
-      try { await navigator.share({ title: "Nakubonye reel", url }) } catch {}
-    } else {
+    const url = window.location.origin + "/reels?r=" + reel.id
+    const text = "Check this reel on Nakubonye"
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "Nakubonye reel", text, url })
+      } else {
+        await navigator.clipboard.writeText(url)
+        alert("Link copied!")
+      }
+    } catch {
+      // User cancelled or share failed — copy as fallback
       try { await navigator.clipboard.writeText(url); alert("Link copied!") } catch {}
     }
   }
@@ -272,7 +281,13 @@ export default function Reels() {
         </button>
         <span className="text-white font-black text-[17px] tracking-tight">Reels</span>
         <button
-          onClick={() => setMuted((m) => !m)}
+          onClick={() => {
+            setMuted((m) => {
+              const next = !m
+              try { localStorage.setItem("reels_muted", String(next)) } catch {}
+              return next
+            })
+          }}
           className="w-10 h-10 rounded-full grid place-items-center bg-black/40 backdrop-blur-md text-white pointer-events-auto"
           aria-label={muted ? "Unmute" : "Mute"}
         >
