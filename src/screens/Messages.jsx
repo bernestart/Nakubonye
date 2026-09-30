@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { MessageCircle, RefreshCw, PenSquare, BellOff, Search, X , Users } from 'lucide-react'
+import { MessageCircle, RefreshCw, PenSquare, BellOff, Search, X , Users , MoreVertical , Archive, Inbox, CheckCheck } from 'lucide-react'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -22,6 +22,7 @@ export default function Messages() {
   const [loading, setLoading] = useState(true)
   const [newMsgOpen, setNewMsgOpen] = useState(false)
   const [newGroupOpen, setNewGroupOpen] = useState(false)
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [error, setError] = useState('')
   const [pullDistance, setPullDistance] = useState(0)
@@ -29,6 +30,36 @@ export default function Messages() {
   const pullStartY = useRef(0)
   const [refreshing, setRefreshing] = useState(false)
   const scrollRef = useRef(null)
+
+  async function markAllRead() {
+    const uid = session?.user?.id
+    if (!uid) return
+    tap("light")
+    const convIds = [
+      ...items.map((x) => x.conversationId),
+      ...groupItems.map((x) => x.groupId),
+    ].filter(Boolean)
+    if (convIds.length === 0) { setHeaderMenuOpen(false); return }
+
+    // DM conversations
+    const dmRows = items
+      .filter((x) => x.conversationId)
+      .map((x) => ({ conversation_id: x.conversationId, user_id: uid, last_read_at: new Date().toISOString() }))
+    if (dmRows.length > 0) {
+      await supabase.from("conversation_reads").upsert(dmRows, { onConflict: "conversation_id,user_id" })
+    }
+
+    // Groups
+    const groupRows = groupItems
+      .filter((x) => x.groupId)
+      .map((x) => ({ group_id: x.groupId, user_id: uid, last_read_at: new Date().toISOString() }))
+    if (groupRows.length > 0) {
+      await supabase.from("group_reads").upsert(groupRows, { onConflict: "group_id,user_id" })
+    }
+
+    setHeaderMenuOpen(false)
+    load()
+  }
 
   const load = useCallback(async () => {
     if (!session?.user?.id) return
@@ -349,8 +380,80 @@ export default function Messages() {
           >
             <PenSquare size={18} color="#fff" />
           </button>
+          <button
+            onClick={() => { tap("light"); setHeaderMenuOpen(true) }}
+            className="w-10 h-10 rounded-full grid place-items-center active:scale-95 transition-transform bg-white/[0.06] border border-white/10"
+            aria-label="Chats menu"
+          >
+            <MoreVertical size={18} className="text-cream" />
+          </button>
         </div>
       </div>
+
+      {headerMenuOpen && (
+        <div className="fixed inset-0 z-[500] flex items-end" onClick={() => setHeaderMenuOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
+            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+          >
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
+
+            <button
+              onClick={markAllRead}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+            >
+              <CheckCheck size={18} />
+              <span className="font-semibold text-[14px]">Mark all as read</span>
+            </button>
+
+            <button
+              onClick={() => { setHeaderMenuOpen(false); nav("/messages/archived") }}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+            >
+              <Archive size={18} />
+              <span className="font-semibold text-[14px]">Archived</span>
+            </button>
+
+            <button
+              onClick={() => { setHeaderMenuOpen(false); nav("/messages/requests") }}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+            >
+              <Inbox size={18} />
+              <span className="font-semibold text-[14px]">Message requests</span>
+            </button>
+
+            <button
+              onClick={() => { setHeaderMenuOpen(false); nav("/notifications") }}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+            >
+              <span className="w-5 h-5 grid place-items-center">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
+              </span>
+              <span className="font-semibold text-[14px]">Notification settings</span>
+            </button>
+
+            <button
+              onClick={() => { setHeaderMenuOpen(false); nav("/me") }}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+            >
+              <span className="w-5 h-5 grid place-items-center">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+              </span>
+              <span className="font-semibold text-[14px]">Settings</span>
+            </button>
+
+            <button onClick={() => setHeaderMenuOpen(false)} className="w-full h-11 mt-1 text-muted font-semibold text-[13.5px]">Cancel</button>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="mx-4 mb-2 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5 shrink-0">
