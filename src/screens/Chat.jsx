@@ -202,7 +202,7 @@ export default function Chat() {
 
     const { data: msgs, error: msgErr } = await supabase
       .from('messages')
-      .select('id, sender_id, content, created_at, media_url, media_type, media_name, reply_to_id, deleted_at')
+      .select('id, sender_id, content, created_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata')
       .eq('conversation_id', convId)
       .order('created_at', { ascending: true }).limit(200)
     if (msgErr) { setError(msgErr.message); setLoading(false); return }
@@ -449,7 +449,7 @@ export default function Chat() {
     const { data: inserted, error: sendErr } = await supabase
       .from('messages')
       .insert(payload)
-      .select('id, sender_id, content, created_at, media_url, media_type, media_name, reply_to_id, deleted_at')
+      .select('id, sender_id, content, created_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata')
       .single()
 
     if (sendErr) {
@@ -487,7 +487,7 @@ export default function Chat() {
     const { data: inserted, error: sendErr } = await supabase
       .from('messages')
       .insert(payload)
-      .select('id, sender_id, content, created_at, media_url, media_type, media_name, reply_to_id, deleted_at')
+      .select('id, sender_id, content, created_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata')
       .single()
 
     if (sendErr) {
@@ -669,6 +669,7 @@ export default function Chat() {
           messages.map((m, i) => {
             const mine = m.sender_id === myId
             const showGap = i === 0 || (new Date(m.created_at) - new Date(messages[i-1].created_at)) > 5 * 60 * 1000
+            const showDay = i === 0 || new Date(m.created_at).toDateString() !== new Date(messages[i-1].created_at).toDateString()
             const replyToMsg = m.reply_to_id ? messages.find((x) => x.id === m.reply_to_id) : null
             const reacts = reactions[m.id] || []
             const myReact = reacts.find((r) => r.user_id === myId)
@@ -690,11 +691,36 @@ export default function Chat() {
                     <div className="flex-1 h-px bg-purple-500/30" />
                   </div>
                 )}
-                {showGap && (
+                {showDay && (
+                  <div className="flex justify-center py-3">
+                    <span className="px-3 py-1 rounded-full bg-white/[0.05] border border-white/8 text-subtle text-[10.5px] font-bold tracking-wider uppercase">
+                      {dayLabel(m.created_at)}
+                    </span>
+                  </div>
+                )}
+                {showGap && !showDay && (
                   <p className="text-center text-subtle text-[10.5px] font-medium py-1.5">{timeLabel(m.created_at)}</p>
                 )}
                 <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                   <div className="max-w-[82%] relative group">
+                    {m.metadata?.story_reply && !deleted && !replyToMsg && (
+                      <div className={`mb-1 px-2 py-2 rounded-xl flex items-center gap-2 ${mine ? 'bg-purple-500/15 border border-purple-500/30' : 'bg-white/5 border border-white/8'}`}>
+                        <div className="w-8 h-8 rounded-lg overflow-hidden bg-black/40 shrink-0">
+                          {m.metadata.story_reply.media_type === "video" ? (
+                            <video src={m.metadata.story_reply.media_url} muted playsInline className="w-full h-full object-cover" />
+                          ) : (
+                            <img src={m.metadata.story_reply.media_url} alt="" className="w-full h-full object-cover" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className="block text-[10px] font-bold tracking-wide text-purple-300">
+                            {mine ? "You replied to their story" : "Replied to your story"}
+                          </span>
+                          <span className="block text-[11.5px] text-muted truncate">Story</span>
+                        </div>
+                      </div>
+                    )}
+
                     {replyToMsg && !deleted && (
                       <div className={`mb-1 px-3 py-1.5 rounded-xl text-[12px] border-l-2 ${
                         mine ? 'bg-purple-500/15 border-purple-400 text-purple-100' : 'bg-white/5 border-white/30 text-muted'
@@ -1077,6 +1103,17 @@ function AudioBubble({ src, mine }) {
       <audio ref={audioRef} src={src} preload="metadata" />
     </div>
   )
+}
+
+function dayLabel(iso) {
+  const d = new Date(iso)
+  const now = new Date()
+  if (d.toDateString() === now.toDateString()) return 'Today'
+  const yest = new Date(now); yest.setDate(now.getDate() - 1)
+  if (d.toDateString() === yest.toDateString()) return 'Yesterday'
+  const days = (now - d) / (1000 * 60 * 60 * 24)
+  if (days < 7) return d.toLocaleDateString([], { weekday: 'long' })
+  return d.toLocaleDateString([], { month: 'long', day: 'numeric', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined })
 }
 
 function timeLabel(iso) {
