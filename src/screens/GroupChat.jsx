@@ -9,6 +9,7 @@ import { tap } from "../lib/haptic"
 import BrandGlow from "../components/BrandGlow"
 import InviteLinkSheet from "../components/InviteLinkSheet"
 import MessageActionsSheet from "../components/MessageActionsSheet"
+import ForwardPicker from "../components/ForwardPicker"
 import Linkify from "../components/chat/Linkify"
 import AudioBubble from "../components/chat/AudioBubble"
 import EmojiPicker from "../components/chat/EmojiPicker"
@@ -44,6 +45,7 @@ export default function GroupChat() {
   const [reactionPickerFor, setReactionPickerFor] = useState(null)
   const [heartBurstId, setHeartBurstId] = useState(null)
   const [pinnedMsg, setPinnedMsg] = useState(null)
+  const [forwardingMsg, setForwardingMsg] = useState(null)
   const longPressTimer = useRef(null)
   const swipeRef = useRef({ id: null, startX: 0, dx: 0, active: false })
   const [swipeState, setSwipeState] = useState({ id: null, dx: 0 })
@@ -716,7 +718,7 @@ export default function GroupChat() {
           onClose={() => setActionsForMsg(null)}
           onReply={(m) => setReplyingTo(m)}
           onCopy={async () => { try { await navigator.clipboard.writeText(actionsForMsg.content || ""); setActionsForMsg(null) } catch {} }}
-          onForward={(m) => { setActionsForMsg(null); alert("Forward coming soon") }}
+          onForward={(m) => { setActionsForMsg(null); setForwardingMsg(m) }}
           onDelete={deleteMessage}
           onReact={(emoji) => toggleReaction(actionsForMsg.id, emoji)}
           isPinned={pinnedMsg?.id === actionsForMsg.id}
@@ -854,6 +856,14 @@ export default function GroupChat() {
 
       {inviteOpen && group && (
         <InviteLinkSheet group={group} onClose={() => setInviteOpen(false)} />
+      )}
+
+      {forwardingMsg && (
+        <ForwardPicker
+          message={forwardingMsg}
+          onClose={() => setForwardingMsg(null)}
+          onForwarded={() => {}}
+        />
       )}
     </div>
   )
