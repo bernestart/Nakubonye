@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { ArrowLeft, Send, Paperclip, X, MoreVertical, Users, Camera, Trash2, Flag, LogOut, UserPlus , Pencil , Link2 , Bell , Mic, Square } from "lucide-react"
+import { ArrowLeft, Send, Paperclip, X, MoreVertical, Users, Camera, Trash2, Flag, LogOut, UserPlus , Pencil , Link2 , Bell , Mic, Square , Pin } from "lucide-react"
 import { motion } from "framer-motion"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
@@ -43,6 +43,7 @@ export default function GroupChat() {
   const [actionsForMsg, setActionsForMsg] = useState(null)
   const [reactionPickerFor, setReactionPickerFor] = useState(null)
   const [heartBurstId, setHeartBurstId] = useState(null)
+  const [pinnedMsg, setPinnedMsg] = useState(null)
   const longPressTimer = useRef(null)
   const swipeRef = useRef({ id: null, startX: 0, dx: 0, active: false })
   const [swipeState, setSwipeState] = useState({ id: null, dx: 0 })
@@ -166,6 +167,34 @@ export default function GroupChat() {
       setReactions(byMsg)
     })()
   }, [messages])
+
+  // Load + realtime pinned message
+  useEffect(() => {
+    if (!groupId) return
+    let cancelled = false
+    const fetchPinned = async () => {
+      const { data: pin } = await supabase
+        .from("group_pinned_messages")
+        .select("message_id, pinned_by")
+        .eq("group_id", groupId)
+        .maybeSingle()
+      if (cancelled) return
+      if (!pin) { setPinnedMsg(null); return }
+      const { data: msg } = await supabase
+        .from("group_messages")
+        .select("id, sender_id, content, media_url, media_type, deleted_at")
+        .eq("id", pin.message_id)
+        .maybeSingle()
+      if (cancelled) return
+      setPinnedMsg(msg ? { ...msg, pinned_by: pin.pinned_by } : null)
+    }
+    fetchPinned()
+    const ch = supabase
+      .channel("gpinned-" + groupId)
+      .on("postgres_changes", { event: "*", schema: "public", table: "group_pinned_messages", filter: "group_id=eq." + groupId }, fetchPinned)
+      .subscribe()
+    return () => { cancelled = true; supabase.removeChannel(ch) }
+  }, [groupId])
 
   function pickAttachment(e) {
     const f = e.target.files?.[0]
@@ -370,6 +399,22 @@ export default function GroupChat() {
     lastTapRef.current = { id: m.id, time: now }
   }
 
+  async function togglePin(message) {
+    if (!groupId || !myId) return
+    tap("light")
+    if (pinnedMsg?.id === message.id) {
+      await supabase.from("group_pinned_messages").delete().eq("group_id", groupId)
+      setPinnedMsg(null)
+    } else {
+      await supabase.from("group_pinned_messages").upsert({
+        group_id: groupId,
+        message_id: message.id,
+        pinned_by: myId,
+      }, { onConflict: "group_id" })
+      setPinnedMsg({ ...message, pinned_by: myId })
+    }
+  }
+
   async function leaveGroup() {
     if (!confirm("Leave this group?")) return
     tap("light")
@@ -431,6 +476,27 @@ export default function GroupChat() {
       {error && (
         <div className="mx-3 mt-2 text-danger text-[12px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5 shrink-0">
           {error}
+        </div>
+      )}
+
+      {pinnedMsg && !pinnedMsg.deleted_at && (
+        <div className="shrink-0 mx-3 mt-2 mb-1 rounded-2xl bg-purple-500/10 border border-purple-500/30 px-3 py-2 flex items-center gap-2.5">
+          <Pin size={14} className="text-purple-300 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-purple-300 text-[10.5px] font-black tracking-wider uppercase">Pinned</p>
+            <p className="text-cream text-[13px] truncate">
+              {pinnedMsg.media_url && !pinnedMsg.content
+                ? "📎 Attachment"
+                : (pinnedMsg.content || "").slice(0, 120)}
+            </p>
+          </div>
+          <button
+            onClick={() => togglePin(pinnedMsg)}
+            className="shrink-0 text-muted text-[11.5px] font-semibold px-2 py-1"
+            aria-label="Unpin"
+          >
+            Unpin
+          </button>
         </div>
       )}
 
@@ -653,6 +719,8 @@ export default function GroupChat() {
           onForward={(m) => { setActionsForMsg(null); alert("Forward coming soon") }}
           onDelete={deleteMessage}
           onReact={(emoji) => toggleReaction(actionsForMsg.id, emoji)}
+          isPinned={pinnedMsg?.id === actionsForMsg.id}
+          onPin={togglePin}
         />
       )}
 
