@@ -53,6 +53,9 @@ export default function GroupChat() {
   const [heartBurstId, setHeartBurstId] = useState(null)
   const [pinnedMsg, setPinnedMsg] = useState(null)
   const [forwardingMsg, setForwardingMsg] = useState(null)
+  const [typers, setTypers] = useState({})  // userId -> timestamp
+  const typingChannelRef = useRef(null)
+  const typingTimeoutRef = useRef(null)
   const [clearedAt, setClearedAt] = useState(null)
   const longPressTimer = useRef(null)
   const swipeRef = useRef({ id: null, startX: 0, dx: 0, active: false })
@@ -213,6 +216,53 @@ export default function GroupChat() {
       .subscribe()
     return () => { cancelled = true; supabase.removeChannel(ch) }
   }, [groupId])
+
+  // Typing broadcast channel
+  useEffect(() => {
+    if (!groupId || !myId) return
+    const ch = supabase.channel("gtyping-" + groupId)
+    ch.on("broadcast", { event: "typing" }, (payload) => {
+      const data = payload?.payload
+      if (!data || data.user_id === myId) return
+      setTypers((prev) => {
+        const next = { ...prev }
+        if (data.typing) next[data.user_id] = Date.now()
+        else delete next[data.user_id]
+        return next
+      })
+    }).subscribe()
+    typingChannelRef.current = ch
+    return () => { supabase.removeChannel(ch); typingChannelRef.current = null }
+  }, [groupId, myId])
+
+  // Auto-expire typers after 3s of silence
+  useEffect(() => {
+    const int = setInterval(() => {
+      setTypers((prev) => {
+        const now = Date.now()
+        const next = {}
+        let changed = false
+        for (const [uid, ts] of Object.entries(prev)) {
+          if (now - ts < 3000) next[uid] = ts
+          else changed = true
+        }
+        return changed ? next : prev
+      })
+    }, 1500)
+    return () => clearInterval(int)
+  }, [])
+
+  function notifyTyping(value) {
+    const ch = typingChannelRef.current
+    if (!ch) return
+    ch.send({ type: "broadcast", event: "typing", payload: { user_id: myId, typing: value.trim().length > 0 } })
+    clearTimeout(typingTimeoutRef.current)
+    if (value.trim().length > 0) {
+      typingTimeoutRef.current = setTimeout(() => {
+        ch.send({ type: "broadcast", event: "typing", payload: { user_id: myId, typing: false } })
+      }, 1500)
+    }
+  }
 
   function pickAttachment(e) {
     const f = e.target.files?.[0]
@@ -504,7 +554,18 @@ export default function GroupChat() {
           </div>
           <div className="min-w-0">
             <p className="text-cream text-[14.5px] font-semibold truncate">{group?.name || "Group"}</p>
-            <p className="text-subtle text-[11.5px] truncate">{members.length} members</p>
+            <p className="text-subtle text-[11.5px] truncate">
+              {(() => {
+                const list = Object.keys(typers)
+                if (list.length === 0) return members.length + " members"
+                const names = list.map((uid) => {
+                  const p = profiles.get(uid)
+                  return p?.display_name || p?.username || "Someone"
+                }).slice(0, 2)
+                if (names.length === 1) return names[0] + " is typing…"
+                return names.join(", ") + " are typing…"
+              })()}
+            </p>
           </div>
         </button>
         <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Menu">
@@ -795,7 +856,7 @@ export default function GroupChat() {
         </button>
         <textarea
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => { setText(e.target.value); notifyTyping(e.target.value) }}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send() } }}
           disabled={voice.recording}
           rows={1}
