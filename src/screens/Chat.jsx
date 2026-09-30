@@ -17,6 +17,17 @@ import ForwardPicker from '../components/ForwardPicker'
 
 const REACTIONS = ['❤️', '😂', '😍', '👍', '🔥', '😮']
 
+const EMOJI_PICKER = [
+  "😀","😃","😄","😁","😆","😅","🤣","😂","🙂","🙃","😉","😊","😇","🥰","😍","🤩","😘","😗","😚","😙",
+  "😋","😛","😜","🤪","😝","🤑","🤗","🤭","🤫","🤔","🤐","🤨","😐","😑","😶","😏","😒","🙄","😬","🤥",
+  "😌","😔","😪","🤤","😴","😷","🤒","🤕","🤢","🤮","🤧","🥵","🥶","🥴","😵","🤯","🤠","🥳","😎","🤓",
+  "🧐","😕","😟","🙁","😮","😯","😲","😳","🥺","😦","😧","😨","😰","😥","😢","😭","😱","😖","😣","😞",
+  "😓","😩","😫","🥱","😤","😡","😠","🤬","😈","👿","💀","☠️","💩","🤡","👹","👺","👻","👽","👾","🤖",
+  "❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎","💔","❣️","💕","💞","💓","💗","💖","💘","💝","💟","✨",
+  "🔥","⭐","🌟","💫","⚡","☀️","🌤","⛅","🌈","☁️","🌧","⛈","❄️","💧","🌊","🎉","🎊","🎈","🎁","🎂",
+  "👍","👎","👌","✌️","🤞","🤟","🤘","👏","🙌","🙏","💪","🦾","✋","🤚","👋","🤙","💅","👀","🧠","💯",
+]
+
 function formatLastSeen(ts) {
   if (!ts) return ''
   const m = Math.floor((Date.now() - new Date(ts).getTime()) / 60000)
@@ -81,6 +92,7 @@ export default function Chat() {
   const [replyingTo, setReplyingTo] = useState(null)
   const [storyReply, setStoryReply] = useState(null)
   const [reactionPickerFor, setReactionPickerFor] = useState(null)
+  const [emojiOpen, setEmojiOpen] = useState(false)
   const [actionsForMsg, setActionsForMsg] = useState(null)
   const [forwardingMsg, setForwardingMsg] = useState(null)
   const [pinnedMsg, setPinnedMsg] = useState(null)
@@ -971,6 +983,21 @@ export default function Chat() {
         </div>
       )}
 
+      {emojiOpen && (
+        <div className="shrink-0 mx-3 mb-1 rounded-2xl bg-elevated border border-white/10 p-2 max-h-56 overflow-y-auto"
+             style={{ display: "grid", gridTemplateColumns: "repeat(9, 1fr)", gap: 4 }}>
+          {EMOJI_PICKER.map((e) => (
+            <button
+              key={e}
+              onClick={() => { setText((t) => (t + e).slice(0, 2000)); tap("light") }}
+              className="aspect-square rounded-lg grid place-items-center text-[20px] active:bg-white/10"
+            >
+              {e}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div
         className="shrink-0 px-3 pt-3 pb-3 flex items-end gap-2 relative"
         style={{ background: 'linear-gradient(to top, #0B0B14 70%, rgba(11,11,20,0) 100%)' }}
@@ -989,6 +1016,13 @@ export default function Chat() {
           aria-label="Attach photo"
         >
           <Paperclip size={19} strokeWidth={2.3} />
+        </button>
+        <button
+          onClick={() => { setEmojiOpen((v) => !v); tap("light") }}
+          className="w-10 h-10 rounded-full grid place-items-center text-muted shrink-0"
+          aria-label="Emoji"
+        >
+          <Smile size={20} strokeWidth={2.3} className={emojiOpen ? "text-purple-400" : ""} />
         </button>
 
         {recording ? (
