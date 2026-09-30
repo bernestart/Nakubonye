@@ -18,6 +18,7 @@ export default function Messages() {
   const nav = useNavigate()
   const { session } = useAuth()
   const [items, setItems] = useState([])
+  const [groupItems, setGroupItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [newMsgOpen, setNewMsgOpen] = useState(false)
   const [newGroupOpen, setNewGroupOpen] = useState(false)
@@ -188,6 +189,53 @@ export default function Messages() {
       list.forEach((x) => { x.muted = x.conversationId ? mutedSet.has(x.conversationId) : false })
     }
 
+    // ---------- Groups ----------
+    const { data: memRows } = await supabase
+      .from('group_members')
+      .select('group_id, role, joined_at')
+      .eq('user_id', userId)
+
+    let groupList = []
+    if (memRows && memRows.length > 0) {
+      const gids = memRows.map((m) => m.group_id)
+      const { data: groupsData } = await supabase
+        .from('groups')
+        .select('id, name, avatar_url, updated_at')
+        .in('id', gids)
+      const { data: lastMsgs } = await supabase
+        .from('group_messages')
+        .select('group_id, sender_id, content, media_type, created_at, deleted_at')
+        .in('group_id', gids)
+        .order('created_at', { ascending: false })
+
+      // pick the latest per group
+      const lastByGroup = new Map()
+      ;(lastMsgs || []).forEach((m) => {
+        if (!lastByGroup.has(m.group_id)) lastByGroup.set(m.group_id, m)
+      })
+
+      groupList = (groupsData || []).map((g) => {
+        const last = lastByGroup.get(g.id)
+        let preview = null
+        if (last) {
+          if (last.deleted_at) preview = null
+          else if (last.media_type?.startsWith('image/')) preview = '📷 Photo'
+          else preview = last.content || null
+        }
+        return {
+          isGroup: true,
+          groupId: g.id,
+          conversationId: null,
+          display_name: g.name,
+          photo_url: g.avatar_url || null,
+          preview,
+          lastMessageAt: last?.created_at || g.updated_at,
+        }
+      })
+    }
+
+    setGroupItems(groupList)
+
     setItems(list)
     setLoading(false)
   }, [session?.user?.id])
@@ -207,14 +255,18 @@ export default function Messages() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, schedule)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversations' }, schedule)
       .subscribe()
-    const visibleItems = searchQuery.trim()
-    ? items.filter((item) => {
+    const combined = [...groupItems, ...items].sort((a, b) =>
+    new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0)
+  )
+
+  const visibleItems = searchQuery.trim()
+    ? combined.filter((item) => {
         const q = searchQuery.toLowerCase()
         return (item.display_name || "").toLowerCase().includes(q)
           || (item.username || "").toLowerCase().includes(q)
           || (item.preview || "").toLowerCase().includes(q)
       })
-    : items
+    : combined
 
   return () => { if (debounce) clearTimeout(debounce); supabase.removeChannel(ch) }
   }, [session?.user?.id, load])
@@ -345,20 +397,28 @@ export default function Messages() {
               <motion.button
                 key={item.userId}
                 whileTap={{ scale: 0.97 }}
-                onClick={() => { tap('light'); nav('/messages/' + item.userId) }}
+                onClick={() => {
+                  tap('light')
+                  if (item.isGroup) nav('/groups/' + item.groupId)
+                  else nav('/messages/' + item.userId)
+                }}
                 className="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/[0.03] transition-colors text-left"
               >
                 <div className="relative shrink-0">
                   <div className="w-14 h-14 rounded-full overflow-hidden bg-elevated border border-white/8">
                     {item.photo_url ? (
                       <img src={item.photo_url} alt="" className="w-full h-full object-cover" />
+                    ) : item.isGroup ? (
+                      <div className="w-full h-full grid place-items-center text-purple-400">
+                        <Users size={22} />
+                      </div>
                     ) : (
                       <div className="w-full h-full grid place-items-center text-xl font-black text-purple-400">
                         {(item.display_name || '?')[0]}
                       </div>
                     )}
                   </div>
-                  {item.last_seen_at && isOnline(item.last_seen_at, 3) && (
+                  {!item.isGroup && item.last_seen_at && isOnline(item.last_seen_at, 3) && (
                     <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-[#0B0B14]" style={{ boxShadow: "0 0 8px rgba(52,211,153,0.9)" }} />
                   )}
                 </div>
