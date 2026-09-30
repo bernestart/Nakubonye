@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl } from '../lib/photo'
 import { tap } from '../lib/haptic'
+import Linkify from './chat/Linkify'
+import EmojiPicker from './chat/EmojiPicker'
 
 export default function CommunityChat({ communityId, isMember, isPremium }) {
   const nav = useNavigate()
@@ -18,6 +20,7 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
   const [photos, setPhotos] = useState(new Map())
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
+  const [emojiOpen, setEmojiOpen] = useState(false)
 
   const scrollRef = useRef(null)
   const myId = session?.user?.id
@@ -233,7 +236,7 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
                         : ''
                     }`}
                   >
-                    {m.content}
+                    <Linkify text={m.content} mine={mine} />
                   </div>
                   <div className="flex items-center gap-1 px-1 mt-0.5">
                     <p className="text-[10px] text-subtle">
@@ -261,8 +264,22 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
         )}
       </div>
 
+      {emojiOpen && (
+        <EmojiPicker
+          className="mx-1 mb-2"
+          onPick={(e) => { setText((t) => (t + e).slice(0, 1000)); tap("light") }}
+        />
+      )}
+
       {/* Composer */}
       <div className="flex items-end gap-2 pt-2 border-t border-white/8">
+        <button
+          onClick={() => { setEmojiOpen((v) => !v); tap("light") }}
+          className="w-10 h-10 rounded-full grid place-items-center text-muted shrink-0"
+          aria-label="Emoji"
+        >
+          <span className={`text-[18px] ${emojiOpen ? "opacity-100" : "opacity-70"}`}>😊</span>
+        </button>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value.slice(0, 1000))}
