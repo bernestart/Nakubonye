@@ -30,13 +30,24 @@ export default function ReportModal({ open, onClose, target, onReported }) {
     if (!session?.user?.id || !target?.id) { setError('Something is wrong.'); return }
     setBusy(true); setError('')
 
-    const { error: err } = await supabase.from('reports').insert({
+    const payload = {
       reporter_id: session.user.id,
-      reported_user_id: target.id,
       reason,
       details: details.trim() || null,
       status: 'pending',
-    })
+    }
+    if (target.isCommunity) {
+      payload.report_type = "community"
+      payload.reported_community_id = target.id
+    } else if (target.isGroup) {
+      payload.report_type = "group"
+      payload.reported_group_id = target.id
+    } else {
+      payload.report_type = "user"
+      payload.reported_user_id = target.id
+    }
+
+    const { error: err } = await supabase.from('reports').insert(payload)
 
     setBusy(false)
     if (err) { setError(err.message); return }
@@ -68,7 +79,9 @@ export default function ReportModal({ open, onClose, target, onReported }) {
           <>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-cream font-extrabold text-[17px]">
-                Report {target?.display_name || target?.username || 'user'}
+                Report {target?.isCommunity || target?.isGroup
+                  ? (target?.name || 'this')
+                  : (target?.display_name || target?.username || 'user')}
               </h3>
               <button onClick={onClose} className="w-8 h-8 rounded-full grid place-items-center text-muted" aria-label="Close">
                 <X size={18} strokeWidth={2.4} />
@@ -76,7 +89,7 @@ export default function ReportModal({ open, onClose, target, onReported }) {
             </div>
 
             <p className="text-muted text-[13px] mb-4">
-              Your report is anonymous. This person will not be told you reported them.
+              Your report is anonymous. {target?.isCommunity || target?.isGroup ? "Admins will not be told you reported this." : "This person will not be told you reported them."}
             </p>
 
             <div className="flex flex-col gap-2 mb-4">

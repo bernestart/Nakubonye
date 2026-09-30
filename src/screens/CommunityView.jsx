@@ -6,6 +6,7 @@ import { useAuth } from '../lib/auth'
 import { publicPhotoUrl, calcAge } from '../lib/photo'
 import { tap } from '../lib/haptic'
 import BrandGlow from '../components/BrandGlow'
+import ReportModal from '../components/ReportModal'
 import CommunityFeed from '../components/CommunityFeed'
 import CommunityChat from '../components/CommunityChat'
 
@@ -25,6 +26,7 @@ export default function CommunityView() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [inviteCode, setInviteCode] = useState(null)
   const [inviteEnabled, setInviteEnabled] = useState(true)
+  const [reportOpen, setReportOpen] = useState(false)
 
   const load = useCallback(async () => {
     if (!session?.user?.id || !id) return
@@ -233,7 +235,7 @@ export default function CommunityView() {
             )}
 
             <button
-              onClick={() => { setMenuOpen(false); alert("Report coming soon") }}
+              onClick={() => { setMenuOpen(false); setReportOpen(true) }}
               className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
             >
               <Flag size={18} /> <span className="font-semibold text-[14px]">Report</span>
@@ -243,6 +245,12 @@ export default function CommunityView() {
           </div>
         </div>
       )}
+
+      <ReportModal
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        target={community ? { ...community, isCommunity: true } : null}
+      />
 
       <div className="flex-1 overflow-y-auto px-5 py-4 pb-10">
         {error && (
