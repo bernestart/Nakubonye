@@ -23,6 +23,7 @@ export default function Messages() {
   const [newMsgOpen, setNewMsgOpen] = useState(false)
   const [newGroupOpen, setNewGroupOpen] = useState(false)
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
+  const [tabFilter, setTabFilter] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [error, setError] = useState('')
   const [pullDistance, setPullDistance] = useState(0)
@@ -330,14 +331,22 @@ export default function Messages() {
     new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0)
   )
 
+  const tabFiltered = tabFilter === "all"
+    ? combined
+    : tabFilter === "unread"
+      ? combined.filter((item) => item.unread)
+      : tabFilter === "groups"
+        ? combined.filter((item) => item.isGroup)
+        : combined
+
   const visibleItems = searchQuery.trim()
-    ? combined.filter((item) => {
+    ? tabFiltered.filter((item) => {
         const q = searchQuery.toLowerCase()
         return (item.display_name || "").toLowerCase().includes(q)
           || (item.username || "").toLowerCase().includes(q)
           || (item.preview || "").toLowerCase().includes(q)
       })
-    : combined
+    : tabFiltered
 
   return (
     <div
@@ -481,6 +490,30 @@ export default function Messages() {
             </button>
           )}
         </div>
+
+        {/* Filter tabs */}
+        <div className="flex gap-1.5 mt-2.5">
+          {[
+            { id: "all",    label: "All" },
+            { id: "unread", label: "Unread" },
+            { id: "groups", label: "Groups" },
+          ].map((t) => (
+            <button
+              key={t.id}
+              onClick={() => { tap("light"); setTabFilter(t.id) }}
+              className="h-8 px-3.5 rounded-full text-[12.5px] font-bold transition-colors"
+              style={{
+                background: tabFilter === t.id
+                  ? "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)"
+                  : "rgba(255,255,255,0.05)",
+                border: tabFilter === t.id ? "none" : "1px solid rgba(255,255,255,0.08)",
+                color: tabFilter === t.id ? "#fff" : "#aaa",
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-3 pb-4"
@@ -505,6 +538,16 @@ export default function Messages() {
             <div className="pt-16 text-center px-6">
               <p className="text-cream font-bold text-[15px] mb-1">No matches</p>
               <p className="text-muted text-[13px]">Try a different search.</p>
+            </div>
+          ) : tabFilter === "unread" ? (
+            <div className="pt-16 text-center px-6">
+              <p className="text-cream font-bold text-[15px] mb-1">No unread chats</p>
+              <p className="text-muted text-[13px]">You're all caught up.</p>
+            </div>
+          ) : tabFilter === "groups" ? (
+            <div className="pt-16 text-center px-6">
+              <p className="text-cream font-bold text-[15px] mb-1">No groups yet</p>
+              <p className="text-muted text-[13px]">Create one with the group button above.</p>
             </div>
           ) : (
             <Empty onGo={() => nav('/discover')} />
