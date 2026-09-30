@@ -54,6 +54,8 @@ export default function Chat() {
   const [messages, setMessages] = useState([])
   const [reactions, setReactions] = useState({})
   const swipeRef = useRef({ id: null, startX: 0, dx: 0, active: false })
+  const lastTapRef = useRef({ id: null, time: 0 })
+  const [heartBurst, setHeartBurst] = useState(null)
   const [swipeState, setSwipeState] = useState({ id: null, dx: 0 })
   const [theirLastRead, setTheirLastRead] = useState(null)
   const [myPreviousReadAt, setMyPreviousReadAt] = useState(null)
@@ -412,12 +414,35 @@ export default function Chat() {
   function onRowTouchEnd(m) {
     const sw = swipeRef.current
     const triggered = sw.active && sw.dx >= 50
+    const wasSwipe = sw.active
     swipeRef.current = { id: null, startX: 0, dx: 0, active: false }
     setSwipeState({ id: null, dx: 0 })
+
     if (triggered) {
       tap("light")
       setReplyingTo(m)
-    } else if (!sw.active) {
+      return
+    }
+
+    if (!wasSwipe) {
+      const now = Date.now()
+      const last = lastTapRef.current
+      const isDoubleTap = last.id === m.id && (now - last.time) < 300
+      if (isDoubleTap) {
+        // Double tap — react with heart
+        lastTapRef.current = { id: null, time: 0 }
+        tap("medium")
+        toggleReaction(m.id, "❤️")
+        setHeartBurst({ id: m.id, key: now })
+        setTimeout(() => setHeartBurst((cur) => cur && cur.id === m.id ? null : cur), 900)
+        // Cancel long-press
+        if (longPressTimer.current) {
+          clearTimeout(longPressTimer.current)
+          longPressTimer.current = null
+        }
+        return
+      }
+      lastTapRef.current = { id: m.id, time: now }
       onMsgPressEnd()
     }
   }
@@ -806,6 +831,18 @@ export default function Chat() {
                       </svg>
                     </div>
                   </div>
+                )}
+                {heartBurst?.id === m.id && (
+                  <motion.div
+                    key={heartBurst.key}
+                    initial={{ scale: 0.3, opacity: 0, y: 0 }}
+                    animate={{ scale: [0.3, 1.2, 1.4, 1], opacity: [0, 1, 1, 0], y: [0, -6, -14, -22] }}
+                    transition={{ duration: 0.85, times: [0, 0.2, 0.6, 1] }}
+                    className="pointer-events-none flex"
+                    style={{ justifyContent: mine ? "flex-end" : "flex-start", paddingRight: mine ? 12 : 0, paddingLeft: mine ? 0 : 12 }}
+                  >
+                    <div className="text-[44px] leading-none" style={{ filter: "drop-shadow(0 4px 12px rgba(236,72,153,0.6))" }}>❤️</div>
+                  </motion.div>
                 )}
                 <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                   <div className="max-w-[82%] relative group">
