@@ -25,9 +25,6 @@ export default function Messages() {
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
   const [tabFilter, setTabFilter] = useState("all")
   const [rowMenuFor, setRowMenuFor] = useState(null)
-  const [swipeRow, setSwipeRow] = useState({ key: null, dx: 0 })
-  const swipeRowRef = useRef({ key: null, startX: 0, startY: 0, dx: 0, active: false })
-  const openRowKeyRef = useRef(null)
   const [pinnedKeys, setPinnedKeys] = useState(new Set())
   const [archivedKeys, setArchivedKeys] = useState(new Set())
   const [onlineUsers, setOnlineUsers] = useState([])
@@ -889,86 +886,28 @@ export default function Messages() {
               return (
               <div
                 key={item.userId}
-                className="relative overflow-hidden rounded-2xl"
+                onTouchStart={() => {
+                  rowPressTriggered.current = false
+                  rowPressTimer.current = setTimeout(() => {
+                    rowPressTriggered.current = true
+                    tap("medium")
+                    setRowMenuFor(item)
+                  }, 500)
+                }}
+                onTouchEnd={() => {
+                  clearTimeout(rowPressTimer.current)
+                  if (!rowPressTriggered.current) {
+                    tap('light')
+                    if (item.isGroup) nav('/groups/' + item.groupId)
+                    else nav('/messages/' + item.userId)
+                  }
+                }}
+                onTouchMove={() => {
+                  clearTimeout(rowPressTimer.current)
+                }}
+                onContextMenu={(e) => { e.preventDefault(); setRowMenuFor(item) }}
+                className="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/[0.03] transition-colors text-left active:opacity-90 cursor-pointer"
               >
-                {/* Reveal actions behind */}
-                <div className="absolute inset-y-0 right-0 flex">
-                  <button
-                    onClick={() => { toggleRowMute(item); openRowKeyRef.current = null; setSwipeRow({ key: null, dx: 0 }) }}
-                    className="w-[90px] h-full flex flex-col items-center justify-center gap-1 text-cream"
-                    style={{ background: "rgba(168,85,247,0.25)" }}
-                  >
-                    {item.muted ? <Bell size={18} /> : <BellOff size={18} />}
-                    <span className="text-[11px] font-bold">{item.muted ? "Unmute" : "Mute"}</span>
-                  </button>
-                  <button
-                    onClick={() => { toggleRowArchive(item); openRowKeyRef.current = null; setSwipeRow({ key: null, dx: 0 }) }}
-                    className="w-[90px] h-full flex flex-col items-center justify-center gap-1 text-cream"
-                    style={{ background: "rgba(236,72,153,0.35)" }}
-                  >
-                    <Archive size={18} />
-                    <span className="text-[11px] font-bold">Archive</span>
-                  </button>
-                </div>
-
-                {/* Front content */}
-                <div
-                  onTouchStart={(e) => {
-                    rowPressTriggered.current = false
-                    openRowKeyRef.current = null
-                    setSwipeRow({ key: null, dx: 0 })
-                    const t = e.touches[0]
-                    swipeRowRef.current = { key: item.userId, startX: t.clientX, startY: t.clientY, dx: 0, active: false }
-                    rowPressTimer.current = setTimeout(() => {
-                      rowPressTriggered.current = true
-                      tap("medium")
-                      setRowMenuFor(item)
-                    }, 500)
-                  }}
-                  onTouchMove={(e) => {
-                    const sw = swipeRowRef.current
-                    if (!sw.key) return
-                    const t = e.touches[0]
-                    const dx = t.clientX - sw.startX
-                    const dy = t.clientY - sw.startY
-                    // Horizontal swipe detection — vertical scroll wins if mostly vertical
-                    if (!sw.active && Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy)) {
-                      sw.active = true
-                      clearTimeout(rowPressTimer.current)
-                    }
-                    if (sw.active) {
-                      // Only allow leftward swipe
-                      sw.dx = Math.max(-180, Math.min(0, dx))
-                      setSwipeRow({ key: sw.key, dx: sw.dx })
-                    }
-                  }}
-                  onTouchEnd={() => {
-                    clearTimeout(rowPressTimer.current)
-                    const sw = swipeRowRef.current
-                    if (sw.active) {
-                      // Snap open if past 60px, else close
-                      const open = sw.dx <= -60
-                      setSwipeRow({ key: open ? sw.key : null, dx: open ? -180 : 0 })
-                      openRowKeyRef.current = open ? sw.key : null
-                      swipeRowRef.current = { key: null, startX: 0, startY: 0, dx: 0, active: false }
-                      return
-                    }
-                    swipeRowRef.current = { key: null, startX: 0, startY: 0, dx: 0, active: false }
-                    if (!rowPressTriggered.current) {
-                      tap('light')
-                      if (item.isGroup) nav('/groups/' + item.groupId)
-                      else nav('/messages/' + item.userId)
-                    }
-                  }}
-                  onContextMenu={(e) => { e.preventDefault(); setRowMenuFor(item) }}
-                  className="flex items-center gap-3 p-3 hover:bg-white/[0.03] transition-colors text-left active:opacity-90 cursor-pointer bg-transparent"
-                  style={{
-                    transform: swipeRow.key === item.userId ? `translateX(${swipeRow.dx}px)` : undefined,
-                    transition: swipeRow.key === item.userId ? "none" : "transform 220ms ease-out",
-                    position: "relative",
-                    zIndex: 1,
-                  }}
-                >
                 <div className="relative shrink-0">
                   {(() => {
                     const hasStory = !item.isGroup && storyOwners.has(item.userId)
@@ -1034,7 +973,6 @@ export default function Messages() {
                   )}
                 </div>
                 </div>
-              </div>
               )
             })}
           </div>
