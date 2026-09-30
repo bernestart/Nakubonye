@@ -13,6 +13,7 @@ import { isOnline } from '../lib/usePresence'
 import ReportModal from '../components/ReportModal'
 import BrandGlow from '../components/BrandGlow'
 import BlockConfirm from '../components/BlockConfirm'
+import ForwardPicker from '../components/ForwardPicker'
 
 const REACTIONS = ['❤️', '😂', '😍', '👍', '🔥', '😮']
 
@@ -81,6 +82,7 @@ export default function Chat() {
   const [storyReply, setStoryReply] = useState(null)
   const [reactionPickerFor, setReactionPickerFor] = useState(null)
   const [actionsForMsg, setActionsForMsg] = useState(null)
+  const [forwardingMsg, setForwardingMsg] = useState(null)
   const [attachment, setAttachment] = useState(null)
   const [attachmentPreview, setAttachmentPreview] = useState('')
   const [otherTyping, setOtherTyping] = useState(false)
@@ -932,9 +934,17 @@ export default function Chat() {
           isMine={actionsForMsg.sender_id === myId}
           onClose={() => setActionsForMsg(null)}
           onReply={(m) => setReplyingTo(m)}
-          onForward={(m) => alert("Forward coming soon")}
+          onForward={(m) => { setActionsForMsg(null); setForwardingMsg(m) }}
           onDelete={deleteMessage}
           onReact={(emoji) => toggleReaction(actionsForMsg.id, emoji)}
+        />
+      )}
+
+      {forwardingMsg && (
+        <ForwardPicker
+          message={forwardingMsg}
+          onClose={() => setForwardingMsg(null)}
+          onForwarded={() => {}}
         />
       )}
     </div>
