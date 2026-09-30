@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import {
   ArrowLeft, ChevronRight, User as UserIcon, Image as ImageIcon, Pin,
-  Bell, BellOff, Eraser, Eye, MessageSquare, Ban, Flag, Trash2, CheckCheck,
+  Bell, BellOff, Eraser, CheckCheck, Ban, Flag, Trash2,
+  Phone, Video, Search,
 } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
+import { useVoiceCall } from "../lib/voiceCall"
 import BrandGlow from "../components/BrandGlow"
 import ReportModal from "../components/ReportModal"
 import BlockConfirm from "../components/BlockConfirm"
@@ -17,6 +19,7 @@ export default function ChatInfo() {
   const { userId: otherId } = useParams()
   const { session } = useAuth()
   const myId = session?.user?.id
+  const voiceCall = useVoiceCall()
 
   const [loading, setLoading] = useState(true)
   const [other, setOther] = useState(null)
@@ -35,7 +38,6 @@ export default function ChatInfo() {
     if (!otherId || !myId) return
     setLoading(true)
 
-    // Load profile
     const { data: prof } = await supabase
       .from("profiles")
       .select("id, display_name, username, is_verified, last_seen_at")
@@ -54,7 +56,6 @@ export default function ChatInfo() {
       setOther({ ...prof, photo_url: ph?.storage_path ? publicPhotoUrl(ph.storage_path) : null })
     }
 
-    // Find conversation
     const { data: conv } = await supabase
       .from("conversations")
       .select("id")
@@ -65,7 +66,6 @@ export default function ChatInfo() {
 
     if (conv) {
       setConversationId(conv.id)
-
       const [muteRes, mediaRes, pinRes] = await Promise.all([
         supabase.from("conversation_mutes").select("conversation_id").eq("conversation_id", conv.id).eq("user_id", myId).maybeSingle(),
         supabase.from("messages").select("id", { count: "exact", head: true }).eq("conversation_id", conv.id).not("media_url", "is", null),
@@ -76,7 +76,6 @@ export default function ChatInfo() {
       setPinnedCount(pinRes.data ? 1 : 0)
     }
 
-    // Read receipts setting
     const { data: settings } = await supabase
       .from("user_settings")
       .select("show_read_receipts")
@@ -139,10 +138,28 @@ export default function ChatInfo() {
 
   async function deleteChat() {
     if (!conversationId || !myId) return
-    if (!confirm("Delete this conversation? It'll be removed from your inbox.")) return
+    if (!confirm("Delete this conversation? It will be removed from your inbox.")) return
     tap("medium")
     await supabase.from("conversation_deletes").insert({ conversation_id: conversationId, user_id: myId })
     nav("/messages", { replace: true })
+  }
+
+  function startVoice() {
+    if (!other) return
+    tap("light")
+    voiceCall.startCall(other.id, {
+      display_name: other.display_name,
+      photo_url: other.photo_url,
+    })
+  }
+
+  function startVideo() {
+    if (!other) return
+    tap("light")
+    voiceCall.startCall(other.id, {
+      display_name: other.display_name,
+      photo_url: other.photo_url,
+    }, { mode: "video" })
   }
 
   if (loading) {
@@ -169,14 +186,11 @@ export default function ChatInfo() {
         <span className="text-cream font-bold text-[15px]">Chat info</span>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 pb-10">
-        {/* Profile card */}
-        <div className="flex flex-col items-center py-4 mb-4">
-          <button
-            onClick={() => { tap("light"); nav("/profile/" + otherId) }}
-            className="active:opacity-80"
-          >
-            <div className="w-24 h-24 rounded-full overflow-hidden bg-purple-600 grid place-items-center text-white text-2xl font-black">
+      <div className="flex-1 overflow-y-auto pb-10">
+        {/* Profile block */}
+        <div className="flex flex-col items-center pt-4 pb-5">
+          <button onClick={() => { tap("light"); nav("/profile/" + otherId) }} className="active:opacity-80">
+            <div className="w-20 h-20 rounded-full overflow-hidden bg-purple-600 grid place-items-center text-white text-2xl font-black">
               {other?.photo_url ? (
                 <img src={other.photo_url} alt="" className="w-full h-full object-cover" />
               ) : (
@@ -184,81 +198,68 @@ export default function ChatInfo() {
               )}
             </div>
           </button>
-          <p className="text-cream font-bold text-[18px] mt-3">
+          <p className="text-cream font-bold text-[20px] mt-3 leading-tight">
             {other?.display_name || other?.username || "User"}
           </p>
           {other?.username && (
-            <p className="text-muted text-[12.5px] mt-0.5">@{other.username}</p>
+            <p className="text-muted text-[13px] mt-0.5">@{other.username}</p>
           )}
         </div>
 
-        {/* Quick actions */}
-        <div className="grid grid-cols-2 gap-2 mb-5">
-          <QuickAction
-            icon={<UserIcon size={18} />}
-            label="View profile"
-            onClick={() => { tap("light"); nav("/profile/" + otherId) }}
-          />
-          <QuickAction
-            icon={<ImageIcon size={18} />}
-            label="Media & files"
-            onClick={openMedia}
+        {/* Circular quick actions */}
+        <div className="grid grid-cols-4 gap-2 px-4 pb-5">
+          <CircleAction icon={<Phone size={20} />} label="Call" onClick={startVoice} />
+          <CircleAction icon={<Video size={20} />} label="Video" onClick={startVideo} />
+          <CircleAction icon={<UserIcon size={20} />} label="Profile" onClick={() => { tap("light"); nav("/profile/" + otherId) }} />
+          <CircleAction
+            icon={isMuted ? <BellOff size={20} /> : <Bell size={20} />}
+            label={isMuted ? "Unmute" : "Mute"}
+            onClick={toggleMute}
           />
         </div>
 
-        {/* Chat info */}
-        <SectionLabel>Chat info</SectionLabel>
-        <Row
-          icon={<ImageIcon size={18} />}
+        <div className="h-px bg-white/[0.06]" />
+
+        {/* Actions */}
+        <SectionLabel>Actions</SectionLabel>
+        <PlainRow
+          icon={<ImageIcon size={20} />}
           label="Media, files & links"
           value={mediaCount > 0 ? String(mediaCount) : null}
           onClick={openMedia}
         />
-        <Row
-          icon={<Pin size={18} />}
+        <PlainRow
+          icon={<Pin size={20} />}
           label="Pinned messages"
           value={pinnedCount > 0 ? String(pinnedCount) : null}
           onClick={() => { tap("light"); nav("/messages/" + otherId) }}
         />
-
-        {/* Actions */}
-        <SectionLabel>Actions</SectionLabel>
-        <Row
-          icon={isMuted ? <BellOff size={18} /> : <Bell size={18} />}
-          label={isMuted ? "Unmute notifications" : "Mute notifications"}
-          onClick={toggleMute}
-        />
-        <Row
-          icon={<Bell size={18} />}
-          label="Notification settings"
-          onClick={() => { tap("light"); nav("/notifications") }}
-        />
-        <Row
-          icon={<Eraser size={18} />}
+        <PlainRow
+          icon={<Eraser size={20} />}
           label="Clear chat"
           onClick={clearChat}
         />
 
         {/* Privacy & support */}
         <SectionLabel>Privacy & support</SectionLabel>
-        <Row
-          icon={<CheckCheck size={18} />}
+        <PlainRow
+          icon={<CheckCheck size={20} />}
           label="Read receipts"
           value={readReceipts ? "On" : "Off"}
           onClick={toggleReadReceipts}
         />
-        <Row
-          icon={<Ban size={18} />}
-          label="Block"
+        <PlainRow
+          icon={<Ban size={20} />}
+          label={"Block " + (other?.display_name || other?.username || "user")}
           onClick={() => { tap("light"); setBlockOpen(true) }}
         />
-        <Row
-          icon={<Flag size={18} />}
+        <PlainRow
+          icon={<Flag size={20} />}
           label="Report"
           onClick={() => { tap("light"); setReportOpen(true) }}
         />
-        <Row
-          icon={<Trash2 size={18} />}
+        <PlainRow
+          icon={<Trash2 size={20} />}
           label="Delete chat"
           danger
           onClick={deleteChat}
@@ -318,36 +319,33 @@ export default function ChatInfo() {
 
 function SectionLabel({ children }) {
   return (
-    <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2 mt-5">
+    <p className="text-subtle text-[11.5px] font-bold tracking-wider uppercase px-5 pt-5 pb-2">
       {children}
     </p>
   )
 }
 
-function Row({ icon, label, value, danger, onClick }) {
+function PlainRow({ icon, label, value, danger, onClick }) {
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-3 p-3.5 rounded-2xl bg-surface border border-white/8 text-left mb-1.5 ${danger ? "text-danger" : "text-cream"}`}
+      className={`w-full flex items-center gap-4 px-5 py-3.5 active:bg-white/[0.04] transition-colors text-left ${danger ? "text-red-400" : "text-cream"}`}
     >
-      <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0">{icon}</span>
-      <span className="flex-1 font-semibold text-[14px] min-w-0 truncate">{label}</span>
-      {value && <span className="text-[13px] text-muted shrink-0">{value}</span>}
-      <ChevronRight size={16} className="text-subtle shrink-0" />
+      <span className={`w-6 h-6 grid place-items-center shrink-0 ${danger ? "" : "text-muted"}`}>{icon}</span>
+      <span className="flex-1 font-semibold text-[15px] truncate">{label}</span>
+      {value && <span className="text-[13.5px] text-muted shrink-0">{value}</span>}
+      <ChevronRight size={18} className="text-subtle shrink-0" />
     </button>
   )
 }
 
-function QuickAction({ icon, label, onClick }) {
+function CircleAction({ icon, label, onClick }) {
   return (
-    <button
-      onClick={onClick}
-      className="rounded-2xl bg-surface border border-white/8 p-3.5 flex flex-col items-start gap-2 active:opacity-80"
-    >
-      <span className="w-9 h-9 rounded-xl bg-purple-500/15 grid place-items-center text-purple-300">
+    <button onClick={onClick} className="flex flex-col items-center gap-1.5 active:opacity-80">
+      <span className="w-12 h-12 rounded-full bg-white/[0.06] border border-white/8 grid place-items-center text-cream">
         {icon}
       </span>
-      <span className="text-cream font-semibold text-[13px]">{label}</span>
+      <span className="text-cream text-[11.5px] font-semibold">{label}</span>
     </button>
   )
 }
