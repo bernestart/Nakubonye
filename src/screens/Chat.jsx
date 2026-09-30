@@ -829,7 +829,7 @@ export default function Chat() {
                                 ? 'bg-gradient-to-br from-purple-600 to-purple-500 text-white rounded-2xl rounded-br-md'
                                 : 'bg-elevated text-cream border border-white/8 rounded-2xl rounded-bl-md'
                             }`}>
-                              {m.content}
+                              <Linkify text={m.content} mine={mine} />
                             </div>
                           </div>
                         )
@@ -843,7 +843,7 @@ export default function Chat() {
                             : 'bg-elevated text-cream border border-white/8 rounded-2xl rounded-bl-md'
                         }`}>
                           {hasAudio && <AudioBubble src={m.media_url} mine={mine} />}
-                          {hasText && <div>{m.content}</div>}
+                          {hasText && <div><Linkify text={m.content} mine={mine} /></div>}
                         </div>
                       )
                     })()}
@@ -1203,6 +1203,36 @@ export default function Chat() {
         </div>
       )}
     </div>
+  )
+}
+
+function Linkify({ text, mine }) {
+  if (!text) return null
+  const urlRegex = /(https?:\/\/[^\s]+)/g
+  const parts = String(text).split(urlRegex)
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (urlRegex.test(part)) {
+          // Reset lastIndex because test() advances it on global regex
+          urlRegex.lastIndex = 0
+          return (
+            <a
+              key={i}
+              href={part}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`underline ${mine ? "text-white/95" : "text-purple-300"}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {part}
+            </a>
+          )
+        }
+        urlRegex.lastIndex = 0
+        return <span key={i}>{part}</span>
+      })}
+    </>
   )
 }
 
