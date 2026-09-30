@@ -18,6 +18,7 @@ import AudioBubble from '../components/chat/AudioBubble'
 import EmojiPicker from '../components/chat/EmojiPicker'
 import ImageLightbox from '../components/chat/ImageLightbox'
 import ForwardPicker from '../components/ForwardPicker'
+import MessageActionsSheet from '../components/MessageActionsSheet'
 
 const REACTIONS = ['❤️', '😂', '😍', '👍', '🔥', '😮']
 
