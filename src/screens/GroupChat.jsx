@@ -8,6 +8,7 @@ import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 import BrandGlow from "../components/BrandGlow"
 import InviteLinkSheet from "../components/InviteLinkSheet"
+import ReportModal from "../components/ReportModal"
 import MessageActionsSheet from "../components/MessageActionsSheet"
 import ForwardPicker from "../components/ForwardPicker"
 import Linkify from "../components/chat/Linkify"
@@ -44,6 +45,7 @@ export default function GroupChat() {
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [lightboxUrl, setLightboxUrl] = useState(null)
   const [replyingTo, setReplyingTo] = useState(null)
@@ -948,7 +950,7 @@ export default function GroupChat() {
                         <MenuItem icon={<UserPlus size={16} />} label="Add members" onClick={() => { setMenuOpen(false); nav(`/groups/${groupId}/add`) }} />
             <MenuItem icon={<Bell size={16} />} label={isMuted ? "Unmute notifications" : "Mute notifications"} onClick={() => { setMenuOpen(false); toggleMute() }} />
             <MenuItem icon={<Eraser size={16} />} label="Clear chat" onClick={() => { setMenuOpen(false); clearChat() }} />
-            <MenuItem icon={<Flag size={16} />} label="Report group" danger onClick={() => { setMenuOpen(false); alert("Coming soon") }} />
+            <MenuItem icon={<Flag size={16} />} label="Report group" danger onClick={() => { setMenuOpen(false); setReportOpen(true) }} />
             <MenuItem icon={<LogOut size={16} />} label="Leave group" danger onClick={() => { setMenuOpen(false); leaveGroup() }} />
           </div>
         </div>
@@ -957,6 +959,12 @@ export default function GroupChat() {
       {inviteOpen && group && (
         <InviteLinkSheet group={group} onClose={() => setInviteOpen(false)} />
       )}
+
+      <ReportModal
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        target={group ? { ...group, isGroup: true } : null}
+      />
 
       {forwardingMsg && (
         <ForwardPicker
