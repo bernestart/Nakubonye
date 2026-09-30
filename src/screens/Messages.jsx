@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { MessageCircle, RefreshCw, PenSquare, BellOff, Search, X , Users , MoreVertical , Archive, Inbox, CheckCheck , Flag, Ban } from 'lucide-react'
+import { MessageCircle, RefreshCw, PenSquare, BellOff, Search, X , Users , MoreVertical , Archive, Inbox, CheckCheck , Flag, Ban , Pin } from 'lucide-react'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -25,6 +25,7 @@ export default function Messages() {
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
   const [tabFilter, setTabFilter] = useState("all")
   const [rowMenuFor, setRowMenuFor] = useState(null)
+  const [pinnedKeys, setPinnedKeys] = useState(new Set())
   const [reportRowFor, setReportRowFor] = useState(null)
   const rowPressTimer = useRef(null)
   const rowPressTriggered = useRef(false)
@@ -287,6 +288,16 @@ export default function Messages() {
 
     setGroupItems(groupList)
 
+    // Load pinned conversations + groups
+    const [convPins, grpPins] = await Promise.all([
+      supabase.from("conversation_pins").select("conversation_id").eq("user_id", userId),
+      supabase.from("group_pins").select("group_id").eq("user_id", userId),
+    ])
+    const pinSet = new Set()
+    ;(convPins.data || []).forEach((r) => pinSet.add("c:" + r.conversation_id))
+    ;(grpPins.data || []).forEach((r) => pinSet.add("g:" + r.group_id))
+    setPinnedKeys(pinSet)
+
     setItems(list)
     setLoading(false)
   }, [session?.user?.id])
@@ -372,6 +383,30 @@ export default function Messages() {
     load()
   }
 
+  async function toggleRowPin(item) {
+    tap("light")
+    const uid = session?.user?.id
+    if (!uid) return
+    const key = item.isGroup ? ("g:" + item.groupId) : ("c:" + item.conversationId)
+    const table = item.isGroup ? "group_pins" : "conversation_pins"
+    const column = item.isGroup ? "group_id" : "conversation_id"
+    const value = item.isGroup ? item.groupId : item.conversationId
+    const isPinned = pinnedKeys.has(key)
+
+    if (isPinned) {
+      await supabase.from(table).delete().eq(column, value).eq("user_id", uid)
+      setPinnedKeys((prev) => {
+        const next = new Set(prev)
+        next.delete(key)
+        return next
+      })
+    } else {
+      await supabase.from(table).insert({ [column]: value, user_id: uid })
+      setPinnedKeys((prev) => new Set([...prev, key]))
+    }
+    setRowMenuFor(null)
+  }
+
   async function blockRow(item) {
     if (item.isGroup) return
     if (!confirm("Block " + (item.display_name || "this user") + "? They won't be able to message you.")) return
@@ -383,9 +418,12 @@ export default function Messages() {
     load()
   }
 
-  const combined = [...groupItems, ...items].sort((a, b) =>
-    new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0)
-  )
+  const combined = [...groupItems, ...items].sort((a, b) => {
+    const aPin = pinnedKeys.has(a.isGroup ? ("g:" + a.groupId) : ("c:" + a.conversationId))
+    const bPin = pinnedKeys.has(b.isGroup ? ("g:" + b.groupId) : ("c:" + b.conversationId))
+    if (aPin !== bPin) return aPin ? -1 : 1
+    return new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0)
+  })
 
   const tabFiltered = tabFilter === "all"
     ? combined
@@ -670,6 +708,9 @@ export default function Messages() {
                 </div>
 
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  {pinnedKeys.has(item.isGroup ? ("g:" + item.groupId) : ("c:" + item.conversationId)) && (
+                    <Pin size={11} className="text-purple-400" />
+                  )}
                   <span className="text-[10.5px] text-subtle font-medium">
                     {relTime(item.lastMessageAt)}
                   </span>
@@ -695,6 +736,18 @@ export default function Messages() {
             <p className="text-cream font-bold text-[15px] mb-2 truncate">
               {rowMenuFor.display_name || rowMenuFor.username || "Chat"}
             </p>
+
+            <button
+              onClick={() => toggleRowPin(rowMenuFor)}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+            >
+              <Pin size={18} />
+              <span className="font-semibold text-[14px]">
+                {pinnedKeys.has(rowMenuFor.isGroup ? ("g:" + rowMenuFor.groupId) : ("c:" + rowMenuFor.conversationId))
+                  ? "Unpin"
+                  : "Pin to top"}
+              </span>
+            </button>
 
             <button
               onClick={() => markRowRead(rowMenuFor)}
