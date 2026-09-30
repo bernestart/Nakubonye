@@ -905,19 +905,38 @@ export default function Messages() {
                   }}
                 >
                 <div className="relative shrink-0">
-                  <div className="w-14 h-14 rounded-full overflow-hidden bg-elevated border border-white/8">
-                    {item.photo_url ? (
-                      <img src={item.photo_url} alt="" className="w-full h-full object-cover" />
-                    ) : item.isGroup ? (
-                      <div className="w-full h-full grid place-items-center text-purple-400">
-                        <Users size={22} />
+                  {(() => {
+                    const hasStory = !item.isGroup && storyOwners.has(item.userId)
+                    const storyViewed = hasStory && viewedStoryOwners.has(item.userId)
+                    const ringStyle = hasStory
+                      ? storyViewed
+                        ? { border: "2px solid rgba(255,255,255,0.15)" }
+                        : { background: "linear-gradient(#0B0B14,#0B0B14) padding-box, linear-gradient(135deg,#C084FC,#EC4899) border-box", border: "2px solid transparent" }
+                      : null
+                    return (
+                      <div
+                        className="w-14 h-14 rounded-full p-[2px]"
+                        style={ringStyle || {}}
+                      >
+                        <div
+                          className="w-full h-full rounded-full overflow-hidden bg-elevated"
+                          style={!hasStory ? { border: "1px solid rgba(255,255,255,0.08)" } : {}}
+                        >
+                          {item.photo_url ? (
+                            <img src={item.photo_url} alt="" className="w-full h-full object-cover" />
+                          ) : item.isGroup ? (
+                            <div className="w-full h-full grid place-items-center text-purple-400">
+                              <Users size={22} />
+                            </div>
+                          ) : (
+                            <div className="w-full h-full grid place-items-center text-xl font-black text-purple-400">
+                              {(item.display_name || '?')[0]}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    ) : (
-                      <div className="w-full h-full grid place-items-center text-xl font-black text-purple-400">
-                        {(item.display_name || '?')[0]}
-                      </div>
-                    )}
-                  </div>
+                    )
+                  })()}
                   {!item.isGroup && item.last_seen_at && isOnline(item.last_seen_at, 3) && (
                     <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-[#0B0B14]" style={{ boxShadow: "0 0 8px rgba(52,211,153,0.9)" }} />
                   )}
