@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { MessageCircle, RefreshCw, PenSquare, BellOff, Search, X , Users , MoreVertical , Archive, Inbox, CheckCheck , Flag, Ban , Pin } from 'lucide-react'
+import { MessageCircle, RefreshCw, PenSquare, BellOff, Search, X , Users , MoreVertical , Archive, Inbox, CheckCheck , Flag, Ban , Pin , Trash2 } from 'lucide-react'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -27,6 +27,7 @@ export default function Messages() {
   const [rowMenuFor, setRowMenuFor] = useState(null)
   const [pinnedKeys, setPinnedKeys] = useState(new Set())
   const [archivedKeys, setArchivedKeys] = useState(new Set())
+  const [deletedKeys, setDeletedKeys] = useState(new Set())
   const [onlineUsers, setOnlineUsers] = useState([])
   const [storyOwners, setStoryOwners] = useState(new Set())
   const [pendingRequests, setPendingRequests] = useState(0)
@@ -314,6 +315,16 @@ export default function Messages() {
     ;(grpArch.data || []).forEach((r) => archSet.add("g:" + r.group_id))
     setArchivedKeys(archSet)
 
+    // Load deleted conversations + groups
+    const [convDel, grpDel] = await Promise.all([
+      supabase.from("conversation_deletes").select("conversation_id").eq("user_id", userId),
+      supabase.from("group_deletes").select("group_id").eq("user_id", userId),
+    ])
+    const delSet = new Set()
+    ;(convDel.data || []).forEach((r) => delSet.add("c:" + r.conversation_id))
+    ;(grpDel.data || []).forEach((r) => delSet.add("g:" + r.group_id))
+    setDeletedKeys(delSet)
+
     // Online users — recent last_seen_at, excluding me
     const cutoff = new Date(Date.now() - 3 * 60 * 1000).toISOString()
     const { data: onlineRows } = await supabase
@@ -547,6 +558,42 @@ export default function Messages() {
     load()
   }
 
+  async function markRowUnread(item) {
+    tap("light")
+    const uid = session?.user?.id
+    if (!uid) return
+    // Set last_read_at to a time BEFORE the last message → row appears unread
+    const t = item.lastMessageAt || new Date().toISOString()
+    const before = new Date(new Date(t).getTime() - 60000).toISOString()
+    if (item.isGroup) {
+      await supabase.from("group_reads").upsert(
+        { group_id: item.groupId, user_id: uid, last_read_at: before },
+        { onConflict: "group_id,user_id" }
+      )
+    } else if (item.conversationId) {
+      await supabase.from("conversation_reads").upsert(
+        { conversation_id: item.conversationId, user_id: uid, last_read_at: before },
+        { onConflict: "conversation_id,user_id" }
+      )
+    }
+    setRowMenuFor(null)
+    load()
+  }
+
+  async function deleteRow(item) {
+    if (!confirm("Delete this conversation? It will be removed from your inbox. The other person will still see it.")) return
+    tap("medium")
+    const uid = session?.user?.id
+    if (!uid) return
+    if (item.isGroup) {
+      await supabase.from("group_deletes").insert({ group_id: item.groupId, user_id: uid })
+    } else if (item.conversationId) {
+      await supabase.from("conversation_deletes").insert({ conversation_id: item.conversationId, user_id: uid })
+    }
+    setRowMenuFor(null)
+    load()
+  }
+
   async function blockRow(item) {
     if (item.isGroup) return
     if (!confirm("Block " + (item.display_name || "this user") + "? They won't be able to message you.")) return
@@ -561,6 +608,7 @@ export default function Messages() {
   const combined = [...groupItems, ...items]
     .filter((item) => {
       const key = item.isGroup ? ("g:" + item.groupId) : ("c:" + item.conversationId)
+      if (deletedKeys.has(key)) return false
       return !archivedKeys.has(key)
     })
     .sort((a, b) => {
@@ -973,28 +1021,15 @@ export default function Messages() {
             style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
-            <p className="text-cream font-bold text-[15px] mb-2 truncate">
-              {rowMenuFor.display_name || rowMenuFor.username || "Chat"}
-            </p>
 
             <button
-              onClick={() => toggleRowPin(rowMenuFor)}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
-            >
-              <Pin size={18} />
-              <span className="font-semibold text-[14px]">
-                {pinnedKeys.has(rowMenuFor.isGroup ? ("g:" + rowMenuFor.groupId) : ("c:" + rowMenuFor.conversationId))
-                  ? "Unpin"
-                  : "Pin to top"}
-              </span>
-            </button>
-
-            <button
-              onClick={() => markRowRead(rowMenuFor)}
+              onClick={() => rowMenuFor.unread ? markRowRead(rowMenuFor) : markRowUnread(rowMenuFor)}
               className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
             >
               <CheckCheck size={18} />
-              <span className="font-semibold text-[14px]">Mark as read</span>
+              <span className="font-semibold text-[14px]">
+                {rowMenuFor.unread ? "Mark as read" : "Mark as unread"}
+              </span>
             </button>
 
             <button
@@ -1002,33 +1037,27 @@ export default function Messages() {
               className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
             >
               {rowMenuFor.muted ? <Bell size={18} /> : <BellOff size={18} />}
-              <span className="font-semibold text-[14px]">{rowMenuFor.muted ? "Unmute" : "Mute notifications"}</span>
+              <span className="font-semibold text-[14px]">
+                {rowMenuFor.muted ? "Unmute" : "Mute"}
+              </span>
             </button>
-
-            <button
-              onClick={() => { setReportRowFor(rowMenuFor); setRowMenuFor(null) }}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
-            >
-              <Flag size={18} />
-              <span className="font-semibold text-[14px]">Report</span>
-            </button>
-
-            {!rowMenuFor.isGroup && (
-              <button
-                onClick={() => blockRow(rowMenuFor)}
-                className="w-full flex items-center gap-3 p-4 rounded-2xl bg-danger/10 border border-danger/30 text-left text-danger"
-              >
-                <Ban size={18} />
-                <span className="font-semibold text-[14px]">Block</span>
-              </button>
-            )}
 
             <button
               onClick={() => toggleRowArchive(rowMenuFor)}
               className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
             >
               <Archive size={18} />
-              <span className="font-semibold text-[14px]">Archive chat</span>
+              <span className="font-semibold text-[14px]">Archive</span>
+            </button>
+
+            <button
+              onClick={() => deleteRow(rowMenuFor)}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-danger/10 border border-danger/30 text-left text-danger"
+            >
+              <Trash2 size={18} />
+              <span className="font-semibold text-[14px]">
+                {rowMenuFor.isGroup ? "Delete group" : "Delete conversation"}
+              </span>
             </button>
 
             <button onClick={() => setRowMenuFor(null)} className="w-full h-11 mt-1 text-muted font-semibold text-[13.5px]">Cancel</button>
