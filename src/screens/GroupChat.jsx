@@ -44,6 +44,8 @@ export default function GroupChat() {
   const [reactionPickerFor, setReactionPickerFor] = useState(null)
   const [heartBurstId, setHeartBurstId] = useState(null)
   const longPressTimer = useRef(null)
+  const swipeRef = useRef({ id: null, startX: 0, dx: 0, active: false })
+  const [swipeState, setSwipeState] = useState({ id: null, dx: 0 })
   const lastTapRef = useRef({ id: null, time: 0 })
   const voice = useVoiceRecorder({ maxSeconds: 300 })
   const [isMuted, setIsMuted] = useState(false)
@@ -305,7 +307,10 @@ export default function GroupChat() {
     })
   }
 
-  function onMsgPressStart(m) {
+  function onMsgPressStart(m, e) {
+    if (e?.touches?.[0]) {
+      swipeRef.current = { id: m.id, startX: e.touches[0].clientX, dx: 0, active: false }
+    }
     longPressTimer.current = setTimeout(() => {
       tap("medium")
       setActionsForMsg(m)
@@ -316,6 +321,37 @@ export default function GroupChat() {
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current)
       longPressTimer.current = null
+    }
+  }
+
+  function onRowTouchMove(e) {
+    const sw = swipeRef.current
+    if (!sw.id) return
+    const dx = e.touches[0].clientX - sw.startX
+    if (!sw.active && dx > 8) {
+      sw.active = true
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current)
+        longPressTimer.current = null
+      }
+    }
+    if (sw.active) {
+      sw.dx = Math.min(dx, 80)
+      setSwipeState({ id: sw.id, dx: sw.dx })
+    }
+  }
+
+  function onRowSwipeEnd(m) {
+    const sw = swipeRef.current
+    const triggered = sw.active && sw.dx >= 50
+    const wasSwipe = sw.active
+    swipeRef.current = { id: null, startX: 0, dx: 0, active: false }
+    setSwipeState({ id: null, dx: 0 })
+    if (triggered) {
+      tap("light")
+      setReplyingTo(m)
+    } else if (!wasSwipe) {
+      onMsgPressEnd()
     }
   }
 
@@ -440,13 +476,28 @@ export default function GroupChat() {
                   </div>
                 )}
                 <div
-                  onTouchStart={() => onMsgPressStart(m)}
-                  onTouchEnd={onMsgPressEnd}
-                  onTouchMove={onMsgPressEnd}
+                  onTouchStart={(e) => onMsgPressStart(m, e)}
+                  onTouchEnd={() => onRowSwipeEnd(m)}
+                  onTouchMove={onRowTouchMove}
                   onContextMenu={(e) => { e.preventDefault(); setActionsForMsg(m) }}
                   onClick={() => onRowTap(m)}
                   className={`flex gap-2 ${mine ? "justify-end" : "justify-start"} relative`}
+                  style={{
+                    transform: swipeState.id === m.id ? `translateX(${swipeState.dx}px)` : undefined,
+                    transition: swipeState.id === m.id ? "none" : "transform 180ms ease-out",
+                  }}
                 >
+                  {swipeState.id === m.id && swipeState.dx > 10 && (
+                    <div className="absolute left-1 top-1/2 -translate-y-1/2 pointer-events-none"
+                         style={{ opacity: Math.min(1, swipeState.dx / 50) }}>
+                      <div className="w-7 h-7 rounded-full grid place-items-center bg-purple-500/30 border border-purple-500/50">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C084FC" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="9 17 4 12 9 7" />
+                          <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+                        </svg>
+                      </div>
+                    </div>
+                  )}
                   {!mine && (
                     <div className="w-8 shrink-0 flex flex-col justify-end">
                       {showSenderHeader && (
