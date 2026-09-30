@@ -811,15 +811,28 @@ export default function Messages() {
                   style={{ width: 64 }}
                 >
                   <div className="relative">
-                    <div className="w-14 h-14 rounded-full overflow-hidden bg-elevated border-2 border-emerald-400/70">
-                      {u.photo_url ? (
-                        <img src={u.photo_url} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full grid place-items-center text-purple-400 font-black text-lg">
-                          {(u.display_name || u.username || "?")[0]}
+                    {(() => {
+                      const hasStory = storyOwners.has(u.id)
+                      const storyViewed = hasStory && viewedStoryOwners.has(u.id)
+                      const ringStyle = hasStory
+                        ? storyViewed
+                          ? { border: "2px solid rgba(255,255,255,0.15)" }
+                          : { background: "linear-gradient(#0B0B14,#0B0B14) padding-box, linear-gradient(135deg,#C084FC,#EC4899) border-box", border: "2px solid transparent" }
+                        : { border: "2px solid rgba(52,211,153,0.7)" }
+                      return (
+                        <div className="w-14 h-14 rounded-full p-[2px]" style={ringStyle}>
+                          <div className="w-full h-full rounded-full overflow-hidden bg-elevated">
+                            {u.photo_url ? (
+                              <img src={u.photo_url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full grid place-items-center text-purple-400 font-black text-lg">
+                                {(u.display_name || u.username || "?")[0]}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      )}
-                    </div>
+                      )
+                    })()}
                     <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-[#0B0B14]" />
                   </div>
                   <span className="text-cream text-[11px] font-semibold truncate w-full text-center">
