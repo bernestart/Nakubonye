@@ -91,7 +91,7 @@ export default function ReelActionsSheet({ reel, onClose, onHidden, onDeleted, o
           <>
             <h3 className="text-cream font-extrabold text-[17px] mb-4">Reel options</h3>
             <div className="flex flex-col gap-2">
-              {reel.user_id !== myId && onRemix && (
+              {reel.user_id !== myId && onRemix && reel.allow_remix !== false && (
                 <button
                   onClick={() => { onRemix(reel); onClose?.() }}
                   disabled={busy}
