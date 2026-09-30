@@ -53,6 +53,8 @@ export default function Chat() {
   const [other, setOther] = useState(null)
   const [messages, setMessages] = useState([])
   const [reactions, setReactions] = useState({})
+  const swipeRef = useRef({ id: null, startX: 0, dx: 0, active: false })
+  const [swipeState, setSwipeState] = useState({ id: null, dx: 0 })
   const [theirLastRead, setTheirLastRead] = useState(null)
   const [myPreviousReadAt, setMyPreviousReadAt] = useState(null)
   const [text, setText] = useState('')
@@ -380,6 +382,43 @@ export default function Chat() {
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current)
       longPressTimer.current = null
+    }
+  }
+
+  function onRowTouchStart(m, e) {
+    swipeRef.current = { id: m.id, startX: e.touches[0].clientX, dx: 0, active: false }
+    onMsgPressStart(m)
+  }
+
+  function onRowTouchMove(e) {
+    const sw = swipeRef.current
+    if (!sw.id) return
+    const dx = e.touches[0].clientX - sw.startX
+    // Swipe only kicks in on a rightward drag of > 8px
+    if (!sw.active && dx > 8) {
+      sw.active = true
+      // Cancel long-press since we're now swiping
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current)
+        longPressTimer.current = null
+      }
+    }
+    if (sw.active) {
+      sw.dx = Math.min(dx, 80)
+      setSwipeState({ id: sw.id, dx: sw.dx })
+    }
+  }
+
+  function onRowTouchEnd(m) {
+    const sw = swipeRef.current
+    const triggered = sw.active && sw.dx >= 50
+    swipeRef.current = { id: null, startX: 0, dx: 0, active: false }
+    setSwipeState({ id: null, dx: 0 })
+    if (triggered) {
+      tap("light")
+      setReplyingTo(m)
+    } else if (!sw.active) {
+      onMsgPressEnd()
     }
   }
 
@@ -732,10 +771,14 @@ export default function Chat() {
             return (
               <div
                 key={m.id}
-                onTouchStart={() => onMsgPressStart(m)}
-                onTouchEnd={onMsgPressEnd}
-                onTouchMove={onMsgPressEnd}
+                onTouchStart={(e) => onRowTouchStart(m, e)}
+                onTouchEnd={() => onRowTouchEnd(m)}
+                onTouchMove={onRowTouchMove}
                 onContextMenu={(e) => { e.preventDefault(); setActionsForMsg(m) }}
+                style={{
+                  transform: swipeState.id === m.id ? `translateX(${swipeState.dx}px)` : undefined,
+                  transition: swipeState.id === m.id ? "none" : "transform 180ms ease-out",
+                }}
               >
                 {i === firstUnreadIdx && (
                   <div className="flex items-center gap-3 py-3 px-2">
@@ -753,6 +796,16 @@ export default function Chat() {
                 )}
                 {showGap && !showDay && (
                   <p className="text-center text-subtle text-[10.5px] font-medium py-1.5">{timeLabel(m.created_at)}</p>
+                )}
+                {swipeState.id === m.id && swipeState.dx > 10 && (
+                  <div className="flex justify-start pl-2 pb-1" style={{ opacity: Math.min(1, swipeState.dx / 50) }}>
+                    <div className="w-7 h-7 rounded-full grid place-items-center bg-purple-500/30 border border-purple-500/50">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C084FC" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="9 17 4 12 9 7" />
+                        <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+                      </svg>
+                    </div>
+                  </div>
                 )}
                 <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                   <div className="max-w-[82%] relative group">
