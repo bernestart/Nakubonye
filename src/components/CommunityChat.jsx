@@ -48,6 +48,9 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
   const [isMuted, setIsMuted] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [forwardingMsg, setForwardingMsg] = useState(null)
+  const [typers, setTypers] = useState({})
+  const typingChannelRef = useRef(null)
+  const typingTimeoutRef = useRef(null)
   const longPressTimer = useRef(null)
   const swipeRef = useRef({ id: null, startX: 0, dx: 0, active: false })
   const [swipeState, setSwipeState] = useState({ id: null, dx: 0 })
@@ -190,6 +193,53 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
       .subscribe()
     return () => { cancelled = true; supabase.removeChannel(ch) }
   }, [communityId])
+
+  // Typing broadcast channel
+  useEffect(() => {
+    if (!communityId || !myId) return
+    const ch = supabase.channel("ctyping-" + communityId)
+    ch.on("broadcast", { event: "typing" }, (payload) => {
+      const data = payload?.payload
+      if (!data || data.user_id === myId) return
+      setTypers((prev) => {
+        const next = { ...prev }
+        if (data.typing) next[data.user_id] = Date.now()
+        else delete next[data.user_id]
+        return next
+      })
+    }).subscribe()
+    typingChannelRef.current = ch
+    return () => { supabase.removeChannel(ch); typingChannelRef.current = null }
+  }, [communityId, myId])
+
+  // Auto-expire typers after 3s
+  useEffect(() => {
+    const int = setInterval(() => {
+      setTypers((prev) => {
+        const now = Date.now()
+        const next = {}
+        let changed = false
+        for (const [uid, ts] of Object.entries(prev)) {
+          if (now - ts < 3000) next[uid] = ts
+          else changed = true
+        }
+        return changed ? next : prev
+      })
+    }, 1500)
+    return () => clearInterval(int)
+  }, [])
+
+  function notifyTyping(value) {
+    const ch = typingChannelRef.current
+    if (!ch) return
+    ch.send({ type: "broadcast", event: "typing", payload: { user_id: myId, typing: value.trim().length > 0 } })
+    clearTimeout(typingTimeoutRef.current)
+    if (value.trim().length > 0) {
+      typingTimeoutRef.current = setTimeout(() => {
+        ch.send({ type: "broadcast", event: "typing", payload: { user_id: myId, typing: false } })
+      }, 1500)
+    }
+  }
 
   function pickAttachment(e) {
     const f = e.target.files?.[0]
@@ -476,7 +526,16 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
     <div className="flex flex-col" style={{ minHeight: '400px' }}>
       <div className="flex items-center justify-between mb-2 pb-2 border-b border-white/8">
         <p className="text-cream font-bold text-[13.5px] truncate">
-          {communityName ? communityName + " · Chat" : "Chat"}
+          {(() => {
+            const list = Object.keys(typers)
+            if (list.length === 0) return communityName ? communityName + " · Chat" : "Chat"
+            const names = list.map((uid) => {
+              const p = profiles.get(uid)
+              return p?.display_name || p?.username || "Someone"
+            }).slice(0, 2)
+            if (names.length === 1) return names[0] + " is typing…"
+            return names.join(", ") + " are typing…"
+          })()}
         </p>
         <button
           onClick={() => { tap("light"); setMenuOpen(true) }}
@@ -794,7 +853,7 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
         </button>
         <textarea
           value={text}
-          onChange={(e) => setText(e.target.value.slice(0, 1000))}
+          onChange={(e) => { setText(e.target.value.slice(0, 1000)); notifyTyping(e.target.value) }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault()
