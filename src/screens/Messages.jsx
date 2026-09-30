@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { MessageCircle, RefreshCw, PenSquare, BellOff, Search, X , Users , MoreVertical , Archive, Inbox, CheckCheck , Flag, Ban , Pin , Trash2 , Settings } from 'lucide-react'
+import { MessageCircle, RefreshCw, PenSquare, BellOff, Search, X , Users , MoreVertical , Archive, Inbox, CheckCheck , Flag, Ban , Pin , Trash2 , Settings , Check } from 'lucide-react'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -11,6 +11,8 @@ import { tap } from '../lib/haptic'
 import BottomNav from '../components/BottomNav'
 import AppHeader from '../components/AppHeader'
 import NewMessageSheet from '../components/NewMessageSheet'
+import StoryComposer from '../components/StoryComposer'
+import StoryViewer from '../components/StoryViewer'
 import NotificationBell from '../components/NotificationBell'
 import BrandGlow from '../components/BrandGlow'
 
@@ -22,13 +24,20 @@ export default function Messages() {
   const [loading, setLoading] = useState(true)
   const [newMsgOpen, setNewMsgOpen] = useState(false)
   const [newGroupOpen, setNewGroupOpen] = useState(false)
-  const [tabFilter, setTabFilter] = useState("all")
+  const [searchParams] = useSearchParams()
+  const [tabFilter, setTabFilter] = useState(() => {
+    const t = searchParams.get("tab")
+    return t === "unread" || t === "groups" ? t : "all"
+  })
   const [rowMenuFor, setRowMenuFor] = useState(null)
   const [pinnedKeys, setPinnedKeys] = useState(new Set())
   const [archivedKeys, setArchivedKeys] = useState(new Set())
   const [deletedKeys, setDeletedKeys] = useState(new Set())
   const [onlineUsers, setOnlineUsers] = useState([])
   const [storyOwners, setStoryOwners] = useState(new Set())
+  const [composerOpen, setComposerOpen] = useState(false)
+  const [viewerOpen, setViewerOpen] = useState(null)
+  const [myStoryGroup, setMyStoryGroup] = useState(null)
   const [pendingRequests, setPendingRequests] = useState(0)
   const [viewedStoryOwners, setViewedStoryOwners] = useState(new Set())
   const [reportRowFor, setReportRowFor] = useState(null)
@@ -474,6 +483,15 @@ export default function Messages() {
     setRefreshing(false)
   }
 
+  async function dismissNewMatch(item) {
+    if (!confirm("Dismiss this new match? They'll stay in Matches but disappear from Messages.")) return
+    tap("light")
+    const uid = session?.user?.id
+    if (!uid || !item.conversationId) return
+    await supabase.from("conversation_deletes").insert({ conversation_id: item.conversationId, user_id: uid })
+    load()
+  }
+
   async function markRowRead(item) {
     tap("light")
     const uid = session?.user?.id
@@ -754,22 +772,44 @@ export default function Messages() {
         {!loading && tabFilter === "all" && !searchQuery.trim() && (
           <div className="mb-3 -mx-3 px-3">
             <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-              {/* Create story */}
+              {/* Your story tile — opens composer, or viewer if you have a story */}
               <button
-                onClick={() => { tap("light"); nav("/stories") }}
+                onClick={() => {
+                  tap("light")
+                  if (myStoryGroup) setViewerOpen({ groups: [myStoryGroup], startIndex: 0 })
+                  else setComposerOpen(true)
+                }}
                 className="shrink-0 flex flex-col items-center gap-1.5 active:opacity-80"
                 style={{ width: 68 }}
               >
                 <div className="relative">
-                  <div
-                    className="w-16 h-16 rounded-full grid place-items-center"
-                    style={{
-                      background: "linear-gradient(135deg, rgba(192,132,252,0.25) 0%, rgba(236,72,153,0.25) 100%)",
-                      border: "2px dashed rgba(192,132,252,0.6)",
-                    }}
+                  {myStoryGroup ? (
+                    <div className="w-16 h-16 rounded-full p-[2px]"
+                         style={{ background: "linear-gradient(#0B0B14,#0B0B14) padding-box, linear-gradient(135deg,#C084FC,#EC4899) border-box", border: "2px solid transparent" }}>
+                      <div className="w-full h-full rounded-full overflow-hidden bg-elevated grid place-items-center text-purple-400 font-black text-lg">
+                        {(myStoryGroup.display_name || "Y")[0]}
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      className="w-16 h-16 rounded-full grid place-items-center"
+                      style={{
+                        background: "linear-gradient(135deg, rgba(192,132,252,0.25) 0%, rgba(236,72,153,0.25) 100%)",
+                        border: "2px dashed rgba(192,132,252,0.6)",
+                      }}
+                    >
+                      <span className="text-purple-300 text-[26px] font-thin leading-none">+</span>
+                    </div>
+                  )}
+                  {/* small + badge for adding another story */}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); tap("light"); setComposerOpen(true) }}
+                    className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-purple-600 border-2 border-[#0B0B14] grid place-items-center"
+                    aria-label="Add story"
                   >
-                    <span className="text-purple-300 text-[26px] font-thin leading-none">+</span>
-                  </div>
+                    <span className="text-white text-[12px] font-bold leading-none">+</span>
+                  </button>
                 </div>
                 <span className="text-cream text-[11.5px] font-semibold truncate w-full text-center">
                   Your story
@@ -790,7 +830,25 @@ export default function Messages() {
                   return (
                     <button
                       key={u.userId}
-                      onClick={() => { tap("light"); nav("/stories") }}
+                      onClick={async () => {
+                        tap("light")
+                        const { data: stories } = await supabase
+                          .from("stories")
+                          .select("id, user_id, media_url, media_type, created_at")
+                          .eq("user_id", u.userId)
+                          .gt("expires_at", new Date().toISOString())
+                          .order("created_at", { ascending: true })
+                        if (!stories || stories.length === 0) return
+                        setViewerOpen({
+                          groups: [{
+                            user_id: u.userId,
+                            display_name: u.display_name,
+                            avatar_path: null,
+                            stories,
+                          }],
+                          startIndex: 0,
+                        })
+                      }}
                       className="shrink-0 flex flex-col items-center gap-1.5 active:opacity-80"
                       style={{ width: 68 }}
                     >
@@ -958,8 +1016,19 @@ export default function Messages() {
                   <span className="text-[10.5px] text-subtle font-medium">
                     {relTime(item.lastMessageAt)}
                   </span>
-                  {item.unread && (
+                  {item.unread ? (
                     <span className="w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_8px_rgba(236,72,153,0.8)]" />
+                  ) : item.isNewMatch ? (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); tap("light"); dismissNewMatch(item) }}
+                      className="w-6 h-6 rounded-full grid place-items-center bg-white/[0.06] border border-white/10 text-muted active:opacity-60"
+                      aria-label="Dismiss"
+                    >
+                      <X size={12} strokeWidth={2.6} />
+                    </button>
+                  ) : (
+                    <Check size={13} strokeWidth={2.6} className="text-sky-400" />
                   )}
                 </div>
                 </div>
@@ -968,6 +1037,22 @@ export default function Messages() {
           </div>
         )}
       </div>
+
+      {composerOpen && (
+        <StoryComposer
+          onClose={() => setComposerOpen(false)}
+          onDone={() => { setComposerOpen(false); load() }}
+        />
+      )}
+
+      {viewerOpen && (
+        <StoryViewer
+          groups={viewerOpen.groups}
+          startIndex={viewerOpen.startIndex}
+          onClose={() => { setViewerOpen(null); load() }}
+          onViewed={() => {}}
+        />
+      )}
 
       {rowMenuFor && (
         <div className="fixed inset-0 z-[500] flex items-end" onClick={() => setRowMenuFor(null)}>

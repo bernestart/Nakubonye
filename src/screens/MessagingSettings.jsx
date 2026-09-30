@@ -116,6 +116,16 @@ export default function MessagingSettings() {
           onClick={() => { tap("light"); nav("/messages/archived") }}
         />
         <Row
+          icon={<Inbox size={18} />}
+          label="Unread chats"
+          onClick={() => { tap("light"); nav("/messages?tab=unread") }}
+        />
+        <Row
+          icon={<Users size={18} />}
+          label="Group chats"
+          onClick={() => { tap("light"); nav("/messages?tab=groups") }}
+        />
+        <Row
           icon={<Shield size={18} />}
           label="Privacy & safety"
           onClick={() => { tap("light"); nav("/settings/privacy") }}
