@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { MessageCircle, RefreshCw, PenSquare, BellOff } from 'lucide-react'
+import { MessageCircle, RefreshCw, PenSquare, BellOff, Search, X } from 'lucide-react'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -20,6 +20,7 @@ export default function Messages() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [newMsgOpen, setNewMsgOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
   const [error, setError] = useState('')
   const [pullDistance, setPullDistance] = useState(0)
   const pullingRef = useRef(false)
@@ -205,7 +206,16 @@ export default function Messages() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, schedule)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversations' }, schedule)
       .subscribe()
-    return () => { if (debounce) clearTimeout(debounce); supabase.removeChannel(ch) }
+    const visibleItems = searchQuery.trim()
+    ? items.filter((item) => {
+        const q = searchQuery.toLowerCase()
+        return (item.display_name || "").toLowerCase().includes(q)
+          || (item.username || "").toLowerCase().includes(q)
+          || (item.preview || "").toLowerCase().includes(q)
+      })
+    : items
+
+  return () => { if (debounce) clearTimeout(debounce); supabase.removeChannel(ch) }
   }, [session?.user?.id, load])
 
   function onTouchStart(e) {
@@ -276,6 +286,23 @@ export default function Messages() {
           {pullDistance >= 60 ? "Release to refresh" : "Pull to refresh"}
         </div>
       )}
+      <div className="px-4 pb-3 shrink-0">
+        <div className="flex items-center gap-2 rounded-2xl bg-surface border border-white/8 px-3.5 h-10">
+          <Search size={15} className="text-muted shrink-0" />
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search conversations…"
+            className="flex-1 bg-transparent border-0 text-cream text-[13.5px] placeholder:text-subtle focus:outline-none"
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery("")} className="text-muted shrink-0" aria-label="Clear">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-3 pb-4"
            onTouchStart={onTouchStart}
            onTouchMove={onTouchMove}
@@ -293,11 +320,18 @@ export default function Messages() {
               </div>
             ))}
           </div>
-        ) : items.length === 0 ? (
-          <Empty onGo={() => nav('/discover')} />
+        ) : visibleItems.length === 0 ? (
+          searchQuery.trim() ? (
+            <div className="pt-16 text-center px-6">
+              <p className="text-cream font-bold text-[15px] mb-1">No matches</p>
+              <p className="text-muted text-[13px]">Try a different search.</p>
+            </div>
+          ) : (
+            <Empty onGo={() => nav('/discover')} />
+          )
         ) : (
           <div className="flex flex-col gap-1 pt-1">
-            {items.map((item) => (
+            {visibleItems.map((item) => (
               <motion.button
                 key={item.userId}
                 whileTap={{ scale: 0.97 }}
