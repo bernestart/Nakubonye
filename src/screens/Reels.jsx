@@ -625,7 +625,7 @@ export default function Reels() {
                   loop={false}
                   muted={muted}
                   playsInline
-                  preload="auto"
+                  preload={idx === currentIdx || idx === currentIdx + 1 ? "auto" : "metadata"}
                   onCanPlay={(e) => {
                     if (idx !== currentIdx) return
                     e.target.muted = muted
