@@ -16,6 +16,13 @@ import EmojiPicker from "../components/chat/EmojiPicker"
 import ImageLightbox from "../components/chat/ImageLightbox"
 import { useVoiceRecorder } from "../components/chat/useVoiceRecorder"
 
+const UNSEND_WINDOW_MS = 3600000
+
+function isWithinUnsendWindow(createdAt) {
+  if (!createdAt) return false
+  return Date.now() - new Date(createdAt).getTime() < UNSEND_WINDOW_MS
+}
+
 export default function GroupChat() {
   const nav = useNavigate()
   const { id: groupId } = useParams()
@@ -301,7 +308,12 @@ export default function GroupChat() {
   }
 
   async function deleteMessage(id) {
-    if (!confirm("Delete this message for everyone?")) return
+    const target = messages.find((m) => m.id === id)
+    if (!target || !isWithinUnsendWindow(target.created_at)) {
+      setError("This message is too old to unsend")
+      return
+    }
+    if (!confirm("Unsend this message for everyone? This cannot be undone.")) return
     tap("light")
     await supabase.from("group_messages").update({ deleted_at: new Date().toISOString(), content: "", media_url: null }).eq("id", id).eq("sender_id", myId)
   }
@@ -721,6 +733,7 @@ export default function GroupChat() {
           onForward={(m) => { setActionsForMsg(null); setForwardingMsg(m) }}
           onDelete={deleteMessage}
           onReact={(emoji) => toggleReaction(actionsForMsg.id, emoji)}
+          canUnsend={isWithinUnsendWindow(actionsForMsg.created_at)}
           isPinned={pinnedMsg?.id === actionsForMsg.id}
           onPin={togglePin}
         />
