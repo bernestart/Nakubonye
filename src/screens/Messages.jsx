@@ -867,14 +867,14 @@ export default function Messages() {
                     rowPressTriggered.current = true
                     tap("medium")
                     setRowMenuFor(item)
-                  }, 500)
+                  }, 700)
                 }}
                 onTouchMove={(e) => {
                   const t = e.touches[0]
                   const dx = Math.abs(t.clientX - tapStartRef.current.x)
                   const dy = Math.abs(t.clientY - tapStartRef.current.y)
                   // Kill long-press the moment the finger moves — scroll wins
-                  if (dx > 6 || dy > 6) {
+                  if (dx > 12 || dy > 12) {
                     clearTimeout(rowPressTimer.current)
                   }
                 }}
@@ -884,7 +884,7 @@ export default function Messages() {
                   const dx = Math.abs(t.clientX - tapStartRef.current.x)
                   const dy = Math.abs(t.clientY - tapStartRef.current.y)
                   // Only open if it was a genuine tap (barely moved)
-                  if (!rowPressTriggered.current && dx < 8 && dy < 8) {
+                  if (!rowPressTriggered.current && dx < 12 && dy < 12) {
                     tap('light')
                     if (item.isGroup) nav('/groups/' + item.groupId)
                     else nav('/messages/' + item.userId)
