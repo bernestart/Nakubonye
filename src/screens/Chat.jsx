@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Send, MessageCircle, Paperclip, X, Smile, Mic, Square, Play, Pause, MoreVertical, Trash2, Eye, Flag, Ban, Check, CheckCheck , Phone, Video, Pin } from 'lucide-react'
+import { ArrowLeft, Send, MessageCircle, Paperclip, X, Smile, Mic, Square, Play, Pause, MoreVertical, Trash2, Eye, Flag, Ban, Check, CheckCheck , Phone, Video, Pin, Bell, BellOff, Eraser } from 'lucide-react'
 import VerifiedBadge from "../components/VerifiedBadge"
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
@@ -84,6 +84,8 @@ export default function Chat() {
   const [actionsForMsg, setActionsForMsg] = useState(null)
   const [forwardingMsg, setForwardingMsg] = useState(null)
   const [pinnedMsg, setPinnedMsg] = useState(null)
+  const [isMuted, setIsMuted] = useState(false)
+  const [clearedAt, setClearedAt] = useState(null)
   const [attachment, setAttachment] = useState(null)
   const [attachmentPreview, setAttachmentPreview] = useState('')
   const [otherTyping, setOtherTyping] = useState(false)
@@ -239,6 +241,14 @@ export default function Chat() {
       .from('conversation_reads').select('last_read_at')
       .eq('conversation_id', convId).eq('user_id', myId).maybeSingle()
     setMyPreviousReadAt(myPrevRead?.last_read_at || null)
+
+    // Load mute + clear state
+    const [muteRes, clearRes] = await Promise.all([
+      supabase.from('conversation_mutes').select('conversation_id').eq('conversation_id', convId).eq('user_id', myId).maybeSingle(),
+      supabase.from('conversation_clears').select('cleared_at').eq('conversation_id', convId).eq('user_id', myId).maybeSingle(),
+    ])
+    setIsMuted(!!muteRes.data)
+    setClearedAt(clearRes.data?.cleared_at || null)
 
     await supabase.from('conversation_reads').upsert(
       { conversation_id: convId, user_id: myId, last_read_at: new Date().toISOString() },
@@ -499,6 +509,30 @@ export default function Chat() {
     setSending(false)
   }
 
+  async function toggleMute() {
+    if (!conversationId || !myId) return
+    tap('light')
+    if (isMuted) {
+      await supabase.from('conversation_mutes').delete().eq('conversation_id', conversationId).eq('user_id', myId)
+      setIsMuted(false)
+    } else {
+      await supabase.from('conversation_mutes').insert({ conversation_id: conversationId, user_id: myId })
+      setIsMuted(true)
+    }
+  }
+
+  async function clearChat() {
+    if (!conversationId || !myId) return
+    if (!confirm('Clear this chat? Messages will be hidden for you only.')) return
+    tap('light')
+    const now = new Date().toISOString()
+    await supabase.from('conversation_clears').upsert(
+      { conversation_id: conversationId, user_id: myId, cleared_at: now },
+      { onConflict: 'conversation_id,user_id' }
+    )
+    setClearedAt(now)
+  }
+
   async function deleteMessage(messageId) {
     const target = messages.find((m) => m.id === messageId)
     if (!target || !isWithinUnsendWindow(target.created_at)) {
@@ -529,7 +563,11 @@ export default function Chat() {
     setReactionPickerFor(null)
   }
 
-  const firstUnreadIdx = messages.findIndex(
+  const visibleMessages = clearedAt
+    ? messages.filter((m) => new Date(m.created_at) > new Date(clearedAt))
+    : messages
+
+  const firstUnreadIdx = visibleMessages.findIndex(
     (m) => m.sender_id !== myId && myPreviousReadAt && new Date(m.created_at) > new Date(myPreviousReadAt)
   )
 
@@ -653,7 +691,7 @@ export default function Chat() {
               <div className="h-11 w-[52%] rounded-2xl rounded-bl-md bg-white/[0.04] animate-pulse" />
             </div>
           </div>
-        ) : messages.length === 0 ? (
+        ) : visibleMessages.length === 0 ? (
           <div className="grid place-items-center h-full text-center px-6">
             <div>
               <div className="w-14 h-14 rounded-2xl bg-purple-500/12 border border-purple-500/25 grid place-items-center mx-auto mb-3">
@@ -666,11 +704,11 @@ export default function Chat() {
             </div>
           </div>
         ) : (
-          messages.map((m, i) => {
+          visibleMessages.map((m, i) => {
             const mine = m.sender_id === myId
-            const showGap = i === 0 || (new Date(m.created_at) - new Date(messages[i-1].created_at)) > 5 * 60 * 1000
-            const showDay = i === 0 || new Date(m.created_at).toDateString() !== new Date(messages[i-1].created_at).toDateString()
-            const replyToMsg = m.reply_to_id ? messages.find((x) => x.id === m.reply_to_id) : null
+            const showGap = i === 0 || (new Date(m.created_at) - new Date(visibleMessages[i-1].created_at)) > 5 * 60 * 1000
+            const showDay = i === 0 || new Date(m.created_at).toDateString() !== new Date(visibleMessages[i-1].created_at).toDateString()
+            const replyToMsg = m.reply_to_id ? visibleMessages.find((x) => x.id === m.reply_to_id) : null
             const reacts = reactions[m.id] || []
             const myReact = reacts.find((r) => r.user_id === myId)
             const readByThem = canSeeReadReceipts && theirLastRead && new Date(theirLastRead) >= new Date(m.created_at)
@@ -856,7 +894,7 @@ export default function Chat() {
                     )}
 
                     {/* Read receipt for my messages */}
-                    {mine && !deleted && i === messages.length - 1 && (
+                    {mine && !deleted && i === visibleMessages.length - 1 && (
                       <div className={`flex justify-end mt-1 pr-0.5`}>
                         {readByThem ? (
                           <CheckCheck size={13} strokeWidth={2.4} className="text-purple-400" />
@@ -1008,6 +1046,12 @@ export default function Chat() {
             className="absolute top-16 right-3 w-56 bg-surface rounded-2xl border border-white/10 shadow-2xl overflow-hidden"
           >
             <MenuItem icon={<Eye size={16} />} label="View profile" onClick={() => { setMenuOpen(false); nav('/profile/' + otherId) }} />
+            <MenuItem
+              icon={isMuted ? <BellOff size={16} /> : <Bell size={16} />}
+              label={isMuted ? "Unmute" : "Mute notifications"}
+              onClick={() => { setMenuOpen(false); toggleMute() }}
+            />
+            <MenuItem icon={<Eraser size={16} />} label="Clear chat" onClick={() => { setMenuOpen(false); clearChat() }} />
             <MenuItem icon={<Flag size={16} />} label="Report" onClick={() => { setMenuOpen(false); setReportOpen(true) }} />
             <MenuItem icon={<Ban size={16} />} label="Block" danger onClick={() => { setMenuOpen(false); setBlockOpen(true) }} />
           </div>
