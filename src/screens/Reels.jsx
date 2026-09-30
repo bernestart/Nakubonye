@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { motion } from "framer-motion"
 import { useNavigate } from "react-router-dom"
 import { Heart, MessageCircle, Share2, Plus, Volume2, VolumeX, ArrowLeft, MoreVertical, Bookmark } from "lucide-react"
 import VerifiedBadge from "../components/VerifiedBadge"
@@ -40,6 +41,13 @@ export default function Reels() {
   const videoRefs = useRef([])
   const clipIdxRefs = useRef({})
   const viewedThisSession = useRef(new Set())
+  const [heartBurstId, setHeartBurstId] = useState(null)
+  const tapTimerRef = useRef(null)
+  const lastTapRef = useRef(0)
+  const [cursor, setCursor] = useState(null)
+  const [hasMore, setHasMore] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const loadingMoreRef = useRef(false)
 
   const load = useCallback(async () => {
     if (!myId) return
@@ -61,6 +69,9 @@ export default function Reels() {
       return true
     })
     setReels(list)
+    setCursor(list.length > 0 ? list[list.length - 1].created_at : null)
+    setHasMore((rows || []).length >= 50)
+    loadingMoreRef.current = false
 
     // viewCounts from DB
     const vc = new Map()
@@ -146,6 +157,110 @@ export default function Reels() {
 
     setLoading(false)
   }, [myId])
+
+  const loadMore = useCallback(async () => {
+    if (!myId || loadingMoreRef.current || !hasMore || !cursor) return
+    loadingMoreRef.current = true
+    setLoadingMore(true)
+    const { data: rows } = await supabase
+      .from("reels")
+      .select("id, user_id, video_url, clips, thumbnail_url, caption, duration_sec, trim_start, trim_end, mirrored, aspect_ratio, text_overlays, sticker_overlays, filter_id, audience, allow_comments, allow_remix, location, cover_frame_time, view_count, remix_of, created_at")
+      .eq("is_active", true)
+      .lt("created_at", cursor)
+      .order("created_at", { ascending: false })
+      .limit(20)
+
+    const filtered = (rows || []).filter((r) => {
+      if (hiddenIds.has(r.id)) return false
+      if (r.user_id === myId) return true
+      const aud = r.audience || "public"
+      if (aud === "public") return true
+      if (aud === "matches") return matchSet.has(r.user_id)
+      if (aud === "private") return false
+      return true
+    })
+
+    if (filtered.length === 0) {
+      setHasMore(false)
+      setLoadingMore(false)
+      loadingMoreRef.current = false
+      return
+    }
+
+    // Dedup append
+    setReels((prev) => {
+      const seen = new Set(prev.map((r) => r.id))
+      return [...prev, ...filtered.filter((r) => !seen.has(r.id))]
+    })
+
+    const newIds = filtered.map((r) => r.id)
+    const newAuthorIds = [...new Set(filtered.map((r) => r.user_id))]
+
+    // Profiles
+    if (newAuthorIds.length > 0) {
+      const { data: profs } = await supabase.from("profiles").select("id, display_name, username, is_verified").in("id", newAuthorIds)
+      setProfiles((prev) => {
+        const next = new Map(prev)
+        ;(profs || []).forEach((p) => next.set(p.id, p))
+        return next
+      })
+      const { data: ph } = await supabase
+        .from("profile_photos")
+        .select("user_id, storage_path, is_primary, display_order")
+        .in("user_id", newAuthorIds)
+        .order("is_primary", { ascending: false })
+        .order("display_order", { ascending: true })
+      setPhotos((prev) => {
+        const next = new Map(prev)
+        ;(ph || []).forEach((p) => { if (!next.has(p.user_id)) next.set(p.user_id, p.storage_path) })
+        return next
+      })
+    }
+
+    // Likes + comments
+    if (newIds.length > 0) {
+      const { data: myLikes } = await supabase.from("reel_likes").select("reel_id").eq("user_id", myId).in("reel_id", newIds)
+      setLikes((prev) => new Set([...prev, ...(myLikes || []).map((l) => l.reel_id)]))
+
+      const { data: allLikes } = await supabase.from("reel_likes").select("reel_id").in("reel_id", newIds)
+      setLikeCounts((prev) => {
+        const next = new Map(prev)
+        const cc = new Map()
+        ;(allLikes || []).forEach((l) => cc.set(l.reel_id, (cc.get(l.reel_id) || 0) + 1))
+        cc.forEach((v, k) => next.set(k, v))
+        return next
+      })
+
+      const { data: cmts } = await supabase.from("reel_comments").select("reel_id").in("reel_id", newIds)
+      setCommentCounts((prev) => {
+        const next = new Map(prev)
+        const cc = new Map()
+        ;(cmts || []).forEach((c) => cc.set(c.reel_id, (cc.get(c.reel_id) || 0) + 1))
+        cc.forEach((v, k) => next.set(k, v))
+        return next
+      })
+    }
+
+    // View counts
+    setViewCounts((prev) => {
+      const next = new Map(prev)
+      filtered.forEach((r) => next.set(r.id, Number(r.view_count) || 0))
+      return next
+    })
+
+    setCursor(filtered[filtered.length - 1].created_at)
+    setHasMore((rows || []).length >= 20)
+    setLoadingMore(false)
+    loadingMoreRef.current = false
+  }, [myId, hasMore, cursor, hiddenIds, matchSet])
+
+  // Auto-trigger loadMore when near the end
+  useEffect(() => {
+    const visible = reels.filter((r) => !hiddenIds.has(r.id))
+    if (currentIdx >= visible.length - 3 && hasMore && !loadingMoreRef.current) {
+      loadMore()
+    }
+  }, [currentIdx, reels, hiddenIds, hasMore, loadMore])
 
   useEffect(() => { load() }, [load])
 
@@ -265,6 +380,30 @@ export default function Reels() {
       // User cancelled or share failed — copy as fallback
       try { await navigator.clipboard.writeText(url); alert("Link copied!") } catch {}
     }
+  }
+
+  function handleVideoTap(idx, reel) {
+    const now = Date.now()
+    const gap = now - lastTapRef.current
+    if (gap < 300 && gap > 40) {
+      // Double tap
+      if (tapTimerRef.current) { clearTimeout(tapTimerRef.current); tapTimerRef.current = null }
+      lastTapRef.current = 0
+      if (!likes.has(reel.id)) {
+        toggleLike(reel.id)
+      }
+      setHeartBurstId(reel.id)
+      setTimeout(() => setHeartBurstId((cur) => cur === reel.id ? null : cur), 800)
+      return
+    }
+    lastTapRef.current = now
+    if (tapTimerRef.current) clearTimeout(tapTimerRef.current)
+    tapTimerRef.current = setTimeout(() => {
+      const v = videoRefs.current[idx]
+      if (!v) return
+      if (v.paused) v.play().catch(() => {})
+      else v.pause()
+    }, 280)
   }
 
   return (
@@ -388,12 +527,7 @@ export default function Reels() {
                       v.addEventListener("loadeddata", onReady)
                     }
                   }}
-                  onClick={() => {
-                    const v = videoRefs.current[idx]
-                    if (!v) return
-                    if (v.paused) v.play().catch(() => {})
-                    else v.pause()
-                  }}
+                  onClick={() => handleVideoTap(idx, reel)}
                   className="w-full h-full object-cover"
                   style={{
                     transform: reel.mirrored ? "scaleX(-1)" : "none",
@@ -410,6 +544,19 @@ export default function Reels() {
                     })(),
                   }}
                 />
+
+                {/* Double-tap heart burst */}
+                {heartBurstId === reel.id && (
+                  <motion.div
+                    initial={{ scale: 0.4, opacity: 0 }}
+                    animate={{ scale: [0.4, 1.3, 1.3, 1.15], opacity: [0, 1, 1, 0] }}
+                    transition={{ duration: 0.8, times: [0, 0.2, 0.7, 1] }}
+                    className="absolute inset-0 grid place-items-center pointer-events-none"
+                    style={{ zIndex: 20 }}
+                  >
+                    <Heart size={110} fill="#EC4899" strokeWidth={0} />
+                  </motion.div>
+                )}
 
                 {/* Text overlays baked on top */}
                 {Array.isArray(reel.text_overlays) && reel.text_overlays.map((t) => (
