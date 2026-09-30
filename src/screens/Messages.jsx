@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { MessageCircle, RefreshCw, PenSquare } from 'lucide-react'
+import { MessageCircle, RefreshCw, PenSquare, BellOff } from 'lucide-react'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -174,6 +174,18 @@ export default function Messages() {
 
     list.sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt))
 
+    // Load mute states
+    const convIdsForMute = list.map((x) => x.conversationId).filter(Boolean)
+    if (convIdsForMute.length > 0) {
+      const { data: mutes } = await supabase
+        .from('conversation_mutes')
+        .select('conversation_id')
+        .eq('user_id', userId)
+        .in('conversation_id', convIdsForMute)
+      const mutedSet = new Set((mutes || []).map((m) => m.conversation_id))
+      list.forEach((x) => { x.muted = x.conversationId ? mutedSet.has(x.conversationId) : false })
+    }
+
     setItems(list)
     setLoading(false)
   }, [session?.user?.id])
@@ -315,6 +327,7 @@ export default function Messages() {
                     {item.is_verified && (
                       <span className="text-purple-400 text-[11px]">✓</span>
                     )}
+                    {item.muted && <BellOff size={12} className="text-subtle shrink-0" />}
                   </div>
                   <p className={`text-[13px] truncate ${item.unread ? 'text-cream font-medium' : 'text-muted'}`}>
                     {item.preview || 'Say hello 👋'}
