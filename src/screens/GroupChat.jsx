@@ -8,6 +8,10 @@ import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 import BrandGlow from "../components/BrandGlow"
 import InviteLinkSheet from "../components/InviteLinkSheet"
+import Linkify from "../components/chat/Linkify"
+import AudioBubble from "../components/chat/AudioBubble"
+import EmojiPicker from "../components/chat/EmojiPicker"
+import ImageLightbox from "../components/chat/ImageLightbox"
 
 export default function GroupChat() {
   const nav = useNavigate()
@@ -30,6 +34,8 @@ export default function GroupChat() {
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
+  const [emojiOpen, setEmojiOpen] = useState(false)
+  const [lightboxUrl, setLightboxUrl] = useState(null)
   const [isMuted, setIsMuted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
@@ -346,14 +352,18 @@ export default function GroupChat() {
                             <img
                               src={m.media_url}
                               alt=""
-                              className="block max-w-[220px] rounded-xl"
+                              onClick={() => setLightboxUrl(m.media_url)}
+                              className="block max-w-[220px] rounded-xl cursor-pointer active:opacity-90"
                               style={{ maxHeight: 260, objectFit: "cover" }}
                               loading="lazy"
                             />
                           )}
+                          {m.media_url && m.media_type?.startsWith("audio/") && (
+                            <AudioBubble src={m.media_url} mine={mine} />
+                          )}
                           {m.content && (
                             <div className={m.media_url ? "mt-1.5 px-3 pb-2 pt-1 text-[14.5px] leading-[1.4] break-words" : "px-3.5 py-2 text-[14.5px] leading-[1.4] break-words"}>
-                              {m.content}
+                              <Linkify text={m.content} mine={mine} />
                             </div>
                           )}
                         </>
@@ -398,6 +408,13 @@ export default function GroupChat() {
         >
           <Paperclip size={19} strokeWidth={2.3} />
         </button>
+        <button
+          onClick={() => { setEmojiOpen((v) => !v); tap("light") }}
+          className="w-10 h-10 rounded-full grid place-items-center text-muted shrink-0"
+          aria-label="Emoji"
+        >
+          <span className={`text-[18px] ${emojiOpen ? "opacity-100" : "opacity-70"}`}>😊</span>
+        </button>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -417,6 +434,15 @@ export default function GroupChat() {
           <Send size={18} strokeWidth={2.4} />
         </motion.button>
       </div>
+
+      {emojiOpen && (
+        <EmojiPicker
+          className="shrink-0 mx-3 mb-1"
+          onPick={(e) => { setText((t) => (t + e).slice(0, 2000)); tap("light") }}
+        />
+      )}
+
+      <ImageLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
 
       {/* Attach menu */}
       {attachMenuOpen && (
