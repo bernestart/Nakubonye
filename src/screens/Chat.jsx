@@ -84,6 +84,7 @@ export default function Chat() {
   const [actionsForMsg, setActionsForMsg] = useState(null)
   const [forwardingMsg, setForwardingMsg] = useState(null)
   const [pinnedMsg, setPinnedMsg] = useState(null)
+  const [lightboxUrl, setLightboxUrl] = useState(null)
   const [isMuted, setIsMuted] = useState(false)
   const [clearedAt, setClearedAt] = useState(null)
   const [attachment, setAttachment] = useState(null)
@@ -791,7 +792,8 @@ export default function Chat() {
                           <img
                             src={m.media_url}
                             alt={m.media_name || 'photo'}
-                            className="block max-w-[200px] w-auto h-auto"
+                            onClick={() => setLightboxUrl(m.media_url)}
+                            className="block max-w-[200px] w-auto h-auto cursor-pointer active:opacity-90"
                             style={{ borderRadius: 12, maxHeight: 260, objectFit: 'cover' }}
                             loading="lazy"
                           />
@@ -805,7 +807,8 @@ export default function Chat() {
                             <img
                               src={m.media_url}
                               alt={m.media_name || 'photo'}
-                              className="block w-full h-auto"
+                              onClick={() => setLightboxUrl(m.media_url)}
+                              className="block w-full h-auto cursor-pointer active:opacity-90"
                               style={{ borderRadius: 12, maxHeight: 240, objectFit: 'cover' }}
                               loading="lazy"
                             />
@@ -1094,6 +1097,38 @@ export default function Chat() {
           onClose={() => setForwardingMsg(null)}
           onForwarded={() => {}}
         />
+      )}
+
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-[600] bg-black/95 grid place-items-center"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            onClick={() => setLightboxUrl(null)}
+            className="absolute top-4 right-4 w-10 h-10 rounded-full grid place-items-center bg-white/10 text-white"
+            aria-label="Close"
+          >
+            <X size={20} strokeWidth={2.4} />
+          </button>
+          <img
+            src={lightboxUrl}
+            alt=""
+            className="max-w-full max-h-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <a
+            href={lightboxUrl}
+            download
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="absolute bottom-8 left-1/2 -translate-x-1/2 h-11 px-5 rounded-full text-white font-bold text-[13.5px] inline-flex items-center gap-2"
+            style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
+          >
+            Save / Open
+          </a>
+        </div>
       )}
 
       {attachMenuOpen && (
