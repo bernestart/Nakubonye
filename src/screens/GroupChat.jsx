@@ -8,6 +8,7 @@ import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 import BrandGlow from "../components/BrandGlow"
 import InviteLinkSheet from "../components/InviteLinkSheet"
+import MessageActionsSheet from "../components/MessageActionsSheet"
 import Linkify from "../components/chat/Linkify"
 import AudioBubble from "../components/chat/AudioBubble"
 import EmojiPicker from "../components/chat/EmojiPicker"
@@ -37,6 +38,13 @@ export default function GroupChat() {
   const [inviteOpen, setInviteOpen] = useState(false)
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [lightboxUrl, setLightboxUrl] = useState(null)
+  const [replyingTo, setReplyingTo] = useState(null)
+  const [reactions, setReactions] = useState({})
+  const [actionsForMsg, setActionsForMsg] = useState(null)
+  const [reactionPickerFor, setReactionPickerFor] = useState(null)
+  const [heartBurstId, setHeartBurstId] = useState(null)
+  const longPressTimer = useRef(null)
+  const lastTapRef = useRef({ id: null, time: 0 })
   const voice = useVoiceRecorder({ maxSeconds: 300 })
   const [isMuted, setIsMuted] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -138,6 +146,25 @@ export default function GroupChat() {
     if (el) el.scrollTop = el.scrollHeight
   }, [messages.length])
 
+  // Load reactions for visible messages
+  useEffect(() => {
+    if (!messages.length) return
+    const ids = messages.filter((m) => !m.is_system).map((m) => m.id)
+    if (!ids.length) return
+    ;(async () => {
+      const { data } = await supabase
+        .from("group_message_reactions")
+        .select("message_id, user_id, reaction")
+        .in("message_id", ids)
+      const byMsg = {}
+      ;(data || []).forEach((r) => {
+        byMsg[r.message_id] = byMsg[r.message_id] || []
+        byMsg[r.message_id].push({ user_id: r.user_id, reaction: r.reaction })
+      })
+      setReactions(byMsg)
+    })()
+  }, [messages])
+
   function pickAttachment(e) {
     const f = e.target.files?.[0]
     if (!f) return
@@ -222,6 +249,8 @@ export default function GroupChat() {
       content: body || "",
     }
     if (mediaUrl) { payload.media_url = mediaUrl; payload.media_type = mediaType; payload.media_name = mediaName }
+    if (replyingTo?.id) payload.reply_to_id = replyingTo.id
+    setReplyingTo(null)
 
     setText(""); clearAttachment()
 
@@ -254,6 +283,55 @@ export default function GroupChat() {
       await supabase.from("group_mutes").insert({ group_id: groupId, user_id: myId })
       setIsMuted(true)
     }
+  }
+
+  async function toggleReaction(messageId, emoji) {
+    if (!myId) return
+    tap("light")
+    const current = (reactions[messageId] || []).find((r) => r.user_id === myId)
+    if (current?.reaction === emoji) {
+      await supabase.from("group_message_reactions").delete().eq("message_id", messageId).eq("user_id", myId)
+    } else if (current) {
+      await supabase.from("group_message_reactions").update({ reaction: emoji }).eq("message_id", messageId).eq("user_id", myId)
+    } else {
+      await supabase.from("group_message_reactions").insert({ message_id: messageId, user_id: myId, reaction: emoji })
+    }
+    setReactionPickerFor(null)
+    const { data } = await supabase.from("group_message_reactions").select("message_id, user_id, reaction").eq("message_id", messageId)
+    setReactions((prev) => {
+      const next = { ...prev }
+      next[messageId] = (data || []).map((r) => ({ user_id: r.user_id, reaction: r.reaction }))
+      return next
+    })
+  }
+
+  function onMsgPressStart(m) {
+    longPressTimer.current = setTimeout(() => {
+      tap("medium")
+      setActionsForMsg(m)
+    }, 450)
+  }
+
+  function onMsgPressEnd() {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }
+
+  function onRowTap(m) {
+    const now = Date.now()
+    const last = lastTapRef.current
+    const isDouble = last.id === m.id && (now - last.time) < 300
+    if (isDouble) {
+      lastTapRef.current = { id: null, time: 0 }
+      tap("medium")
+      toggleReaction(m.id, "❤️")
+      setHeartBurstId(m.id)
+      setTimeout(() => setHeartBurstId((cur) => cur === m.id ? null : cur), 900)
+      return
+    }
+    lastTapRef.current = { id: m.id, time: now }
   }
 
   async function leaveGroup() {
@@ -361,7 +439,14 @@ export default function GroupChat() {
                     </span>
                   </div>
                 )}
-                <div className={`flex gap-2 ${mine ? "justify-end" : "justify-start"}`}>
+                <div
+                  onTouchStart={() => onMsgPressStart(m)}
+                  onTouchEnd={onMsgPressEnd}
+                  onTouchMove={onMsgPressEnd}
+                  onContextMenu={(e) => { e.preventDefault(); setActionsForMsg(m) }}
+                  onClick={() => onRowTap(m)}
+                  className={`flex gap-2 ${mine ? "justify-end" : "justify-start"} relative`}
+                >
                   {!mine && (
                     <div className="w-8 shrink-0 flex flex-col justify-end">
                       {showSenderHeader && (
@@ -381,6 +466,24 @@ export default function GroupChat() {
                     {showSenderHeader && !mine && (
                       <p className="text-[11px] text-muted font-semibold mb-0.5 px-1 truncate">{senderName}</p>
                     )}
+                    {m.reply_to_id && (() => {
+                      const parent = messages.find((x) => x.id === m.reply_to_id)
+                      if (!parent) return null
+                      const pName = parent.sender_id === myId ? "You" : (profiles.get(parent.sender_id)?.display_name || "Someone")
+                      return (
+                        <div className={`mb-1 px-3 py-1.5 rounded-xl text-[11.5px] border-l-2 ${mine ? "bg-purple-500/15 border-purple-300 text-purple-100" : "bg-white/5 border-white/30 text-muted"}`}>
+                          <span className="font-bold block text-[10px] tracking-wide">{pName}</span>
+                          <span className="truncate block">{parent.content || "📎 Attachment"}</span>
+                        </div>
+                      )
+                    })()}
+
+                    {heartBurstId === m.id && (
+                      <div className="absolute inset-0 grid place-items-center pointer-events-none" style={{ zIndex: 20 }}>
+                        <span className="text-[44px] leading-none animate-ping">❤️</span>
+                      </div>
+                    )}
+
                     <div
                       className={`relative group ${
                         deleted
@@ -424,6 +527,40 @@ export default function GroupChat() {
                         </button>
                       )}
                     </div>
+
+                    {(reactions[m.id] || []).length > 0 && (
+                      <div className={`flex gap-0.5 mt-1 ${mine ? "justify-end" : "justify-start"} flex-wrap`}>
+                        {Object.entries(
+                          (reactions[m.id] || []).reduce((acc, r) => { acc[r.reaction] = (acc[r.reaction] || 0) + 1; return acc }, {})
+                        ).map(([emoji, count]) => {
+                          const myReact = (reactions[m.id] || []).find((r) => r.user_id === myId)
+                          const isMineReaction = myReact?.reaction === emoji
+                          return (
+                            <button
+                              key={emoji}
+                              onClick={() => toggleReaction(m.id, emoji)}
+                              className={`text-[11px] px-1.5 py-0.5 rounded-full border ${isMineReaction ? "bg-purple-500/20 border-purple-400/40" : "bg-white/[0.04] border-white/10"}`}
+                            >
+                              {emoji} {count > 1 ? count : ""}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {reactionPickerFor === m.id && (
+                      <div className={`flex gap-1 mt-1 p-1.5 rounded-full bg-elevated border border-white/10 ${mine ? "justify-end ml-auto" : ""} w-fit`}>
+                        {["❤️","😂","😍","👍","🔥","😮"].map((e) => (
+                          <button
+                            key={e}
+                            onClick={() => toggleReaction(m.id, e)}
+                            className="w-7 h-7 rounded-full grid place-items-center text-base hover:bg-white/10"
+                          >
+                            {e}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -439,6 +576,33 @@ export default function GroupChat() {
             <X size={13} strokeWidth={2.6} className="text-cream" />
           </button>
         </div>
+      )}
+
+      {replyingTo && (
+        <div className="shrink-0 mx-3 mb-2 px-3 py-2 rounded-xl bg-elevated border border-purple-500/30 flex items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <p className="text-purple-300 text-[10.5px] font-bold tracking-wide uppercase mb-0.5">
+              Replying to {replyingTo.sender_id === myId ? "yourself" : (profiles.get(replyingTo.sender_id)?.display_name || "Someone")}
+            </p>
+            <p className="text-muted text-[12px] truncate">{replyingTo.content || "📎 Attachment"}</p>
+          </div>
+          <button onClick={() => setReplyingTo(null)} className="w-6 h-6 rounded-full grid place-items-center text-muted shrink-0" aria-label="Cancel">
+            <X size={14} strokeWidth={2.4} />
+          </button>
+        </div>
+      )}
+
+      {actionsForMsg && (
+        <MessageActionsSheet
+          message={actionsForMsg}
+          isMine={actionsForMsg.sender_id === myId}
+          onClose={() => setActionsForMsg(null)}
+          onReply={(m) => setReplyingTo(m)}
+          onCopy={async () => { try { await navigator.clipboard.writeText(actionsForMsg.content || ""); setActionsForMsg(null) } catch {} }}
+          onForward={(m) => { setActionsForMsg(null); alert("Forward coming soon") }}
+          onDelete={deleteMessage}
+          onReact={(emoji) => toggleReaction(actionsForMsg.id, emoji)}
+        />
       )}
 
       {voice.recording && (
