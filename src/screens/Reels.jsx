@@ -12,6 +12,13 @@ import ReelComments from "../components/ReelComments"
 import ReelActionsSheet from "../components/ReelActionsSheet"
 import FollowButton from "../components/FollowButton"
 
+function fypScore(reel) {
+  const views = Number(reel.view_count) || 0
+  const hours = (Date.now() - new Date(reel.created_at).getTime()) / (1000 * 60 * 60)
+  // Hacker News style decay: engagement grows, age decays
+  return (views + 1) / Math.pow(hours + 2, 1.5)
+}
+
 export default function Reels() {
   const nav = useNavigate()
   const { session } = useAuth()
@@ -87,7 +94,8 @@ export default function Reels() {
       if (feedTab === "following") return followSet.has(r.user_id) || r.user_id === myId
       return true
     })
-    setReels(list)
+    const ranked = feedTab === "foryou" ? [...list].sort((a, b) => fypScore(b) - fypScore(a)) : list
+    setReels(ranked)
     setCursor(list.length > 0 ? list[list.length - 1].created_at : null)
     setHasMore((rows || []).length >= 50)
     loadingMoreRef.current = false
