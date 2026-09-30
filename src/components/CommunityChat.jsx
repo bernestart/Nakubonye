@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Send, Sparkles, Paperclip, Camera, X , Mic, Square , Pin } from 'lucide-react'
+import { Send, Sparkles, Paperclip, Camera, X , Mic, Square , Pin , MoreVertical , Eraser , Bell, BellOff } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl } from '../lib/photo'
@@ -20,7 +20,7 @@ function isWithinUnsendWindow(createdAt) {
   return Date.now() - new Date(createdAt).getTime() < UNSEND_WINDOW_MS
 }
 
-export default function CommunityChat({ communityId, isMember, isPremium }) {
+export default function CommunityChat({ communityId, isMember, isPremium, communityName }) {
   const nav = useNavigate()
   const { session } = useAuth()
 
@@ -44,6 +44,9 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
   const [reactionPickerFor, setReactionPickerFor] = useState(null)
   const [heartBurstId, setHeartBurstId] = useState(null)
   const [pinnedMsg, setPinnedMsg] = useState(null)
+  const [clearedAt, setClearedAt] = useState(null)
+  const [isMuted, setIsMuted] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const [forwardingMsg, setForwardingMsg] = useState(null)
   const longPressTimer = useRef(null)
   const swipeRef = useRef({ id: null, startX: 0, dx: 0, active: false })
@@ -58,6 +61,13 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
   const load = useCallback(async () => {
     if (!myId || !communityId) return
     setLoading(true); setError('')
+
+    const [clearRes, muteRes] = await Promise.all([
+      supabase.from("community_clears").select("cleared_at").eq("community_id", communityId).eq("user_id", myId).maybeSingle(),
+      supabase.from("community_mutes").select("community_id").eq("community_id", communityId).eq("user_id", myId).maybeSingle(),
+    ])
+    setClearedAt(clearRes.data?.cleared_at || null)
+    setIsMuted(!!muteRes.data)
 
     const { data: rows, error: err } = await supabase
       .from('community_messages')
@@ -412,6 +422,30 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
     }
   }
 
+  async function clearChat() {
+    if (!communityId || !myId) return
+    if (!confirm("Clear this chat? Messages will be hidden for you only.")) return
+    tap("light")
+    const now = new Date().toISOString()
+    await supabase.from("community_clears").upsert(
+      { community_id: communityId, user_id: myId, cleared_at: now },
+      { onConflict: "community_id,user_id" }
+    )
+    setClearedAt(now)
+  }
+
+  async function toggleMute() {
+    if (!communityId || !myId) return
+    tap("light")
+    if (isMuted) {
+      await supabase.from("community_mutes").delete().eq("community_id", communityId).eq("user_id", myId)
+      setIsMuted(false)
+    } else {
+      await supabase.from("community_mutes").insert({ community_id: communityId, user_id: myId })
+      setIsMuted(true)
+    }
+  }
+
   if (!isMember) {
     return (
       <div className="text-center py-12">
@@ -434,8 +468,53 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
     return -1
   })()
 
+  const visibleMessages = clearedAt
+    ? messages.filter((m) => new Date(m.created_at) > new Date(clearedAt))
+    : messages
+
   return (
     <div className="flex flex-col" style={{ minHeight: '400px' }}>
+      <div className="flex items-center justify-between mb-2 pb-2 border-b border-white/8">
+        <p className="text-cream font-bold text-[13.5px] truncate">
+          {communityName ? communityName + " · Chat" : "Chat"}
+        </p>
+        <button
+          onClick={() => { tap("light"); setMenuOpen(true) }}
+          className="w-8 h-8 rounded-full grid place-items-center text-muted shrink-0"
+          aria-label="Chat menu"
+        >
+          <MoreVertical size={18} />
+        </button>
+      </div>
+
+      {menuOpen && (
+        <div className="fixed inset-0 z-[500] flex items-end" onClick={() => setMenuOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
+            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+          >
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
+            <button
+              onClick={() => { setMenuOpen(false); toggleMute() }}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+            >
+              {isMuted ? <Bell size={18} /> : <BellOff size={18} />}
+              <span className="font-semibold text-[14px]">{isMuted ? "Unmute notifications" : "Mute notifications"}</span>
+            </button>
+            <button
+              onClick={() => { setMenuOpen(false); clearChat() }}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+            >
+              <Eraser size={18} />
+              <span className="font-semibold text-[14px]">Clear chat</span>
+            </button>
+            <button onClick={() => setMenuOpen(false)} className="w-full h-11 mt-1 text-muted font-semibold text-[13.5px]">Cancel</button>
+          </div>
+        </div>
+      )}
+
       {error && (
         <div className="text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5 mb-3">
           {error}
@@ -473,13 +552,13 @@ export default function CommunityChat({ communityId, isMember, isPremium }) {
           <div className="grid place-items-center h-40 text-muted text-[13px]">
             Loading messages…
           </div>
-        ) : messages.length === 0 ? (
+        ) : visibleMessages.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-cream font-semibold text-[14.5px] mb-1">No messages yet</p>
             <p className="text-muted text-[12.5px]">Say hello to the community.</p>
           </div>
         ) : (
-          messages.map((m, i) => {
+          visibleMessages.map((m, i) => {
             const mine = m.sender_id === myId
             const p = profiles.get(m.sender_id)
             const photo = photos.get(m.sender_id)

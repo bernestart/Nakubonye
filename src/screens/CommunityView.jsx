@@ -254,7 +254,7 @@ export default function CommunityView() {
             {tab === 'feed' ? (
               <FeedErrorBoundary><CommunityFeed communityId={community.id} isMember={joined} /></FeedErrorBoundary>
             ) : tab === 'chat' ? (
-              <CommunityChat communityId={community.id} isMember={joined} isPremium={isPremium} />
+              <CommunityChat communityId={community.id} isMember={joined} isPremium={isPremium} communityName={community.name} />
             ) : (
               <>
                 <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-3">
