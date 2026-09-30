@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { MessageCircle, RefreshCw, PenSquare, BellOff, Search, X , Users , MoreVertical , Archive, Inbox, CheckCheck } from 'lucide-react'
+import { MessageCircle, RefreshCw, PenSquare, BellOff, Search, X , Users , MoreVertical , Archive, Inbox, CheckCheck , Flag, Ban } from 'lucide-react'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -24,6 +24,10 @@ export default function Messages() {
   const [newGroupOpen, setNewGroupOpen] = useState(false)
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
   const [tabFilter, setTabFilter] = useState("all")
+  const [rowMenuFor, setRowMenuFor] = useState(null)
+  const [reportRowFor, setReportRowFor] = useState(null)
+  const rowPressTimer = useRef(null)
+  const rowPressTriggered = useRef(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [error, setError] = useState('')
   const [pullDistance, setPullDistance] = useState(0)
@@ -327,6 +331,58 @@ export default function Messages() {
     setRefreshing(false)
   }
 
+  async function markRowRead(item) {
+    tap("light")
+    const uid = session?.user?.id
+    if (!uid) return
+    const now = new Date().toISOString()
+    if (item.isGroup) {
+      await supabase.from("group_reads").upsert(
+        { group_id: item.groupId, user_id: uid, last_read_at: now },
+        { onConflict: "group_id,user_id" }
+      )
+    } else if (item.conversationId) {
+      await supabase.from("conversation_reads").upsert(
+        { conversation_id: item.conversationId, user_id: uid, last_read_at: now },
+        { onConflict: "conversation_id,user_id" }
+      )
+    }
+    setRowMenuFor(null)
+    load()
+  }
+
+  async function toggleRowMute(item) {
+    tap("light")
+    const uid = session?.user?.id
+    if (!uid) return
+    if (item.isGroup) {
+      if (item.muted) {
+        await supabase.from("group_mutes").delete().eq("group_id", item.groupId).eq("user_id", uid)
+      } else {
+        await supabase.from("group_mutes").insert({ group_id: item.groupId, user_id: uid })
+      }
+    } else if (item.conversationId) {
+      if (item.muted) {
+        await supabase.from("conversation_mutes").delete().eq("conversation_id", item.conversationId).eq("user_id", uid)
+      } else {
+        await supabase.from("conversation_mutes").insert({ conversation_id: item.conversationId, user_id: uid })
+      }
+    }
+    setRowMenuFor(null)
+    load()
+  }
+
+  async function blockRow(item) {
+    if (item.isGroup) return
+    if (!confirm("Block " + (item.display_name || "this user") + "? They won't be able to message you.")) return
+    tap("medium")
+    const uid = session?.user?.id
+    if (!uid) return
+    await supabase.from("blocks").insert({ blocker_id: uid, blocked_id: item.userId })
+    setRowMenuFor(null)
+    load()
+  }
+
   const combined = [...groupItems, ...items].sort((a, b) =>
     new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0)
   )
@@ -555,15 +611,29 @@ export default function Messages() {
         ) : (
           <div className="flex flex-col gap-1 pt-1">
             {visibleItems.map((item) => (
-              <motion.button
+              <div
                 key={item.userId}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => {
-                  tap('light')
-                  if (item.isGroup) nav('/groups/' + item.groupId)
-                  else nav('/messages/' + item.userId)
+                onTouchStart={() => {
+                  rowPressTriggered.current = false
+                  rowPressTimer.current = setTimeout(() => {
+                    rowPressTriggered.current = true
+                    tap("medium")
+                    setRowMenuFor(item)
+                  }, 500)
                 }}
-                className="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/[0.03] transition-colors text-left"
+                onTouchEnd={() => {
+                  clearTimeout(rowPressTimer.current)
+                  if (!rowPressTriggered.current) {
+                    tap('light')
+                    if (item.isGroup) nav('/groups/' + item.groupId)
+                    else nav('/messages/' + item.userId)
+                  }
+                }}
+                onTouchMove={() => {
+                  clearTimeout(rowPressTimer.current)
+                }}
+                onContextMenu={(e) => { e.preventDefault(); setRowMenuFor(item) }}
+                className="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/[0.03] transition-colors text-left active:opacity-90 cursor-pointer"
               >
                 <div className="relative shrink-0">
                   <div className="w-14 h-14 rounded-full overflow-hidden bg-elevated border border-white/8">
@@ -607,11 +677,73 @@ export default function Messages() {
                     <span className="w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_8px_rgba(236,72,153,0.8)]" />
                   )}
                 </div>
-              </motion.button>
+              </div>
             ))}
           </div>
         )}
       </div>
+
+      {rowMenuFor && (
+        <div className="fixed inset-0 z-[500] flex items-end" onClick={() => setRowMenuFor(null)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
+            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+          >
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
+            <p className="text-cream font-bold text-[15px] mb-2 truncate">
+              {rowMenuFor.display_name || rowMenuFor.username || "Chat"}
+            </p>
+
+            <button
+              onClick={() => markRowRead(rowMenuFor)}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+            >
+              <CheckCheck size={18} />
+              <span className="font-semibold text-[14px]">Mark as read</span>
+            </button>
+
+            <button
+              onClick={() => toggleRowMute(rowMenuFor)}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+            >
+              {rowMenuFor.muted ? <Bell size={18} /> : <BellOff size={18} />}
+              <span className="font-semibold text-[14px]">{rowMenuFor.muted ? "Unmute" : "Mute notifications"}</span>
+            </button>
+
+            <button
+              onClick={() => { setReportRowFor(rowMenuFor); setRowMenuFor(null) }}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+            >
+              <Flag size={18} />
+              <span className="font-semibold text-[14px]">Report</span>
+            </button>
+
+            {!rowMenuFor.isGroup && (
+              <button
+                onClick={() => blockRow(rowMenuFor)}
+                className="w-full flex items-center gap-3 p-4 rounded-2xl bg-danger/10 border border-danger/30 text-left text-danger"
+              >
+                <Ban size={18} />
+                <span className="font-semibold text-[14px]">Block</span>
+              </button>
+            )}
+
+            <button onClick={() => setRowMenuFor(null)} className="w-full h-11 mt-1 text-muted font-semibold text-[13.5px]">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {reportRowFor && (
+        <ReportModal
+          open={!!reportRowFor}
+          onClose={() => setReportRowFor(null)}
+          target={reportRowFor.isGroup
+            ? { id: reportRowFor.groupId, name: reportRowFor.display_name, isGroup: true }
+            : { id: reportRowFor.userId, display_name: reportRowFor.display_name, username: reportRowFor.username }}
+        />
+      )}
 
       <div style={{ height: 72, flexShrink: 0 }} />
       {newMsgOpen && (
