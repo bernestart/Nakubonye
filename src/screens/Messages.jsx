@@ -30,6 +30,7 @@ export default function Messages() {
   const openRowKeyRef = useRef(null)
   const [pinnedKeys, setPinnedKeys] = useState(new Set())
   const [archivedKeys, setArchivedKeys] = useState(new Set())
+  const [onlineUsers, setOnlineUsers] = useState([])
   const [reportRowFor, setReportRowFor] = useState(null)
   const rowPressTimer = useRef(null)
   const rowPressTriggered = useRef(false)
@@ -652,6 +653,41 @@ export default function Messages() {
            onTouchStart={onTouchStart}
            onTouchMove={onTouchMove}
            onTouchEnd={onTouchEnd}>
+        {/* Active now — horizontal strip */}
+        {!loading && tabFilter === "all" && !searchQuery.trim() && onlineUsers.length > 0 && (
+          <div className="mb-3">
+            <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2 px-1">
+              Active now
+            </p>
+            <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+              {onlineUsers.slice(0, 15).map((u) => (
+                <button
+                  key={u.id}
+                  onClick={() => { tap("light"); nav("/messages/" + u.id) }}
+                  className="shrink-0 flex flex-col items-center gap-1.5 active:opacity-80"
+                  style={{ width: 64 }}
+                >
+                  <div className="relative">
+                    <div className="w-14 h-14 rounded-full overflow-hidden bg-elevated border-2 border-emerald-400/70">
+                      {u.photo_url ? (
+                        <img src={u.photo_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full grid place-items-center text-purple-400 font-black text-lg">
+                          {(u.display_name || u.username || "?")[0]}
+                        </div>
+                      )}
+                    </div>
+                    <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-[#0B0B14]" />
+                  </div>
+                  <span className="text-cream text-[11px] font-semibold truncate w-full text-center">
+                    {(u.display_name || u.username || "User").split(" ")[0]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex flex-col gap-1 pt-2 animate-pulse">
             {[0,1,2,3,4,5].map((i) => (
