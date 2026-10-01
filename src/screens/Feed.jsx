@@ -33,8 +33,6 @@ export default function Feed() {
   const [commentsFor, setCommentsFor] = useState(null)
   const [actionsFor, setActionsFor] = useState(null)
   const [suggested, setSuggested] = useState([])
-  const [trending, setTrending] = useState([])
-  const [trendingLabel, setTrendingLabel] = useState("Trending")
   const [composerChooserOpen, setComposerChooserOpen] = useState(false)
   const [postComposerOpen, setPostComposerOpen] = useState(false)
   const [pendingPosts, setPendingPosts] = useState([])
@@ -180,40 +178,6 @@ export default function Feed() {
       created_at: r.created_at,
       _source: "service",
     }))
-
-    // 3c-bis. Trending — top reels by views in last 24h
-    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-    const { data: trendingRows } = await supabase
-      .from("reels")
-      .select("id, user_id, caption, video_url, thumbnail_url, view_count, like_count, created_at")
-      .eq("is_active", true)
-      .eq("audience", "public")
-      .gt("created_at", dayAgo)
-      .order("view_count", { ascending: false })
-      .limit(6)
-
-    let trendingList = (trendingRows || []).filter((r) => r.user_id !== myId)
-
-    // If not enough in last 24h, fall back to last 7 days
-    if (trendingList.length < 3) {
-      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-      const { data: weekRows } = await supabase
-        .from("reels")
-        .select("id, user_id, caption, video_url, thumbnail_url, view_count, like_count, created_at")
-        .eq("is_active", true)
-        .eq("audience", "public")
-        .gt("created_at", weekAgo)
-        .order("view_count", { ascending: false })
-        .limit(6)
-      trendingList = (weekRows || []).filter((r) => r.user_id !== myId)
-    }
-
-    setTrending(trendingList)
-
-    // City label
-    if (profile?.city) setTrendingLabel("Trending in " + profile.city)
-    else setTrendingLabel("Trending today")
-
 
     // 3d. Load my hidden post IDs and filter them out
     const { data: hideRows } = await supabase
@@ -826,68 +790,28 @@ export default function Feed() {
               <StoriesRow />
             </div>
 
-            {/* TRENDING RAIL */}
-            {trending.length > 0 && (
-              <div className="mb-3">
-                <div className="flex items-center justify-between mb-2 px-1">
-                  <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase flex items-center gap-1">
-                    🔥 {trendingLabel}
-                  </p>
-                  <button
-                    onClick={() => { tap("light"); nav("/reels") }}
-                    className="text-purple-300 text-[12px] font-bold"
-                  >
-                    See all →
-                  </button>
-                </div>
-                <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-                  {trending.map((r, i) => (
-                    <button
-                      key={r.id}
-                      onClick={() => { tap("light"); nav("/reels") }}
-                      className="shrink-0 relative rounded-xl overflow-hidden bg-black"
-                      style={{ width: 104, height: 156 }}
-                    >
-                      {r.thumbnail_url ? (
-                        <img
-                          src={r.thumbnail_url}
-                          alt=""
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <video
-                          src={r.video_url}
-                          muted
-                          playsInline
-                          preload="metadata"
-                          className="w-full h-full object-cover"
-                        />
-                      )}
-                      <span className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full grid place-items-center text-white text-[11px] font-black"
-                            style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}>
-                        {i + 1}
-                      </span>
-                      <span className="absolute bottom-1.5 left-1.5 right-1.5 text-white text-[10px] font-semibold truncate" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.9)" }}>
-                        {r.view_count || 0} views
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
           </>
         )}
 
         {loading ? (
-          <div className="grid place-items-center h-40 text-muted text-[13px]">Loading feed…</div>
+          <div className="flex flex-col gap-2 pt-1">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="rounded-xl bg-white/[0.03] border border-white/8 p-3 animate-pulse">
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="w-9 h-9 rounded-full bg-white/[0.06]" />
+                  <div className="flex-1">
+                    <div className="h-3 w-1/3 rounded bg-white/[0.08] mb-1.5" />
+                    <div className="h-2.5 w-1/4 rounded bg-white/[0.05]" />
+                  </div>
+                </div>
+                <div className="h-48 rounded-xl bg-white/[0.05]" />
+              </div>
+            ))}
+          </div>
         ) : posts.length === 0 ? (
           <EmptyFeed
             nav={nav}
             suggested={suggested}
-            trending={trending}
-            trendingLabel={trendingLabel}
             myId={myId}
           />
         ) : (
