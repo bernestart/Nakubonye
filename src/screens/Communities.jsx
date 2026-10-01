@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Check, Plus, Users } from 'lucide-react'
+import { ArrowLeft, Check, Plus, Users , Search , X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { tap } from '../lib/haptic'
@@ -15,6 +15,8 @@ export default function Communities() {
   const [communities, setCommunities] = useState([])
   const [myIds, setMyIds] = useState(new Set())
   const [busyId, setBusyId] = useState(null)
+  const [tabFilter, setTabFilter] = useState("discover")
+  const [search, setSearch] = useState("")
 
   const load = useCallback(async () => {
     if (!session?.user?.id) return
@@ -84,6 +86,19 @@ export default function Communities() {
 
   const joinedCount = myIds.size
 
+  const filtered = communities.filter((c) => {
+    if (tabFilter === "mine" && !myIds.has(c.id)) return false
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      const matchName = (c.name || "").toLowerCase().includes(q)
+      const matchDesc = (c.description || "").toLowerCase().includes(q)
+      if (!matchName && !matchDesc) return false
+    }
+    return true
+  })
+
+  const showHero = tabFilter === "discover" && !search.trim() && communities.length > 0
+
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -114,24 +129,65 @@ export default function Communities() {
           </div>
         )}
 
-        <div className="text-center mb-6">
-          <div
-            className="w-16 h-16 rounded-3xl grid place-items-center mx-auto mb-4"
-            style={{
-              background: 'linear-gradient(135deg, #A855F7 0%, #EC4899 100%)',
-              boxShadow: '0 12px 36px rgba(168,85,247,0.5)',
-            }}
-          >
-            <Users size={28} strokeWidth={2.2} className="text-white" />
-          </div>
-          <h1 className="text-cream text-[22px] font-extrabold tracking-tight mb-1.5">
-            Find your people
-          </h1>
-          <p className="text-muted text-[13.5px] leading-relaxed max-w-[320px] mx-auto">
-            Join communities that match your vibe. Members see each other's profiles on your profile page.
-            {joinedCount > 0 && <> You're in <strong className="text-cream">{joinedCount}</strong>.</>}
-          </p>
+        {/* Search bar */}
+        <div className="flex items-center gap-2 rounded-2xl bg-surface border border-white/8 px-3.5 h-11 mb-3">
+          <Search size={16} className="text-muted shrink-0" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value.slice(0, 60))}
+            placeholder="Search communities…"
+            className="flex-1 bg-transparent border-0 text-cream text-[14px] placeholder:text-subtle focus:outline-none"
+          />
+          {search && (
+            <button onClick={() => setSearch("")} className="text-muted shrink-0" aria-label="Clear">
+              <X size={14} />
+            </button>
+          )}
         </div>
+
+        {/* Tabs */}
+        <div className="flex gap-2 mb-5">
+          {[
+            { id: "discover", label: "Discover" },
+            { id: "mine",     label: "My communities" },
+          ].map((t) => (
+            <button
+              key={t.id}
+              onClick={() => { tap("light"); setTabFilter(t.id) }}
+              className="flex-1 h-9 rounded-xl text-[13px] font-bold transition-colors"
+              style={{
+                background: tabFilter === t.id
+                  ? "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)"
+                  : "rgba(255,255,255,0.04)",
+                border: tabFilter === t.id ? "none" : "1px solid rgba(255,255,255,0.08)",
+                color: tabFilter === t.id ? "#fff" : "#888",
+              }}
+            >
+              {t.label}
+              {t.id === "mine" && joinedCount > 0 ? " · " + joinedCount : ""}
+            </button>
+          ))}
+        </div>
+
+        {showHero && (
+          <div className="text-center mb-6">
+            <div
+              className="w-16 h-16 rounded-3xl grid place-items-center mx-auto mb-4"
+              style={{
+                background: 'linear-gradient(135deg, #A855F7 0%, #EC4899 100%)',
+                boxShadow: '0 12px 36px rgba(168,85,247,0.5)',
+              }}
+            >
+              <Users size={28} strokeWidth={2.2} className="text-white" />
+            </div>
+            <h1 className="text-cream text-[22px] font-extrabold tracking-tight mb-1.5">
+              Find your people
+            </h1>
+            <p className="text-muted text-[13.5px] leading-relaxed max-w-[320px] mx-auto">
+              Join communities that match your vibe. Members see each other's profiles on your profile page.
+            </p>
+          </div>
+        )}
 
         {loading ? (
           <div className="flex flex-col gap-2.5 animate-pulse">
@@ -147,8 +203,29 @@ export default function Communities() {
             ))}
           </div>
         ) : (
+          filtered.length === 0 ? (
+            <div className="pt-12 text-center px-6">
+              <div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/8 grid place-items-center mx-auto mb-4">
+                <Users size={26} className="text-muted" />
+              </div>
+              <p className="text-cream font-bold text-[15px] mb-1">
+                {search.trim()
+                  ? "No communities found"
+                  : tabFilter === "mine"
+                    ? "You haven't joined any"
+                    : "No communities yet"}
+              </p>
+              <p className="text-muted text-[13px] max-w-[260px] mx-auto leading-relaxed">
+                {search.trim()
+                  ? "Try a different search."
+                  : tabFilter === "mine"
+                    ? "Tap Discover to find one to join, or create your own."
+                    : "Create the first community."}
+              </p>
+            </div>
+          ) : (
           <div className="flex flex-col gap-2.5">
-            {communities.map((c) => {
+            {filtered.map((c) => {
               const joined = myIds.has(c.id)
               const busy = busyId === c.id
               return (
@@ -206,6 +283,7 @@ export default function Communities() {
               )
             })}
           </div>
+          )
         )}
 
         <p className="text-center text-subtle text-[11.5px] mt-8 leading-relaxed">
