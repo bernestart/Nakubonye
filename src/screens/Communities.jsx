@@ -97,7 +97,14 @@ export default function Communities() {
         <button onClick={() => nav(-1)} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Back">
           <ArrowLeft size={20} strokeWidth={2.3} />
         </button>
-        <span className="text-cream font-bold text-[15px]">Communities</span>
+        <span className="text-cream font-bold text-[15px] flex-1">Communities</span>
+        <button
+          onClick={() => { tap("light"); nav("/communities/new") }}
+          className="h-9 px-3 rounded-full text-white font-bold text-[13px] inline-flex items-center gap-1.5"
+          style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
+        >
+          <Plus size={15} strokeWidth={3} /> Create
+        </button>
       </header>
 
       <div className="flex-1 overflow-y-auto px-5 py-4 pb-10">
@@ -202,7 +209,7 @@ export default function Communities() {
         )}
 
         <p className="text-center text-subtle text-[11.5px] mt-8 leading-relaxed">
-          More communities are coming. Want to suggest one? WhatsApp us at <a href="https://wa.me/25765394084" target="_blank" rel="noopener" className="text-purple-300 font-semibold">+257 65 39 40 84</a>
+          Can't find your people? <button onClick={() => nav("/communities/new")} className="text-purple-300 font-semibold">Create a community</button>
         </p>
       </div>
     </div>

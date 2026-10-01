@@ -74,6 +74,7 @@ import Wallet from './screens/Wallet'
 import Premium from './screens/Premium'
 import Invite from './screens/Invite'
 import Communities from './screens/Communities'
+import CreateCommunity from './screens/CreateCommunity'
 import CommunityView from './screens/CommunityView'
 import EditCommunity from './screens/EditCommunity'
 import JoinCommunity from './screens/JoinCommunity'
@@ -249,6 +250,7 @@ export default function App() {
         <Route path="/premium" element={<Guard><Premium /></Guard>} />
         <Route path="/invite" element={<Guard><Invite /></Guard>} />
         <Route path="/communities" element={<Guard><Communities /></Guard>} />
+        <Route path="/communities/new" element={<Guard><CreateCommunity /></Guard>} />
         <Route path="/communities/:id" element={<Guard><CommunityView /></Guard>} />
         <Route path="/communities/:id/edit" element={<Guard><EditCommunity /></Guard>} />
         <Route path="/join-community/:code" element={<JoinCommunity />} />
