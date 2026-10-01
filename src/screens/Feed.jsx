@@ -11,6 +11,7 @@ import BottomNav from "../components/BottomNav"
 import NotificationBell from "../components/NotificationBell"
 import AppHeader from "../components/AppHeader"
 import StoriesRow from "../components/StoriesRow"
+import SuggestedPeople from "../components/SuggestedPeople"
 import PostCommentsSheet from "../components/PostCommentsSheet"
 import PostActionsSheet from "../components/PostActionsSheet"
 import FollowButton from "../components/FollowButton"
@@ -953,35 +954,7 @@ export default function Feed() {
                   </article>
 
                   {((idx + 1) % 4 === 0 || (idx === posts.length - 1 && posts.length < 4)) && suggested.length > 0 && (
-                    <div className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
-                      <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase px-3 pt-3 mb-2">
-                        People you may know
-                      </p>
-                      <div className="flex gap-3 overflow-x-auto px-3 pb-3" style={{ scrollbarWidth: "none" }}>
-                        {suggested.slice(0, 6).map((u) => (
-                          <button
-                            key={u.id}
-                            onClick={() => { tap("light"); nav("/profile/" + u.id) }}
-                            className="shrink-0 flex flex-col items-center gap-1.5"
-                            style={{ width: 92 }}
-                          >
-                            <span className="w-[72px] h-[72px] rounded-full overflow-hidden bg-elevated border-2 border-white/10">
-                              {u.photo_url ? (
-                                <img src={u.photo_url} alt="" className="w-full h-full object-cover" />
-                              ) : (
-                                <span className="w-full h-full grid place-items-center text-purple-400 font-black text-xl">
-                                  {(u.display_name || "?")[0]}
-                                </span>
-                              )}
-                            </span>
-                            <span className="text-cream text-[12px] font-semibold truncate w-full text-center">
-                              {u.display_name || u.username}
-                            </span>
-                            <span className="text-purple-300 text-[11px] font-bold">View</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                    <SuggestedPeople people={suggested} />
                   )}
                 </Fragment>
               )
