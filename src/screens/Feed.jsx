@@ -12,6 +12,7 @@ import NotificationBell from "../components/NotificationBell"
 import AppHeader from "../components/AppHeader"
 import StoriesRow from "../components/StoriesRow"
 import SuggestedPeople from "../components/SuggestedPeople"
+import PostImages from "../components/PostImages"
 import MatchModal from "../components/MatchModal"
 import PostCommentsSheet from "../components/PostCommentsSheet"
 import PostActionsSheet from "../components/PostActionsSheet"
@@ -85,7 +86,7 @@ export default function Feed() {
     if (myCommIds.length > 0) {
       const { data: rows, error: pErr } = await supabase
         .from("community_posts")
-        .select("id, community_id, author_id, content, image_path, created_at, pinned_until")
+        .select("id, community_id, author_id, content, image_path, image_paths, created_at, pinned_until")
         .in("community_id", myCommIds)
         .order("created_at", { ascending: false })
         .limit(20)
@@ -104,7 +105,7 @@ export default function Feed() {
 
     const { data: personalRows } = await supabase
       .from("user_posts")
-      .select("id, user_id, content, image_path, audience, created_at")
+      .select("id, user_id, content, image_path, image_paths, audience, created_at")
       .in("user_id", allowedUserIds)
       .eq("is_active", true)
       .order("created_at", { ascending: false })
@@ -361,7 +362,7 @@ export default function Feed() {
     if (myCommIds.length > 0) {
       const { data: rows } = await supabase
         .from("community_posts")
-        .select("id, community_id, author_id, content, image_path, created_at, pinned_until")
+        .select("id, community_id, author_id, content, image_path, image_paths, created_at, pinned_until")
         .in("community_id", myCommIds)
         .lt("created_at", cursor)
         .order("created_at", { ascending: false })
@@ -380,7 +381,7 @@ export default function Feed() {
 
     const { data: personalRows } = await supabase
       .from("user_posts")
-      .select("id, user_id, content, image_path, audience, created_at")
+      .select("id, user_id, content, image_path, image_paths, audience, created_at")
       .in("user_id", allowedUserIds)
       .eq("is_active", true)
       .lt("created_at", cursor)
@@ -1092,15 +1093,19 @@ export default function Feed() {
                   <p className="px-3 pb-3 text-cream text-[14px] leading-[1.5] whitespace-pre-wrap">{p.content}</p>
                 )}
 
-                {imageUrl && (
-                  <img
-                    src={imageUrl}
-                    alt=""
-                    className="w-full object-cover"
-                    style={{ maxHeight: "72vh" }}
-                    loading="lazy"
-                  />
-                )}
+                {(() => {
+                  const paths = Array.isArray(p.image_paths) && p.image_paths.length > 0
+                    ? p.image_paths
+                    : (p.image_path ? [p.image_path] : [])
+                  if (paths.length === 0) return null
+                  return (
+                    <PostImages
+                      paths={paths}
+                      bucket="community-media"
+                      onDoubleTap={() => toggleLike(p.id, p._source)}
+                    />
+                  )
+                })()}
 
                 {/* Engagement summary */}
                 {((reactionCounts.get(p.id) || 0) > 0 || (commentCounts.get(p.id) || 0) > 0) && (
