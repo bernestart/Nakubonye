@@ -12,6 +12,7 @@ import NotificationBell from "../components/NotificationBell"
 import AppHeader from "../components/AppHeader"
 import StoriesRow from "../components/StoriesRow"
 import SuggestedPeople from "../components/SuggestedPeople"
+import MatchModal from "../components/MatchModal"
 import PostCommentsSheet from "../components/PostCommentsSheet"
 import PostActionsSheet from "../components/PostActionsSheet"
 import FollowButton from "../components/FollowButton"
@@ -34,6 +35,7 @@ export default function Feed() {
   const [commentsFor, setCommentsFor] = useState(null)
   const [actionsFor, setActionsFor] = useState(null)
   const [suggested, setSuggested] = useState([])
+  const [matchModal, setMatchModal] = useState(null)
   const [composerChooserOpen, setComposerChooserOpen] = useState(false)
   const [postComposerOpen, setPostComposerOpen] = useState(false)
   const [pendingPosts, setPendingPosts] = useState([])
@@ -954,7 +956,7 @@ export default function Feed() {
                   </article>
 
                   {((idx + 1) % 4 === 0 || (idx === posts.length - 1 && posts.length < 4)) && suggested.length > 0 && (
-                    <SuggestedPeople people={suggested} />
+                    <SuggestedPeople people={suggested} onMatch={setMatchModal} />
                   )}
                 </Fragment>
               )
@@ -1289,12 +1291,21 @@ export default function Feed() {
         />
       )}
 
+      {matchModal && (
+        <MatchModal
+          me={profile}
+          them={matchModal}
+          onClose={() => setMatchModal(null)}
+          onMessage={() => { setMatchModal(null); nav('/messages/' + matchModal.id) }}
+        />
+      )}
+
       <BottomNav />
     </div>
   )
 }
 
-function EmptyFeed({ nav, suggested, trending, trendingLabel, myId }) {
+function EmptyFeed({ nav, suggested, myId }) {
   const [listings, setListings] = useState([])
   const [services, setServices] = useState([])
 
