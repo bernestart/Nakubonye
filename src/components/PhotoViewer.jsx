@@ -67,27 +67,44 @@ export default function PhotoViewer({ photo, currentUserId, onClose }) {
       const toAdd = selectedUsers.filter(
         (u) => !currentIds.has(u.id) && u.id !== currentUserId
       )
+
+      // Look up recipient tag-review settings in one query
+      let reviewMap = new Map()
+      if (toAdd.length > 0) {
+        const { data: settingsRows } = await supabase
+          .from("user_settings")
+          .select("user_id, tag_review_enabled")
+          .in("user_id", toAdd.map((u) => u.id))
+        ;(settingsRows || []).forEach((r) => reviewMap.set(r.user_id, r.tag_review_enabled === true))
+      }
+
       for (const u of toAdd) {
+        const requiresReview = reviewMap.get(u.id) === true
+        const status = requiresReview ? "pending" : "approved"
+
         const { error: tagErr } = await supabase.from("photo_tags").insert({
           photo_id: photo.id,
           tagged_user_id: u.id,
           tagger_id: currentUserId,
+          status,
         })
         if (tagErr) continue
+
         try {
           await supabase.from("notifications").insert({
             user_id: u.id,
             actor_id: currentUserId,
-            type: "photo_tag",
+            type: requiresReview ? "photo_tag_pending" : "photo_tag",
             ref_id: String(photo.id),
             ref_type: "photo",
-            body: "tagged you in a photo",
+            body: requiresReview
+              ? "tagged you in a photo — review needed"
+              : "tagged you in a photo",
           })
         } catch (e) {
           console.warn("photo tag notification failed", e)
         }
       }
-
       await loadTags()
     } catch (e) {
       setError(e.message || String(e))

@@ -100,6 +100,13 @@ export default function PrivacySettings() {
               onClick={() => openSheet('who_can_tag', 'Who can tag or mention me', TAG_LEVELS)}
             />
             <ToggleRow
+              icon={<AtSign size={18} />}
+              label="Tag review"
+              sub="Review tags people add before they appear on your profile"
+              value={settings.tag_review_enabled}
+              onChange={(v) => update({ tag_review_enabled: v })}
+            />
+            <ToggleRow
               icon={<Image size={18} />}
               label="Allow story replies"
               sub="People can reply to your stories"

@@ -39,7 +39,8 @@ export default function ProfilePhotos({ userId, onPhotoClick, emptySubtitle = "N
           .eq('user_id', userId),
         supabase.from('photo_tags')
           .select('photo_id, photos(id, user_id, storage_path, bucket, created_at)')
-          .eq('tagged_user_id', userId),
+          .eq('tagged_user_id', userId)
+          .eq('status', 'approved'),
       ])
 
       if (cancelled) return

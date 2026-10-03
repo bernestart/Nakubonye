@@ -49,6 +49,7 @@ import EditProfile from './screens/EditProfile'
 import Preview from './screens/Preview'
 import ProfileSettings from './screens/ProfileSettings'
 import PrivacySettings from './screens/PrivacySettings'
+import PendingTags from './screens/PendingTags'
 import Marketplace from './screens/Marketplace'
 import CreateGroup from './screens/CreateGroup'
 import GroupChat from './screens/GroupChat'
@@ -241,6 +242,7 @@ export default function App() {
         <Route path="/facebook-reward" element={<Guard><FacebookReward /></Guard>} />
         <Route path="/settings/security" element={<Guard><AccountSecurity /></Guard>} />
         <Route path="/settings/privacy" element={<Guard><PrivacySettings /></Guard>} />
+        <Route path="/settings/pending-tags" element={<Guard><PendingTags /></Guard>} />
         <Route path="/safety"   element={<Guard><SafetyCenter /></Guard>} />
         <Route path="/blocked"  element={<Guard><BlockedList /></Guard>} />
         <Route path="/profile/:userId" element={<Guard><ProfileView /></Guard>} />
