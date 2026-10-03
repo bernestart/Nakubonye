@@ -7,6 +7,65 @@ import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 import { mixFeed } from "../lib/mixFeed"
+
+// ─── Ranking signals ──────────────────────────────────────
+// Fetch my interaction history with post authors (last 90 days)
+// + my reel vs post affinity, so mixFeed can personalize ranking.
+async function fetchRankingSignals(myId) {
+  if (!myId) return { interactions: new Map(), reelAffinity: 1 }
+
+  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
+
+  // 1. My recent likes + comments on posts (need post_id, will resolve authors later)
+  const [postLikes, postComments, reelsLiked] = await Promise.all([
+    supabase.from("user_post_likes").select("post_id, created_at").eq("user_id", myId).gt("created_at", ninetyDaysAgo).limit(500),
+    supabase.from("user_post_comments").select("post_id, created_at").eq("user_id", myId).gt("created_at", ninetyDaysAgo).limit(500),
+    supabase.from("reel_likes").select("reel_id, created_at").eq("user_id", myId).gt("created_at", ninetyDaysAgo).limit(500),
+  ])
+
+  const postIds = [...new Set([
+    ...(postLikes.data || []).map((r) => r.post_id),
+    ...(postComments.data || []).map((r) => r.post_id),
+  ])].filter(Boolean)
+
+  // 2. Resolve post authors
+  const authorCounts = new Map()
+  if (postIds.length > 0) {
+    const { data: personal } = await supabase
+      .from("user_posts")
+      .select("id, user_id")
+      .in("id", postIds)
+    const { data: community } = await supabase
+      .from("community_posts")
+      .select("id, author_id")
+      .in("id", postIds)
+
+    const idToAuthor = new Map()
+    ;(personal || []).forEach((r) => idToAuthor.set(r.id, r.user_id))
+    ;(community || []).forEach((r) => idToAuthor.set(r.id, r.author_id))
+
+    // Increment per-author counts
+    const addAuthor = (pid) => {
+      const a = idToAuthor.get(pid)
+      if (!a) return
+      authorCounts.set(a, (authorCounts.get(a) || 0) + 1)
+    }
+    ;(postLikes.data || []).forEach((r) => addAuthor(r.post_id))
+    ;(postComments.data || []).forEach((r) => addAuthor(r.post_id))
+  }
+
+  // 3. Content affinity — reel ratio
+  const reelN = (reelsLiked.data || []).length
+  const postN = (postLikes.data || []).length + (postComments.data || []).length
+  const total = reelN + postN
+  // affinity is a number between 0.7 (strongly post-preferring) and 1.4 (strongly reel-preferring)
+  const reelAffinity = total < 5 ? 1 : Math.max(0.7, Math.min(1.4, 1 + (reelN - postN) / (total * 1.5)))
+
+  return {
+    interactions: authorCounts,
+    reelAffinity,
+  }
+}
 import BottomNav from "../components/BottomNav"
 import NotificationBell from "../components/NotificationBell"
 import AppHeader from "../components/AppHeader"
@@ -246,10 +305,13 @@ export default function Feed() {
 
     // 3f. Mix — ranked
     seenReelIds.current = new Set()
+    const rankingSignals = await fetchRankingSignals(myId)
     const scoreContextLoad = {
       myId,
       matchIds: new Set(matchIds),
       followIds: new Set(followIds),
+      interactions: rankingSignals.interactions,
+      reelAffinity: rankingSignals.reelAffinity,
     }
     const list = mixFeed({
       posts: enrichedPosts,
@@ -517,10 +579,13 @@ export default function Feed() {
     }))
     const enrichedReels = reelsSorted.map((r) => ({ ...r, _likeCount: 0, _commentCount: 0 }))
 
+    const rankingSignalsLM = await fetchRankingSignals(myId)
     const scoreContextLM = {
       myId,
       matchIds: new Set(matchIds),
       followIds: new Set(followIds),
+      interactions: rankingSignalsLM.interactions,
+      reelAffinity: rankingSignalsLM.reelAffinity,
     }
     const merged = mixFeed({
       posts: enrichedPosts,
