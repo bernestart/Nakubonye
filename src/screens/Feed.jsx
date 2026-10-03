@@ -558,23 +558,28 @@ export default function Feed() {
         .from("community_post_reactions")
         .select("post_id, user_id")
         .in("post_id", communityIds)
-      setMyReactions((prev) => {
-        const next = new Set(prev)
-        ;(reactRows || []).forEach((r) => { if (r.user_id === myId) next.add(r.post_id) })
-        return next
+      const freshReactions = new Map()
+      const freshMyReactions = new Set()
+      ;(reactRows || []).forEach((r) => {
+        freshReactions.set(r.post_id, (freshReactions.get(r.post_id) || 0) + 1)
+        if (r.user_id === myId) freshMyReactions.add(r.post_id)
       })
+      setMyReactions((prev) => new Set([...prev, ...freshMyReactions]))
       setReactionCounts((prev) => {
         const next = new Map(prev)
-        ;(reactRows || []).forEach((r) => next.set(r.post_id, (next.get(r.post_id) || 0) + 1))
+        freshReactions.forEach((c, pid) => next.set(pid, c))
         return next
       })
+
       const { data: commentRows } = await supabase
         .from("community_post_comments")
         .select("post_id")
         .in("post_id", communityIds)
+      const freshComments = new Map()
+      ;(commentRows || []).forEach((c) => freshComments.set(c.post_id, (freshComments.get(c.post_id) || 0) + 1))
       setCommentCounts((prev) => {
         const next = new Map(prev)
-        ;(commentRows || []).forEach((c) => next.set(c.post_id, (next.get(c.post_id) || 0) + 1))
+        freshComments.forEach((c, pid) => next.set(pid, c))
         return next
       })
     }
@@ -584,23 +589,28 @@ export default function Feed() {
         .from("user_post_likes")
         .select("post_id, user_id")
         .in("post_id", personalIds)
-      setMyReactions((prev) => {
-        const next = new Set(prev)
-        ;(reactRows || []).forEach((r) => { if (r.user_id === myId) next.add(r.post_id) })
-        return next
+      const freshReactions = new Map()
+      const freshMyReactions = new Set()
+      ;(reactRows || []).forEach((r) => {
+        freshReactions.set(r.post_id, (freshReactions.get(r.post_id) || 0) + 1)
+        if (r.user_id === myId) freshMyReactions.add(r.post_id)
       })
+      setMyReactions((prev) => new Set([...prev, ...freshMyReactions]))
       setReactionCounts((prev) => {
         const next = new Map(prev)
-        ;(reactRows || []).forEach((r) => next.set(r.post_id, (next.get(r.post_id) || 0) + 1))
+        freshReactions.forEach((c, pid) => next.set(pid, c))
         return next
       })
+
       const { data: commentRows } = await supabase
         .from("user_post_comments")
         .select("post_id")
         .in("post_id", personalIds)
+      const freshComments = new Map()
+      ;(commentRows || []).forEach((c) => freshComments.set(c.post_id, (freshComments.get(c.post_id) || 0) + 1))
       setCommentCounts((prev) => {
         const next = new Map(prev)
-        ;(commentRows || []).forEach((c) => next.set(c.post_id, (next.get(c.post_id) || 0) + 1))
+        freshComments.forEach((c, pid) => next.set(pid, c))
         return next
       })
     }
