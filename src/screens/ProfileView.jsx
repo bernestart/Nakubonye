@@ -145,6 +145,79 @@ export default function ProfileView() {
     setMyLike(true)
   }
 
+  // Fetch connections when the Connections tab is active
+  useEffect(() => {
+    if (activeTab !== 'connections' || !userId) return
+    let cancelled = false
+    ;(async () => {
+      setConnLoading(true)
+
+      // Followers of this user
+      const { data: followerRows } = await supabase
+        .from('follows')
+        .select('follower_id')
+        .eq('following_id', userId)
+        .limit(100)
+      const followerIds = (followerRows || []).map((r) => r.follower_id)
+
+      // People this user follows
+      const { data: followingRows } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', userId)
+        .limit(100)
+      const followingIds = (followingRows || []).map((r) => r.following_id)
+
+      // Matches (both sides)
+      const { data: matchRows } = await supabase
+        .from('matches')
+        .select('user_one_id, user_two_id')
+        .or('user_one_id.eq.' + userId + ',user_two_id.eq.' + userId)
+        .limit(100)
+      const matchIds = (matchRows || []).map((m) => m.user_one_id === userId ? m.user_two_id : m.user_one_id)
+
+      // Fetch profiles + photos for all of them
+      const allIds = [...new Set([...followerIds, ...followingIds, ...matchIds])]
+      let profMap = new Map(), photoMap = new Map()
+      if (allIds.length > 0) {
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('id, display_name, username, is_verified')
+          .in('id', allIds)
+        ;(profs || []).forEach((pr) => profMap.set(pr.id, pr))
+
+        const { data: ph } = await supabase
+          .from('profile_photos')
+          .select('user_id, storage_path, is_primary, display_order')
+          .in('user_id', allIds)
+          .order('is_primary', { ascending: false })
+          .order('display_order', { ascending: true })
+        ;(ph || []).forEach((ph2) => { if (!photoMap.has(ph2.user_id)) photoMap.set(ph2.user_id, ph2.storage_path) })
+      }
+      if (cancelled) return
+
+      const toPerson = (id) => {
+        const pr = profMap.get(id)
+        if (!pr) return null
+        return {
+          id,
+          display_name: pr.display_name,
+          username: pr.username,
+          is_verified: pr.is_verified,
+          photo_url: photoMap.get(id) ? publicPhotoUrl(photoMap.get(id)) : null,
+        }
+      }
+
+      setConnections({
+        followers: followerIds.map(toPerson).filter(Boolean),
+        following: followingIds.map(toPerson).filter(Boolean),
+        matches:   matchIds.map(toPerson).filter(Boolean),
+      })
+      setConnLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [activeTab, userId])
+
   if (loading) {
     return (
       <div className="mobile-shell flex items-center justify-center" style={{ position: 'fixed', inset: 0, background: '#0B0B14' }}>
@@ -533,9 +606,73 @@ export default function ProfileView() {
           )}
 
           {activeTab === 'connections' && (
-            <div className="px-4 py-12 text-center">
-              <p className="text-cream font-bold text-[15px] mb-1">Connections</p>
-              <p className="text-muted text-[13px]">Coming in the next step.</p>
+            <div className="px-4 py-3">
+              {/* Sub-tabs */}
+              <div className="flex gap-1.5 mb-4 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+                {[
+                  { id: 'followers', label: 'Followers', count: connections.followers.length },
+                  { id: 'following', label: 'Following', count: connections.following.length },
+                  { id: 'matches',   label: 'Matches',   count: connections.matches.length },
+                ].map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => { tap('light'); setConnSubTab(t.id) }}
+                    className="shrink-0 h-9 px-3.5 rounded-full text-[12.5px] font-bold transition-colors"
+                    style={{
+                      background: connSubTab === t.id ? 'linear-gradient(135deg, #EC4899 0%, #A855F7 100%)' : 'rgba(255,255,255,0.05)',
+                      border: connSubTab === t.id ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                      color: connSubTab === t.id ? '#fff' : '#aaa',
+                    }}
+                  >
+                    {t.label} {t.count > 0 ? '· ' + t.count : ''}
+                  </button>
+                ))}
+              </div>
+
+              {connLoading ? (
+                <div className="flex flex-col gap-2">
+                  {[0,1,2].map((i) => (
+                    <div key={i} className="rounded-2xl bg-white/[0.03] border border-white/8 p-3 h-14 shimmer" />
+                  ))}
+                </div>
+              ) : connections[connSubTab].length === 0 ? (
+                <div className="py-12 text-center">
+                  <p className="text-cream font-bold text-[15px] mb-1">
+                    {connSubTab === 'followers' ? 'No followers yet'
+                     : connSubTab === 'following' ? 'Not following anyone'
+                     : 'No matches yet'}
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  {connections[connSubTab].map((u) => (
+                    <button
+                      key={u.id}
+                      onClick={() => { tap('light'); nav('/profile/' + u.id) }}
+                      className="flex items-center gap-3 p-2.5 rounded-2xl hover:bg-white/[0.04] active:opacity-80 text-left"
+                    >
+                      <div className="w-11 h-11 rounded-full overflow-hidden bg-purple-600 grid place-items-center text-white font-black shrink-0">
+                        {u.photo_url ? (
+                          <img src={u.photo_url} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          (u.display_name || u.username || '?')[0].toUpperCase()
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-cream font-semibold text-[14px] truncate flex items-center gap-1.5">
+                          {u.display_name || u.username || 'User'}
+                          {u.is_verified && (
+                            <span className="w-[14px] h-[14px] rounded-full bg-[#1DA1F2] grid place-items-center shrink-0">
+                              <span className="text-white text-[9px] font-black">✓</span>
+                            </span>
+                          )}
+                        </p>
+                        {u.username && <p className="text-muted text-[11.5px] truncate">@{u.username}</p>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
