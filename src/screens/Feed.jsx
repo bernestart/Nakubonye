@@ -15,6 +15,7 @@ import SuggestedPeople from "../components/SuggestedPeople"
 import PostImages from "../components/PostImages"
 import ExpandableText from "../components/ExpandableText"
 import PostLikesModal from "../components/PostLikesModal"
+import PostCommentsPreview from "../components/PostCommentsPreview"
 import MatchModal from "../components/MatchModal"
 import PostCommentsSheet from "../components/PostCommentsSheet"
 import PostActionsSheet from "../components/PostActionsSheet"
@@ -40,6 +41,7 @@ export default function Feed() {
   const [suggested, setSuggested] = useState([])
   const [matchModal, setMatchModal] = useState(null)
   const [likesModalFor, setLikesModalFor] = useState(null)
+  const [commentsModalFor, setCommentsModalFor] = useState(null)
   const [composerChooserOpen, setComposerChooserOpen] = useState(false)
   const [postComposerOpen, setPostComposerOpen] = useState(false)
   const [pendingPosts, setPendingPosts] = useState([])
@@ -1163,9 +1165,13 @@ export default function Feed() {
                       )}
                     </button>
                     {(commentCounts.get(p.id) || 0) > 0 && (
-                      <span className="text-muted text-[12px]">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); tap("light"); setCommentsModalFor({ postId: p.id, source: p._source }) }}
+                        className="text-muted text-[12px] active:opacity-70"
+                      >
                         {commentCounts.get(p.id)} {commentCounts.get(p.id) === 1 ? "comment" : "comments"}
-                      </span>
+                      </button>
                     )}
                   </div>
                 )}
@@ -1342,6 +1348,16 @@ export default function Feed() {
           source={likesModalFor.source}
           count={reactionCounts.get(likesModalFor.postId) || 0}
           onClose={() => setLikesModalFor(null)}
+        />
+      )}
+
+      {commentsModalFor && (
+        <PostCommentsPreview
+          postId={commentsModalFor.postId}
+          source={commentsModalFor.source}
+          count={commentCounts.get(commentsModalFor.postId) || 0}
+          onClose={() => setCommentsModalFor(null)}
+          onOpenSheet={() => setCommentsFor({ id: commentsModalFor.postId, source: commentsModalFor.source })}
         />
       )}
 
