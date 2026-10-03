@@ -7,6 +7,7 @@ import { publicPhotoUrl, calcAge } from '../lib/photo'
 import { tap } from '../lib/haptic'
 import BrandGlow from '../components/BrandGlow'
 import ProfileConnections from '../components/ProfileConnections'
+import ProfileIntro from '../components/ProfileIntro'
 import ProfileAbout from '../components/ProfileAbout'
 import FollowButton from '../components/FollowButton'
 import DirectMessageModal from '../components/DirectMessageModal'
@@ -411,6 +412,8 @@ export default function ProfileView() {
             </div>
           )}
         </div>
+
+        <ProfileIntro person={person} />
 
         {/* Tabs */}
         <div className="border-b border-white/8">

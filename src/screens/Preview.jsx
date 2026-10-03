@@ -10,6 +10,7 @@ import ProfileHeader from '../components/ProfileHeader'
 import BottomNav from '../components/BottomNav'
 import BrandGlow from '../components/BrandGlow'
 import ProfileConnections from '../components/ProfileConnections'
+import ProfileIntro from '../components/ProfileIntro'
 import ProfileAbout from '../components/ProfileAbout'
 
 export default function Preview() {
@@ -140,6 +141,8 @@ export default function Preview() {
             </>
           }
         />
+
+        <ProfileIntro person={profile} />
 
         <div className="mt-2 border-b border-white/8">
           <div className="flex overflow-x-auto px-4" style={{ scrollbarWidth: 'none' }}>
