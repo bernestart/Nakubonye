@@ -66,6 +66,10 @@ export default function EditProfile() {
   const [selectedInterests, setSelectedInterests] = useState([])
 
   const [photos, setPhotos] = useState([]) // [{ id, storage_path, url, is_primary, display_order }]
+  const [coverFile, setCoverFile] = useState(null)
+  const [coverPreview, setCoverPreview] = useState('')
+  const [existingCoverPath, setExistingCoverPath] = useState('')
+  const coverInputRef = useRef(null)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef(null)
 
@@ -79,10 +83,11 @@ export default function EditProfile() {
 
     const { data: prof } = await supabase
       .from('profiles')
-      .select('display_name, username, gender, date_of_birth, bio, city, country, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children, hide_online_status, hide_age, incognito_mode, only_matches_can_message')
+      .select('display_name, username, gender, date_of_birth, bio, city, country, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children, hide_online_status, hide_age, incognito_mode, only_matches_can_message, cover_photo_path')
       .eq('id', myId).single()
 
     if (prof) {
+      setExistingCoverPath(prof.cover_photo_path || '')
       setDisplayName(prof.display_name || '')
       setUsername(prof.username || '')
       setGender(prof.gender || '')
@@ -233,6 +238,23 @@ export default function EditProfile() {
     setPhotos(remaining)
   }
 
+  function pickCover(e) {
+    const f = e.target.files?.[0]
+    if (!f) return
+    if (!f.type.startsWith('image/')) { setError('Cover must be an image'); return }
+    if (f.size > 10 * 1024 * 1024) { setError('Cover must be under 10 MB'); return }
+    if (coverPreview) URL.revokeObjectURL(coverPreview)
+    setCoverFile(f)
+    setCoverPreview(URL.createObjectURL(f))
+    setError('')
+  }
+
+  function clearCover() {
+    if (coverPreview) URL.revokeObjectURL(coverPreview)
+    setCoverFile(null)
+    setCoverPreview('')
+  }
+
   async function setPrimaryPhoto(photo) {
     if (photo.is_primary) return
     tap('light')
@@ -256,9 +278,21 @@ export default function EditProfile() {
 
     setSaving(true)
 
+    // Upload cover photo if changed
+    let coverPath = existingCoverPath || null
+    if (coverFile) {
+      const path = `covers/${myId}.jpg`
+      const { error: covErr } = await supabase.storage
+        .from('profile-photos')
+        .upload(path, coverFile, { upsert: true, contentType: 'image/jpeg' })
+      if (covErr) { setSaving(false); setError(covErr.message); return }
+      coverPath = path
+    }
+
     const { data: updated, error: pErr } = await supabase
       .from('profiles')
       .update({
+        cover_photo_path: coverPath,
         display_name: displayName.trim(),
         username: username.trim().toLowerCase(),
         bio: bio.trim(),
@@ -376,6 +410,50 @@ export default function EditProfile() {
       <AppHeader />
 
       <div className="px-4 pt-3">
+      {/* Cover photo picker */}
+      <div className="px-5 pt-2 pb-3">
+        <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">Cover photo</p>
+        <div className="relative rounded-2xl overflow-hidden" style={{ height: 130 }}>
+          {coverPreview || existingCoverPath ? (
+            <img
+              src={coverPreview || publicPhotoUrl(existingCoverPath)}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full grid place-items-center"
+                 style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.25) 0%, rgba(236,72,153,0.25) 100%)' }}>
+              <p className="text-cream/80 text-[13px] font-semibold">No cover yet</p>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => coverInputRef.current?.click()}
+            className="absolute bottom-2 right-2 h-9 px-3 rounded-full bg-black/70 backdrop-blur-md border border-white/15 text-white font-bold text-[12.5px] inline-flex items-center gap-1.5 active:opacity-80"
+          >
+            <Camera size={14} />
+            {coverPreview || existingCoverPath ? "Change" : "Add cover"}
+          </button>
+          {(coverPreview || existingCoverPath) && (
+            <button
+              type="button"
+              onClick={() => { clearCover(); setExistingCoverPath('') }}
+              className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/70 backdrop-blur-md border border-white/15 text-white grid place-items-center active:opacity-80"
+              aria-label="Remove cover"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
+        <input
+          ref={coverInputRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={pickCover}
+        />
+      </div>
+
         <ProfileTabs active="edit" />
       </div>
 

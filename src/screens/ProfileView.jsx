@@ -50,7 +50,7 @@ export default function ProfileView() {
 
     const { data: prof, error: profErr } = await supabase
       .from('profiles')
-      .select('id, display_name, username, date_of_birth, bio, city, country, is_verified, looking_for')
+      .select('id, display_name, username, date_of_birth, bio, city, country, is_verified, looking_for, cover_photo_path')
       .eq('id', userId)
       .single()
 
@@ -232,10 +232,19 @@ export default function ProfileView() {
       </header>
 
       <div className="flex-1 overflow-y-auto pb-10">
+        {/* Cover photo */}
+        <div className="relative -mx-4" style={{ height: 150 }}>
+          {person.cover_photo_path ? (
+            <img src={publicPhotoUrl(person.cover_photo_path)} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full" style={{ background: "linear-gradient(135deg, rgba(168,85,247,0.35) 0%, rgba(236,72,153,0.35) 100%)" }} />
+          )}
+        </div>
+
         {/* Header */}
         <div className="px-4 pb-3">
-          <div className="flex items-start gap-4">
-            <span className="shrink-0 block rounded-full overflow-hidden bg-elevated border-2" style={{ width: 82, height: 82, borderColor: 'rgba(168,85,247,0.4)' }}>
+          <div className="flex items-start gap-4 -mt-14 relative">
+            <span className="shrink-0 block rounded-full overflow-hidden bg-elevated border-4 relative z-10" style={{ width: 96, height: 96, borderColor: '#0B0B14' }}>
               {photos[0] ? (
                 <img src={photos[0]} alt="" className="w-full h-full object-cover" />
               ) : (
@@ -245,7 +254,7 @@ export default function ProfileView() {
               )}
             </span>
 
-            <div className="flex-1 min-w-0 pt-1">
+            <div className="flex-1 min-w-0 pt-16">
               <div className="flex items-center gap-1.5 mb-1">
                 <h1 className="text-cream text-[18px] font-extrabold tracking-tight truncate">
                   {person.display_name || person.username}

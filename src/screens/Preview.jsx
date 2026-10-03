@@ -111,6 +111,7 @@ export default function Preview() {
           profile={{ ...profile, age: profile?.date_of_birth ? calcAge(profile.date_of_birth) : null }}
           photos={photos}
           isOwn={true}
+          coverPhotoPath={profile?.cover_photo_path || null}
           followersCount={followersCount}
           followingCount={followingCount}
           postsCount={myPosts.length}
