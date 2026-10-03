@@ -9,6 +9,7 @@ import BrandGlow from '../components/BrandGlow'
 import ProfileConnections from '../components/ProfileConnections'
 import ProfileIntro from '../components/ProfileIntro'
 import ProfilePhotos from '../components/ProfilePhotos'
+import ProfileHighlights from '../components/ProfileHighlights'
 import PhotoViewer from '../components/PhotoViewer'
 import ReelViewer from '../components/ReelViewer'
 import ProfileAbout from '../components/ProfileAbout'
@@ -386,6 +387,8 @@ export default function ProfileView() {
               </div>
             </div>
           </div>
+
+          <ProfileHighlights userId={userId} isOwn={isMe} />
 
           {(person.bio || (person.city && canSeeLocation)) && (
             <div className="mt-3">

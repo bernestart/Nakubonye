@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom"
 import { useAuth } from "../lib/auth"
 import { supabase } from "../lib/supabase"
 import { publicPhotoUrl } from "../lib/photo"
-import { X, Send, Heart, MoreVertical, Eye, Volume2, VolumeX } from "lucide-react"
+import { X, Send, Heart, MoreVertical, Eye, Volume2, VolumeX, Trash2, Star } from "lucide-react"
 
 const REACTIONS = ["❤️", "😂", "😍", "👍", "🔥", "😮", "😢", "🙏"]
 const IMAGE_DURATION = 5000
@@ -24,6 +24,68 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
   const [viewers, setViewers] = useState([])
   const [viewersLoading, setViewersLoading] = useState(false)
   const [muted, setMuted] = useState(false)
+  async function loadHighlights() {
+    if (!myId) return
+    try {
+      const { data } = await supabase
+        .from("story_highlights")
+        .select("id, title, cover_story_id, created_at")
+        .eq("user_id", myId)
+        .order("created_at", { ascending: false })
+      setMyHighlights(data || [])
+    } catch (e) { console.warn("load highlights failed", e) }
+  }
+
+  async function addToHighlight(highlightId) {
+    if (!story?.id || !highlightId) return
+    try {
+      // Prevent duplicate
+      const { data: exists } = await supabase
+        .from("story_highlight_items")
+        .select("story_id")
+        .eq("highlight_id", highlightId)
+        .eq("story_id", story.id)
+        .maybeSingle()
+      if (!exists) {
+        const { error } = await supabase.from("story_highlight_items").insert({
+          highlight_id: highlightId,
+          story_id: story.id,
+          display_order: 0,
+        })
+        if (error) throw error
+      }
+      setHighlightPickerOpen(false)
+      setMenuOpen(false)
+      alert("Added to highlight")
+    } catch (e) {
+      console.warn("add to highlight failed", e)
+      alert("Failed: " + (e.message || e))
+    }
+  }
+
+  async function createHighlightAndAdd() {
+    const title = newHighlightTitle.trim()
+    if (!title || !myId) return
+    try {
+      const { data: h, error } = await supabase
+        .from("story_highlights")
+        .insert({ user_id: myId, title, cover_story_id: story?.id || null })
+        .select("id")
+        .single()
+      if (error) throw error
+      if (h?.id) await addToHighlight(h.id)
+      setNewHighlightTitle("")
+    } catch (e) {
+      console.warn("create highlight failed", e)
+      alert("Failed: " + (e.message || e))
+    }
+  }
+
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [highlightPickerOpen, setHighlightPickerOpen] = useState(false)
+  const [myHighlights, setMyHighlights] = useState([])
+  const [newHighlightTitle, setNewHighlightTitle] = useState("")
 
   const videoRef = useRef(null)
   const startRef = useRef(Date.now())
@@ -236,6 +298,56 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
     })
   }
 
+  async function deleteStory() {
+    if (!story || !isMine || deleting) return
+    if (!confirm("Delete this story?")) return
+    setDeleting(true)
+    tap("light")
+    try {
+      // Delete storage object (best-effort)
+      try {
+        const url = story.media_url || ""
+        const bucket = "stories"
+        const marker = "/object/public/" + bucket + "/"
+        const idx = url.indexOf(marker)
+        if (idx !== -1) {
+          const path = url.slice(idx + marker.length)
+          await supabase.storage.from(bucket).remove([path])
+        }
+      } catch (e) { console.warn("storage delete failed", e) }
+
+      const { error } = await supabase.from("stories").delete().eq("id", story.id).eq("user_id", myId)
+      if (error) throw error
+
+      setDeleting(false)
+      setMenuOpen(false)
+
+      // If there are more stories in this group, go next
+      const list = group?.stories || []
+      if (list.length > 1) {
+        // Parent re-fetch on close is cleaner
+        onViewed?.(story.id)
+        // If the deleted story was the current, move to next or close
+        if (storyIdx < list.length - 1) {
+          setStoryIdx(storyIdx + 1)
+          setProgress(0)
+          startRef.current = Date.now()
+          accumulatedRef.current = 0
+        } else if (list.length === 1) {
+          close()
+        } else {
+          setStoryIdx(0)
+          setProgress(0)
+        }
+      } else {
+        close()
+      }
+    } catch (e) {
+      console.warn("delete story failed", e)
+      setDeleting(false)
+    }
+  }
+
   function close() {
     onClose?.()
   }
@@ -314,6 +426,15 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
             aria-label="Toggle sound"
           >
             {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+          </button>
+        )}
+        {isMine && (
+          <button
+            onClick={() => { tap("light"); setMenuOpen(true) }}
+            className="w-8 h-8 rounded-full grid place-items-center text-white"
+            aria-label="Story options"
+          >
+            <MoreVertical size={18} />
           </button>
         )}
         <button onClick={close} className="w-9 h-9 grid place-items-center text-white" aria-label="Close">
@@ -478,6 +599,103 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
           </div>
         </div>
       )}
+      {/* Owner menu — delete story */}
+      {menuOpen && (
+        <div
+          className="absolute inset-0 z-[300] flex items-end"
+          onClick={(e) => { e.stopPropagation(); setMenuOpen(false) }}
+        >
+          <div className="absolute inset-0 bg-black/60" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
+            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+          >
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
+            <button
+              onClick={() => { tap("light"); loadHighlights(); setHighlightPickerOpen(true); setMenuOpen(false) }}
+              className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left"
+            >
+              <span className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 grid place-items-center">
+                <Star size={17} color="#C084FC" />
+              </span>
+              <span className="text-cream font-semibold text-[14.5px]">Add to highlight</span>
+            </button>
+
+            <button
+              onClick={deleteStory}
+              disabled={deleting}
+              className="flex items-center gap-3 p-4 rounded-2xl bg-red-500/8 border border-red-500/25 text-left disabled:opacity-50"
+            >
+              <span className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 grid place-items-center">
+                <Trash2 size={17} color="#F87171" />
+              </span>
+              <span className="text-cream font-semibold text-[14.5px]">
+                {deleting ? "Deleting…" : "Delete story"}
+              </span>
+            </button>
+            <button
+              onClick={() => setMenuOpen(false)}
+              className="w-full h-11 mt-2 text-muted font-semibold text-[13.5px]"
+            >Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {highlightPickerOpen && (
+        <div
+          className="absolute inset-0 z-[400] flex items-end"
+          onClick={(e) => { e.stopPropagation(); setHighlightPickerOpen(false) }}
+        >
+          <div className="absolute inset-0 bg-black/60" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-3"
+            style={{ maxHeight: "75dvh", paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+          >
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-1" />
+            <h3 className="text-cream font-extrabold text-[16px] mb-1">Add to highlight</h3>
+
+            <div className="flex gap-2">
+              <input
+                value={newHighlightTitle}
+                onChange={(e) => setNewHighlightTitle(e.target.value.slice(0, 40))}
+                placeholder="New highlight name…"
+                className="flex-1 h-11 rounded-full bg-white/[0.06] border border-white/10 px-4 text-cream text-[14px] placeholder:text-muted focus:outline-none focus:border-purple-500"
+              />
+              <button
+                onClick={createHighlightAndAdd}
+                disabled={!newHighlightTitle.trim()}
+                className="h-11 px-4 rounded-full text-white font-bold text-[13px] disabled:opacity-40"
+                style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
+              >
+                Create
+              </button>
+            </div>
+
+            {myHighlights.length > 0 && (
+              <>
+                <p className="text-muted text-[11px] font-bold uppercase tracking-wide mt-2">Your highlights</p>
+                <div className="flex flex-col gap-1 max-h-[40vh] overflow-y-auto">
+                  {myHighlights.map((h) => (
+                    <button
+                      key={h.id}
+                      onClick={() => addToHighlight(h.id)}
+                      className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/8 text-left active:opacity-80"
+                    >
+                      <span className="w-10 h-10 rounded-full bg-purple-600 grid place-items-center text-white font-black text-[14px]">
+                        {h.title[0]?.toUpperCase()}
+                      </span>
+                      <span className="flex-1 text-cream font-semibold text-[14px] truncate">{h.title}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>,
     document.body
   )

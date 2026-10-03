@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 import VerifiedBadge from "./VerifiedBadge"
+import ProfileHighlights from "./ProfileHighlights"
 
 export default function ProfileHeader({
   profile,
@@ -138,6 +139,8 @@ export default function ProfileHeader({
             </button>
           )}
         </div>
+
+        <ProfileHighlights userId={profile?.id} isOwn={isOwn} />
 
         {/* Bio + location */}
         {(profile?.bio || profile?.city) && (

@@ -5,6 +5,45 @@ import { useAuth } from "../lib/auth"
 import StoryEditor from "./StoryEditor"
 import { createPortal } from "react-dom"
 
+const TEXT_BGS = [
+  ["#EC4899", "#A855F7"],
+  ["#3B82F6", "#06B6D4"],
+  ["#F59E0B", "#EC4899"],
+  ["#10B981", "#3B82F6"],
+  ["#8B5CF6", "#EC4899"],
+  ["#EF4444", "#F59E0B"],
+  ["#1E1B4B", "#4C1D95"],
+  ["#0F172A", "#334155"],
+]
+
+async function notifyMentions(caption, storyId, authorId) {
+  if (!caption || !storyId || !authorId) return
+  // Extract @username tokens
+  const matches = [...caption.matchAll(/@([a-z0-9_]{3,20})/gi)].map((m) => m[1].toLowerCase())
+  const unique = [...new Set(matches)]
+  if (unique.length === 0) return
+  try {
+    const { data: profs } = await supabase
+      .from("profiles")
+      .select("id, username")
+      .in("username", unique)
+    if (!profs || profs.length === 0) return
+    const rows = profs
+      .filter((p) => p.id !== authorId)
+      .map((p) => ({
+        user_id: p.id,
+        actor_id: authorId,
+        type: "mention",
+        ref_id: String(storyId),
+        ref_type: "story",
+        body: "mentioned you in a story",
+      }))
+    if (rows.length > 0) {
+      await supabase.from("notifications").insert(rows)
+    }
+  } catch (e) { console.warn("mention notify failed", e) }
+}
+
 export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve, onFail, onRetryStart }) {
   const { session } = useAuth()
   const myId = session?.user?.id
@@ -14,6 +53,9 @@ export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve
   const [editedBlob, setEditedBlob] = useState(null)
   const [editorOpen, setEditorOpen] = useState(false)
   const [caption, setCaption] = useState("")
+  const [mode, setMode] = useState("media")
+  const [textContent, setTextContent] = useState("")
+  const [textBg, setTextBg] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
 
@@ -40,17 +82,84 @@ export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve
         .upload(path, useFile, { upsert: false, contentType })
       if (upErr) throw new Error(upErr.message)
       const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
-      const { error: insErr } = await supabase.from("stories").insert({
+      const { data: inserted, error: insErr } = await supabase.from("stories").insert({
         user_id: myId,
         media_url: pub?.publicUrl,
         media_type: mediaType,
         caption: captionSnapshot || null,
         audience: audienceSnapshot || 'everyone',
-      })
+      }).select("id").single()
       if (insErr) throw new Error(insErr.message)
       onResolve?.(tempId)
+      if (inserted?.id && captionSnapshot) {
+        notifyMentions(captionSnapshot, inserted.id, myId)
+      }
     } catch (e) {
       onFail?.(tempId, e.message || String(e))
+    }
+  }
+
+  async function submitTextStory() {
+    const body = textContent.trim()
+    if (!body || !myId || busy) return
+    setBusy(true); setError("")
+    try {
+      // Render to 1080x1920 canvas
+      const canvas = document.createElement("canvas")
+      canvas.width = 1080
+      canvas.height = 1920
+      const ctx = canvas.getContext("2d")
+      const [c1, c2] = TEXT_BGS[textBg] || TEXT_BGS[0]
+      const grad = ctx.createLinearGradient(0, 0, 1080, 1920)
+      grad.addColorStop(0, c1)
+      grad.addColorStop(1, c2)
+      ctx.fillStyle = grad
+      ctx.fillRect(0, 0, 1080, 1920)
+
+      // Text — centered, wrapped
+      const maxWidth = 900
+      const fontSize = 88
+      ctx.font = "900 " + fontSize + "px -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif"
+      ctx.fillStyle = "#ffffff"
+      ctx.textAlign = "center"
+      ctx.textBaseline = "middle"
+      ctx.shadowColor = "rgba(0,0,0,0.35)"
+      ctx.shadowBlur = 20
+      ctx.shadowOffsetY = 6
+
+      const words = body.split(/\s+/)
+      const lines = []
+      let current = ""
+      for (const w of words) {
+        const test = current ? current + " " + w : w
+        if (ctx.measureText(test).width > maxWidth && current) {
+          lines.push(current)
+          current = w
+        } else {
+          current = test
+        }
+      }
+      if (current) lines.push(current)
+
+      const lineHeight = fontSize * 1.22
+      const totalH = lines.length * lineHeight
+      const startY = 960 - totalH / 2 + lineHeight / 2
+      lines.forEach((line, i) => {
+        ctx.fillText(line, 540, startY + i * lineHeight)
+      })
+
+      const blob = await new Promise((res) => canvas.toBlob((b) => res(b), "image/jpeg", 0.92))
+      if (!blob) throw new Error("Canvas export failed")
+
+      const tempId = "pending-story-" + crypto.randomUUID()
+      const snapshot = body
+      onOptimistic?.(tempId, URL.createObjectURL(blob), snapshot, "everyone")
+      setBusy(false)
+      onClose?.()
+      runPublish(tempId, blob, "jpg", "image/jpeg", "image", snapshot, "everyone")
+    } catch (e) {
+      setBusy(false)
+      setError(e.message || String(e))
     }
   }
 
@@ -122,6 +231,65 @@ export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve
     return () => { if (preview) URL.revokeObjectURL(preview) }
   }, [preview])
 
+  if (mode === "text") {
+    const [c1, c2] = TEXT_BGS[textBg] || TEXT_BGS[0]
+    return createPortal(
+      <div className="fixed inset-0 z-[2000] flex flex-col" style={{ background: `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)` }}>
+        <div className="flex items-center justify-between p-4 shrink-0" style={{ paddingTop: "max(16px, env(safe-area-inset-top))" }}>
+          <button
+            onClick={() => { setMode("media"); setTextContent("") }}
+            className="h-10 px-4 rounded-full bg-black/25 text-white font-bold text-[13px]"
+          >← Media</button>
+          <button
+            onClick={onClose}
+            className="w-10 h-10 rounded-full grid place-items-center bg-black/25 text-white"
+            aria-label="Close"
+          ><X size={20} /></button>
+        </div>
+
+        <div className="flex-1 grid place-items-center px-6 overflow-hidden">
+          <textarea
+            value={textContent}
+            onChange={(e) => setTextContent(e.target.value.slice(0, 200))}
+            placeholder="Type something…"
+            autoFocus
+            className="w-full max-w-[420px] bg-transparent text-white text-center font-black text-[28px] leading-tight placeholder:text-white/50 focus:outline-none resize-none"
+            style={{ minHeight: 200 }}
+          />
+        </div>
+
+        <div className="px-4 flex gap-2 overflow-x-auto mb-3" style={{ scrollbarWidth: "none" }}>
+          {TEXT_BGS.map((pair, i) => (
+            <button
+              key={i}
+              onClick={() => setTextBg(i)}
+              className="shrink-0 w-11 h-11 rounded-full border-2 transition-transform active:scale-95"
+              style={{
+                background: `linear-gradient(135deg, ${pair[0]} 0%, ${pair[1]} 100%)`,
+                borderColor: textBg === i ? "#fff" : "transparent",
+                boxShadow: textBg === i ? "0 0 0 2px rgba(0,0,0,0.3)" : "none",
+              }}
+              aria-label={"Background " + (i + 1)}
+            />
+          ))}
+        </div>
+
+        {error && <p className="text-red-200 text-[12.5px] text-center px-4 pb-2">{error}</p>}
+
+        <div className="p-4 pt-0 shrink-0" style={{ paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}>
+          <button
+            onClick={submitTextStory}
+            disabled={busy || !textContent.trim()}
+            className="w-full h-12 rounded-full bg-white text-black font-black text-[15px] flex items-center justify-center gap-2 disabled:opacity-40"
+          >
+            <Send size={16} /> {busy ? "Posting…" : "Share to story"}
+          </button>
+        </div>
+      </div>,
+      document.body
+    )
+  }
+
   if (editorOpen && preview && file?.type.startsWith("image/")) {
     return (
       <StoryEditor
@@ -165,6 +333,12 @@ export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve
                 className="flex-1 h-11 rounded-full bg-white/10 text-white font-semibold text-[13.5px] inline-flex items-center justify-center gap-2"
               >
                 <RefreshCw size={15} /> Change
+              </button>
+              <button
+                onClick={() => { setMode("text"); setPreview(""); setFile(null); setEditedBlob(null) }}
+                className="flex-1 h-11 rounded-full bg-white/10 text-white font-semibold text-[13.5px] inline-flex items-center justify-center gap-2"
+              >
+                <Pencil size={15} /> Text
               </button>
               {file?.type.startsWith("image/") && (
                 <button

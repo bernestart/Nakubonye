@@ -28,6 +28,8 @@ import Verify from './screens/Verify'
 import Roadmap from './screens/Roadmap'
 import Feed from './screens/Feed'
 import PostDetail from './screens/PostDetail'
+import Saved from './screens/Saved'
+import StoryArchive from './screens/StoryArchive'
 import Reels from './screens/Reels'
 import FollowList from './screens/FollowList'
 import Create from './screens/Create'
@@ -221,7 +223,8 @@ export default function App() {
         <Route path="/messages/requests" element={<Guard><MessageRequests /></Guard>} />
         <Route path="/messages/:userId" element={<Guard><Chat /></Guard>} />
         <Route path="/me"         element={<Guard><ProfileSettings /></Guard>} />
-        <Route path="/saved" element={<Guard><ComingSoon title="Saved" message="Your saved posts and reels will appear here soon." /></Guard>} />
+        <Route path="/saved" element={<Guard><Saved /></Guard>} />
+        <Route path="/story-archive" element={<Guard><StoryArchive /></Guard>} />
         <Route path="/marketplace" element={<Guard><Marketplace /></Guard>} />
         <Route path="/groups/new" element={<Guard><CreateGroup /></Guard>} />
         <Route path="/groups/:id" element={<Guard><GroupChat /></Guard>} />
