@@ -1304,6 +1304,7 @@ export default function Feed() {
                       paths={paths}
                       bucket="community-media"
                       onDoubleTap={() => toggleLike(p.id, p._source)}
+                      onPostOpen={() => { tap("light"); nav("/post/" + p._source + "/" + p.id) }}
                     />
                   )
                 })()}

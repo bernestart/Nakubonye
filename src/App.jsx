@@ -27,6 +27,7 @@ import Privacy from './screens/Privacy'
 import Verify from './screens/Verify'
 import Roadmap from './screens/Roadmap'
 import Feed from './screens/Feed'
+import PostDetail from './screens/PostDetail'
 import Reels from './screens/Reels'
 import FollowList from './screens/FollowList'
 import Create from './screens/Create'
@@ -194,6 +195,7 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/onboarding" element={<Guard><Onboarding /></Guard>} />
         <Route path="/feed" element={<Guard><Feed /></Guard>} />
+        <Route path="/post/:source/:id" element={<Guard><PostDetail /></Guard>} />
         <Route path="/reels" element={<Guard><Reels /></Guard>} />
         <Route path="/user/:userId/followers" element={<Guard><FollowList /></Guard>} />
         <Route path="/user/:userId/following" element={<Guard><FollowList /></Guard>} />

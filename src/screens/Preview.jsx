@@ -10,7 +10,6 @@ import ProfileHeader from '../components/ProfileHeader'
 import BottomNav from '../components/BottomNav'
 import BrandGlow from '../components/BrandGlow'
 import ProfileConnections from '../components/ProfileConnections'
-import ProfileIntro from '../components/ProfileIntro'
 import ProfilePhotos from '../components/ProfilePhotos'
 import PhotoViewer from '../components/PhotoViewer'
 import ReelViewer from '../components/ReelViewer'
@@ -24,6 +23,7 @@ export default function Preview() {
   const [photos, setPhotos] = useState([])
   const [interests, setInterests] = useState([])
   const [prompts, setPrompts] = useState([])
+  const [communities, setCommunities] = useState([])
   const [reels, setReels] = useState([])
   const [savedReels, setSavedReels] = useState([])
   const [myPosts, setMyPosts] = useState([])
@@ -68,6 +68,16 @@ export default function Preview() {
       const { data: rows } = await supabase.from('interests').select('id, name').in('id', ids)
       setInterests((rows || []).map((r) => r.name))
     } else setInterests([])
+
+    // Communities (best-effort)
+    try {
+      const { data: cmRows } = await supabase
+        .from('community_memberships')
+        .select('community_id, communities(id, name, slug, emoji, cover_color)')
+        .eq('user_id', myId)
+        .limit(20)
+      setCommunities((cmRows || []).map((r) => r.communities).filter(Boolean))
+    } catch { setCommunities([]) }
 
     const savedIds = (saveRes.data || []).map((r) => r.reel_id)
     if (savedIds.length > 0) {
@@ -145,9 +155,7 @@ export default function Preview() {
           }
         />
 
-        <ProfileIntro person={profile} />
-
-        <div className="mt-2 border-b border-white/8">
+        <div className="border-b border-white/8 sticky top-0 z-20" style={{ background: '#0B0B14' }}>
           <div className="flex justify-around px-2">
             {tabs.map((t) => (
               <button
@@ -248,6 +256,26 @@ export default function Preview() {
                   )}
                 </div>
               )}
+            {communities.length > 0 && (
+              <div className="px-4 mb-4 pb-4 border-b border-white/8">
+                <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">Communities</p>
+                <div className="flex flex-col gap-1">
+                  {communities.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => { tap("light"); nav('/community/' + (c.slug || c.id)) }}
+                      className="flex items-center gap-3 p-2 rounded-2xl bg-white/[0.03] border border-white/8 text-left active:opacity-80"
+                    >
+                      <span className="w-10 h-10 rounded-xl grid place-items-center text-[18px] shrink-0" style={{ background: c.cover_color || 'rgba(168,85,247,0.25)' }}>
+                        {c.emoji || '🌐'}
+                      </span>
+                      <span className="flex-1 min-w-0 text-cream font-semibold text-[13.5px] truncate">{c.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             savedReels.length === 0 ? (
               <EmptyTab icon="🔖" title="Nothing saved" subtitle="Save reels to see them here." />
             ) : (

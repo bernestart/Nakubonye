@@ -29,6 +29,7 @@ export default function ProfileView() {
   const [photos, setPhotos] = useState([])
   const [interests, setInterests] = useState([])
   const [prompts, setPrompts] = useState([])
+  const [communities, setCommunities] = useState([])
   const [myPosts, setMyPosts] = useState([])
   const [reels, setReels] = useState([])
   const [followersCount, setFollowersCount] = useState(0)
@@ -38,6 +39,7 @@ export default function ProfileView() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('posts')
+  const [postsFilter, setPostsFilter] = useState('all')
   const [playingReel, setPlayingReel] = useState(null)
   const [viewingPhoto, setViewingPhoto] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -104,7 +106,7 @@ export default function ProfileView() {
         .eq('user_id', userId).eq('is_active', true).order('created_at', { ascending: false }).limit(30),
       supabase.from('user_posts').select('id, content, image_path, created_at')
         .eq('user_id', userId).eq('is_active', true).eq('audience', 'public').order('created_at', { ascending: false }).limit(30),
-      supabase.from('community_posts').select('id, content, image_path, created_at')
+      supabase.from('community_posts').select('id, content, image_path, created_at, pinned_until')
         .eq('author_id', userId).order('created_at', { ascending: false }).limit(30),
       supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', userId),
       supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', userId),
@@ -121,6 +123,16 @@ export default function ProfileView() {
       const { data: rows } = await supabase.from('interests').select('id, name').in('id', ids)
       setInterests((rows || []).map((r) => r.name))
     } else setInterests([])
+
+    // Communities (best-effort)
+    try {
+      const { data: cmRows } = await supabase
+        .from('community_memberships')
+        .select('community_id, communities(id, name, slug, emoji, cover_color)')
+        .eq('user_id', userId)
+        .limit(20)
+      setCommunities((cmRows || []).map((r) => r.communities).filter(Boolean))
+    } catch { setCommunities([]) }
 
     const personal = (personalRes.data || []).map((p) => ({ ...p, _source: 'personal' }))
     const community = (communityRes.data || []).map((p) => ({ ...p, _source: 'community' }))
@@ -349,6 +361,14 @@ export default function ProfileView() {
                 )}
               </div>
               <p className="text-muted text-[13px] truncate mb-2">@{person.username || 'user'}</p>
+              {(() => {
+                const parts = []
+                if (person.profession) parts.push(person.profession)
+                if (person.education) parts.push(person.education)
+                if (person.city) parts.push('Lives in ' + person.city)
+                const line = parts.slice(0, 2).join(' · ')
+                return line ? <p className="text-muted text-[12.5px] mb-2 truncate">{line}</p> : null
+              })()}
 
               <div className="flex items-center gap-4">
                 <button className="text-left">
@@ -416,10 +436,8 @@ export default function ProfileView() {
           )}
         </div>
 
-        <ProfileIntro person={person} />
-
-        {/* Tabs */}
-        <div className="border-b border-white/8">
+        {/* Tabs — sticky below top bar */}
+        <div className="border-b border-white/8 sticky top-0 z-20" style={{ background: '#0B0B14' }}>
           <div className="flex justify-around px-2">
             {tabs.map((t) => (
               <button
@@ -440,27 +458,90 @@ export default function ProfileView() {
         <div className="pt-3">
           {activeTab === 'posts' && (
             <>
-              {myPosts.length === 0 ? (
-                <EmptyTab icon="✏️" title="No posts yet" subtitle="When they post something, it shows here." />
-              ) : (
-                <div className="grid grid-cols-3 gap-1 px-1">
-                  {myPosts.map((p) => {
-                    const url = p.image_path ? supabase.storage.from('community-media').getPublicUrl(p.image_path).data?.publicUrl : null
-                    return (
-                      <button key={p._source + '-' + p.id} onClick={() => { tap('light'); nav('/feed') }}
-                        className="relative aspect-square rounded-lg overflow-hidden bg-white/[0.04] border border-white/8">
-                        {url ? (
-                          <img src={url} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full grid place-items-center p-2">
-                            <p className="text-muted text-[10.5px] leading-tight line-clamp-3 text-center">{p.content}</p>
-                          </div>
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
+              {/* Featured — pinned posts */}
+              {(() => {
+                const now = Date.now()
+                const pinned = myPosts.filter((p) => p.pinned_until && new Date(p.pinned_until).getTime() > now)
+                if (pinned.length === 0) return null
+                return (
+                  <div className="px-4 mb-4">
+                    <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">Featured</p>
+                    <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                      {pinned.slice(0, 6).map((p) => {
+                        const url = p.image_path ? supabase.storage.from('community-media').getPublicUrl(p.image_path).data?.publicUrl : null
+                        return (
+                          <button
+                            key={p._source + '-' + p.id}
+                            onClick={() => { tap('light'); nav('/feed') }}
+                            className="shrink-0 w-24 h-32 rounded-xl overflow-hidden bg-white/[0.04] border border-white/8 relative"
+                          >
+                            {url ? (
+                              <img src={url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full grid place-items-center p-2">
+                                <p className="text-muted text-[10.5px] leading-tight line-clamp-4 text-center">{p.content}</p>
+                              </div>
+                            )}
+                            <span className="absolute top-1 right-1 text-[10px] bg-black/60 rounded px-1.5 py-0.5 text-white font-bold">📌</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Filter pills — Facebook-style */}
+              <div className="flex gap-1.5 px-4 mb-3 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+                {[
+                  { id: 'all',    label: 'All' },
+                  { id: 'photos', label: 'Photos' },
+                  { id: 'text',   label: 'Text' },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => { tap('light'); setPostsFilter(f.id) }}
+                    className="shrink-0 h-8 px-3.5 rounded-full text-[12px] font-bold transition-colors"
+                    style={{
+                      background: postsFilter === f.id ? 'rgba(255,255,255,0.12)' : 'transparent',
+                      color: postsFilter === f.id ? '#fff' : '#888',
+                      border: postsFilter === f.id ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                    }}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              {(() => {
+                const filtered = myPosts.filter((p) => {
+                  if (postsFilter === 'photos') return !!p.image_path
+                  if (postsFilter === 'text')   return !p.image_path
+                  return true
+                })
+                if (filtered.length === 0) {
+                  return <EmptyTab icon="✏️" title="No posts yet" subtitle="When they post something, it shows here." />
+                }
+                return (
+                  <div className="grid grid-cols-3 gap-1 px-1">
+                    {filtered.map((p) => {
+                      const url = p.image_path ? supabase.storage.from('community-media').getPublicUrl(p.image_path).data?.publicUrl : null
+                      return (
+                        <button key={p._source + '-' + p.id} onClick={() => { tap('light'); nav('/feed') }}
+                          className="relative aspect-square rounded-lg overflow-hidden bg-white/[0.04] border border-white/8">
+                          {url ? (
+                            <img src={url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full grid place-items-center p-2">
+                              <p className="text-muted text-[10.5px] leading-tight line-clamp-3 text-center">{p.content}</p>
+                            </div>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
             </>
           )}
 
@@ -520,7 +601,27 @@ export default function ProfileView() {
                 </div>
               )}
 
-              {interests.length === 0 && prompts.length === 0 && (
+              {communities.length > 0 && (
+                <div className="mb-5">
+                  <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">Communities</p>
+                  <div className="flex flex-col gap-1">
+                    {communities.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => { tap('light'); nav('/community/' + (c.slug || c.id)) }}
+                        className="flex items-center gap-3 p-2 rounded-2xl bg-white/[0.03] border border-white/8 text-left active:opacity-80"
+                      >
+                        <span className="w-10 h-10 rounded-xl grid place-items-center text-[18px] shrink-0" style={{ background: c.cover_color || 'rgba(168,85,247,0.25)' }}>
+                          {c.emoji || '🌐'}
+                        </span>
+                        <span className="flex-1 min-w-0 text-cream font-semibold text-[13.5px] truncate">{c.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {interests.length === 0 && prompts.length === 0 && communities.length === 0 && (
                 <div className="py-12 text-center">
                   <p className="text-cream font-bold text-[15px] mb-1">Nothing here yet</p>
                   <p className="text-muted text-[13px]">Their interests and prompts will show up here.</p>

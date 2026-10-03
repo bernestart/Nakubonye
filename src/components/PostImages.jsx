@@ -11,7 +11,7 @@ import { tap } from "../lib/haptic"
  * 4 → 2x2 grid
  * 5+ → 2x2 grid with +N overlay on last tile
  */
-export default function PostImages({ paths = [], bucket = "community-media", onDoubleTap }) {
+export default function PostImages({ paths = [], bucket = "community-media", onDoubleTap, onPostOpen }) {
   const [lightbox, setLightbox] = useState(null)
   const [lastTapRef, setLastTap] = useState({ id: null, time: 0 })
 
@@ -33,6 +33,10 @@ export default function PostImages({ paths = [], bucket = "community-media", onD
       return
     }
     setLastTap({ id: "idx" + idx, time: now })
+    if (onPostOpen) {
+      onPostOpen()
+      return
+    }
     setLightbox(idx)
   }
 

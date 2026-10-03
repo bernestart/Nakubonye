@@ -92,6 +92,14 @@ export default function ProfileHeader({
             <p className="text-muted text-[13px] truncate">
               @{profile?.username || "username"}
             </p>
+            {(() => {
+              const parts = []
+              if (profile?.profession) parts.push(profile.profession)
+              if (profile?.education) parts.push(profile.education)
+              if (profile?.city) parts.push("Lives in " + profile.city)
+              const line = parts.slice(0, 2).join(" · ")
+              return line ? <p className="text-muted text-[12.5px] mt-1 truncate">{line}</p> : null
+            })()}
           </div>
         </div>
 
