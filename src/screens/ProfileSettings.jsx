@@ -128,6 +128,16 @@ export default function ProfileSettings() {
             <span className="flex-1 font-semibold text-[14.5px]">Invite friends</span>
             <ChevronRight size={18} className="text-subtle" />
           </button>
+          <button
+            onClick={() => { tap('light'); nav('/saved') }}
+            className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-surface border border-white/8 text-left text-cream"
+          >
+            <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0">
+              <Bookmark size={18} />
+            </span>
+            <span className="flex-1 font-semibold text-[14.5px]">Saved</span>
+            <ChevronRight size={18} className="text-subtle" />
+          </button>
         </div>
 
         {/* Feature tile grid — NO label */}

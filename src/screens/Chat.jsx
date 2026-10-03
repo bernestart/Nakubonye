@@ -101,6 +101,7 @@ export default function Chat() {
   }, [otherId, session?.user?.id])
   const [sending, setSending] = useState(false)
   const [replyingTo, setReplyingTo] = useState(null)
+  const [editingMsg, setEditingMsg] = useState(null)
   const [storyReply, setStoryReply] = useState(null)
   const [reactionPickerFor, setReactionPickerFor] = useState(null)
   const [emojiOpen, setEmojiOpen] = useState(false)
@@ -231,7 +232,7 @@ export default function Chat() {
 
     const { data: msgs, error: msgErr } = await supabase
       .from('messages')
-      .select('id, sender_id, content, created_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata')
+      .select('id, sender_id, content, created_at, edited_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata')
       .eq('conversation_id', convId)
       .order('created_at', { ascending: true }).limit(200)
     if (msgErr) { setError(msgErr.message); setLoading(false); return }
@@ -300,7 +301,7 @@ export default function Chat() {
       if (!pin) { setPinnedMsg(null); return }
       const { data: msg } = await supabase
         .from('messages')
-        .select('id, sender_id, content, created_at, media_url, media_type, deleted_at')
+        .select('id, sender_id, content, created_at, edited_at, media_url, media_type, deleted_at')
         .eq('id', pin.message_id)
         .maybeSingle()
       if (cancelled) return
@@ -548,7 +549,7 @@ export default function Chat() {
     const { data: inserted, error: sendErr } = await supabase
       .from('messages')
       .insert(payload)
-      .select('id, sender_id, content, created_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata')
+      .select('id, sender_id, content, created_at, edited_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata')
       .single()
 
     if (sendErr) {
@@ -559,7 +560,25 @@ export default function Chat() {
     setSending(false)
   }
 
+  async function saveEdit() {
+    if (!editingMsg || !myId) return
+    const body = text.trim()
+    if (!body) return
+    tap('light'); setSending(true)
+    const nowIso = new Date().toISOString()
+    const { error: err } = await supabase
+      .from('messages')
+      .update({ content: body.slice(0, 2000), edited_at: nowIso })
+      .eq('id', editingMsg.id)
+      .eq('sender_id', myId)
+    setSending(false)
+    if (err) { setError(err.message); return }
+    setMessages((cur) => cur.map((m) => m.id === editingMsg.id ? { ...m, content: body.slice(0, 2000), edited_at: nowIso } : m))
+    setEditingMsg(null); setText('')
+  }
+
   async function send() {
+    if (editingMsg) return saveEdit()
     const body = text.trim()
     if (!body && !attachment) return
     if (sending) return
@@ -626,7 +645,7 @@ export default function Chat() {
     const { data: inserted, error: sendErr } = await supabase
       .from('messages')
       .insert(payload)
-      .select('id, sender_id, content, created_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata')
+      .select('id, sender_id, content, created_at, edited_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata')
       .single()
 
     if (sendErr) {
@@ -1040,6 +1059,10 @@ export default function Chat() {
                       </div>
                     )}
 
+                    {m.edited_at && !deleted && (
+                      <p className={`text-subtle text-[10px] mt-0.5 ${mine ? 'text-right' : ''}`}>(edited)</p>
+                    )}
+
                     {reactionPickerFor === m.id && (
                       <motion.div
                         initial={{ opacity: 0, y: -4 }}
@@ -1095,6 +1118,18 @@ export default function Chat() {
             aria-label="Cancel story reply"
           >
             <X size={15} strokeWidth={2.4} />
+          </button>
+        </div>
+      )}
+
+      {editingMsg && (
+        <div className="shrink-0 mx-3 mb-2 px-3 py-2 rounded-xl bg-elevated border border-amber-500/30 flex items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <p className="text-amber-300 text-[10.5px] font-bold tracking-wide uppercase mb-0.5">Editing message</p>
+            <p className="text-muted text-[12.5px] truncate">{editingMsg.content || 'Media'}</p>
+          </div>
+          <button onClick={() => { setEditingMsg(null); setText('') }} className="w-6 h-6 rounded-full grid place-items-center text-muted shrink-0" aria-label="Cancel edit">
+            <X size={14} strokeWidth={2.4} />
           </button>
         </div>
       )}
@@ -1270,6 +1305,7 @@ export default function Chat() {
           canUnsend={isWithinUnsendWindow(actionsForMsg.created_at)}
           onClose={() => setActionsForMsg(null)}
           onReply={(m) => setReplyingTo(m)}
+          onEdit={(m) => { setEditingMsg(m); setText(m.content || ''); setReplyingTo(null) }}
           onForward={(m) => { setActionsForMsg(null); setForwardingMsg(m) }}
           onDelete={deleteMessage}
           onReact={(emoji) => toggleReaction(actionsForMsg.id, emoji)}

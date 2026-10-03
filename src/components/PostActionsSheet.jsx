@@ -10,10 +10,11 @@ const AUDIENCES = [
   { id: "private", label: "Only me" },
 ]
 
-export default function PostActionsSheet({ post, onClose, onDeleted, onUpdated }) {
+export default function PostActionsSheet({ post, onClose, onDeleted, onUpdated, initialSaved = false, onSaved }) {
   const { session } = useAuth()
   const myId = session?.user?.id
   const [screen, setScreen] = useState("menu") // menu | edit | audience
+  const [saved, setSaved] = useState(initialSaved)
   const [content, setContent] = useState(post.content || "")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
@@ -70,17 +71,32 @@ export default function PostActionsSheet({ post, onClose, onDeleted, onUpdated }
   }
 
   async function savePost() {
-    if (!myId) return
+    if (!myId || busy) return
+    tap("light")
     setBusy(true); setError("")
-    const { error: err } = await supabase.from("post_saves").insert({
-      post_id: post.id,
-      post_type: post._source,
-      user_id: myId,
-    })
-    setBusy(false)
-    if (err && !err.message.includes("duplicate")) { setError(err.message); return }
-    onClose?.()
-    alert("Saved!")
+    if (saved) {
+      const { error: err } = await supabase.from("post_saves")
+        .delete()
+        .eq("post_id", post.id)
+        .eq("post_type", post._source)
+        .eq("user_id", myId)
+      setBusy(false)
+      if (err) { setError(err.message); return }
+      setSaved(false)
+      onSaved?.(false, post)
+      onClose?.()
+    } else {
+      const { error: err } = await supabase.from("post_saves").insert({
+        post_id: post.id,
+        post_type: post._source,
+        user_id: myId,
+      })
+      setBusy(false)
+      if (err && !err.message.includes("duplicate")) { setError(err.message); return }
+      setSaved(true)
+      onSaved?.(true, post)
+      onClose?.()
+    }
   }
 
   async function snoozeAuthor() {
@@ -210,10 +226,14 @@ export default function PostActionsSheet({ post, onClose, onDeleted, onUpdated }
                   className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left disabled:opacity-50"
                 >
                   <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
-                    <Bookmark size={17} className="text-purple-300" />
+                    <Bookmark
+                      size={17}
+                      className="text-purple-300"
+                      fill={saved ? "#C084FC" : "none"}
+                    />
                   </div>
                   <div className="flex-1">
-                    <p className="text-cream font-semibold text-[14.5px]">Save post</p>
+                    <p className="text-cream font-semibold text-[14.5px]">{saved ? "Unsave post" : "Save post"}</p>
                   </div>
                 </button>
               )}

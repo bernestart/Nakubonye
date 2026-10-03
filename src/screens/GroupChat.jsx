@@ -49,6 +49,7 @@ export default function GroupChat() {
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [lightboxUrl, setLightboxUrl] = useState(null)
   const [replyingTo, setReplyingTo] = useState(null)
+  const [editingMsg, setEditingMsg] = useState(null)
   const [reactions, setReactions] = useState({})
   const [actionsForMsg, setActionsForMsg] = useState(null)
   const [reactionPickerFor, setReactionPickerFor] = useState(null)
@@ -126,7 +127,7 @@ export default function GroupChat() {
     // Load messages
     const { data: msgs } = await supabase
       .from("group_messages")
-      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, created_at, is_system")
+      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, edited_at, created_at, is_system")
       .eq("group_id", groupId)
       .order("created_at", { ascending: true })
       .limit(300)
@@ -205,7 +206,7 @@ export default function GroupChat() {
       if (!pin) { setPinnedMsg(null); return }
       const { data: msg } = await supabase
         .from("group_messages")
-        .select("id, sender_id, content, media_url, media_type, deleted_at")
+        .select("id, sender_id, content, media_url, media_type, deleted_at, edited_at")
         .eq("id", pin.message_id)
         .maybeSingle()
       if (cancelled) return
@@ -306,7 +307,7 @@ export default function GroupChat() {
         media_type: "audio/webm",
         media_name: "Voice · " + result.seconds + "s",
       })
-      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, created_at, is_system")
+      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, edited_at, created_at, is_system")
       .single()
 
     setBusy(false)
@@ -325,7 +326,25 @@ export default function GroupChat() {
     await voice.stop(false)
   }
 
+  async function saveEdit() {
+    if (!editingMsg || !myId) return
+    const body = text.trim()
+    if (!body) return
+    tap("light"); setSending(true)
+    const nowIso = new Date().toISOString()
+    const { error: err } = await supabase
+      .from("group_messages")
+      .update({ content: body.slice(0, 2000), edited_at: nowIso })
+      .eq("id", editingMsg.id)
+      .eq("sender_id", myId)
+    setSending(false)
+    if (err) { setError(err.message); return }
+    setMessages((cur) => cur.map((m) => m.id === editingMsg.id ? { ...m, content: body.slice(0, 2000), edited_at: nowIso } : m))
+    setEditingMsg(null); setText("")
+  }
+
   async function send() {
+    if (editingMsg) return saveEdit()
     const body = text.trim()
     if ((!body && !attachment) || !myId) return
     setBusy(true); tap("light")
@@ -358,7 +377,7 @@ export default function GroupChat() {
     const { data: inserted, error: sendErr } = await supabase
       .from("group_messages")
       .insert(payload)
-      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, created_at, is_system")
+      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, edited_at, created_at, is_system")
       .single()
 
     if (sendErr) { setError(sendErr.message); setText(body) }
@@ -797,6 +816,18 @@ export default function GroupChat() {
         </div>
       )}
 
+      {editingMsg && (
+        <div className="shrink-0 mx-3 mb-2 px-3 py-2 rounded-xl bg-elevated border border-amber-500/30 flex items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <p className="text-amber-300 text-[10.5px] font-bold tracking-wide uppercase mb-0.5">Editing message</p>
+            <p className="text-muted text-[12.5px] truncate">{editingMsg.content || "Media"}</p>
+          </div>
+          <button onClick={() => { setEditingMsg(null); setText("") }} className="w-6 h-6 rounded-full grid place-items-center text-muted shrink-0" aria-label="Cancel edit">
+            <X size={14} strokeWidth={2.4} />
+          </button>
+        </div>
+      )}
+
       {replyingTo && (
         <div className="shrink-0 mx-3 mb-2 px-3 py-2 rounded-xl bg-elevated border border-purple-500/30 flex items-start gap-2">
           <div className="flex-1 min-w-0">
@@ -817,6 +848,7 @@ export default function GroupChat() {
           isMine={actionsForMsg.sender_id === myId}
           onClose={() => setActionsForMsg(null)}
           onReply={(m) => setReplyingTo(m)}
+          onEdit={(m) => { setEditingMsg(m); setText(m.content || ""); setReplyingTo(null) }}
           onCopy={async () => { try { await navigator.clipboard.writeText(actionsForMsg.content || ""); setActionsForMsg(null) } catch {} }}
           onForward={(m) => { setActionsForMsg(null); setForwardingMsg(m) }}
           onDelete={deleteMessage}
