@@ -10,6 +10,7 @@ import ProfileConnections from '../components/ProfileConnections'
 import ProfileIntro from '../components/ProfileIntro'
 import ProfilePhotos from '../components/ProfilePhotos'
 import PhotoViewer from '../components/PhotoViewer'
+import ReelViewer from '../components/ReelViewer'
 import ProfileAbout from '../components/ProfileAbout'
 import FollowButton from '../components/FollowButton'
 import DirectMessageModal from '../components/DirectMessageModal'
@@ -99,7 +100,7 @@ export default function ProfileView() {
       supabase.from('profile_prompts').select('prompt_key, answer, display_order').eq('profile_id', userId)
         .order('display_order', { ascending: true }),
       supabase.from('profile_interests').select('interest_id').eq('profile_id', userId),
-      supabase.from('reels').select('id, video_url, thumbnail_url, caption, created_at')
+      supabase.from('reels').select('id, user_id, video_url, thumbnail_url, caption, created_at, allow_comments, clips, trim_start, trim_end, mirrored, filter_id, text_overlays, sticker_overlays, view_count, location')
         .eq('user_id', userId).eq('is_active', true).order('created_at', { ascending: false }).limit(30),
       supabase.from('user_posts').select('id, content, image_path, created_at')
         .eq('user_id', userId).eq('is_active', true).eq('audience', 'public').order('created_at', { ascending: false }).limit(30),
@@ -538,10 +539,11 @@ export default function ProfileView() {
 
       {/* Fullscreen viewers */}
       {playingReel && (
-        <div className="fixed inset-0 z-[500] bg-black flex items-center justify-center" onClick={() => setPlayingReel(null)}>
-          <button className="absolute top-4 right-4 w-10 h-10 rounded-full grid place-items-center bg-white/15 text-white z-10" onClick={() => setPlayingReel(null)} aria-label="Close">✕</button>
-          <video src={playingReel.video_url} autoPlay loop playsInline controls className="w-full h-full object-contain" onClick={(e) => e.stopPropagation()} />
-        </div>
+        <ReelViewer
+          reel={playingReel}
+          currentUserId={myId}
+          onClose={() => setPlayingReel(null)}
+        />
       )}
 
       {viewingPhoto && (
