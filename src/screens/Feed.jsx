@@ -13,6 +13,7 @@ import AppHeader from "../components/AppHeader"
 import StoriesRow from "../components/StoriesRow"
 import SuggestedPeople from "../components/SuggestedPeople"
 import PostImages from "../components/PostImages"
+import ExpandableText from "../components/ExpandableText"
 import MatchModal from "../components/MatchModal"
 import PostCommentsSheet from "../components/PostCommentsSheet"
 import PostActionsSheet from "../components/PostActionsSheet"
@@ -833,7 +834,7 @@ export default function Feed() {
                     <span className="w-6 h-6 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
                   )}
                 </div>
-                {pp.content && <p className="px-3 pb-3 text-cream text-[14px] leading-[1.5] whitespace-pre-wrap">{pp.content}</p>}
+                {pp.content && <ExpandableText text={pp.content} className="px-3 pb-3 text-cream text-[14px] leading-[1.5] whitespace-pre-wrap" />}
                 {pp.imagePreview && <img src={pp.imagePreview} alt="" className="w-full max-h-[60vh] object-cover" />}
                 {pp._status === "failed" && (
                   <div className="px-3 py-2.5 border-t border-red-500/20 bg-red-500/5">
@@ -887,7 +888,7 @@ export default function Feed() {
 
                     {/* Caption */}
                     {p.content && (
-                      <p className="px-3 pb-3 text-cream text-[14px] leading-[1.5] whitespace-pre-wrap">{p.content}</p>
+                      <ExpandableText text={p.content} className="px-3 pb-3 text-cream text-[14px] leading-[1.5] whitespace-pre-wrap" />
                     )}
 
                     {/* Video / thumbnail — tap opens Reels player */}
@@ -1090,7 +1091,7 @@ export default function Feed() {
 
                 {/* Content */}
                 {p.content && (
-                  <p className="px-3 pb-3 text-cream text-[14px] leading-[1.5] whitespace-pre-wrap">{p.content}</p>
+                  <ExpandableText text={p.content} className="px-3 pb-3 text-cream text-[14px] leading-[1.5] whitespace-pre-wrap" />
                 )}
 
                 {(() => {
