@@ -9,6 +9,7 @@ import BrandGlow from '../components/BrandGlow'
 import ProfileConnections from '../components/ProfileConnections'
 import ProfileIntro from '../components/ProfileIntro'
 import ProfilePhotos from '../components/ProfilePhotos'
+import PhotoViewer from '../components/PhotoViewer'
 import ProfileAbout from '../components/ProfileAbout'
 import FollowButton from '../components/FollowButton'
 import DirectMessageModal from '../components/DirectMessageModal'
@@ -544,10 +545,11 @@ export default function ProfileView() {
       )}
 
       {viewingPhoto && (
-        <div className="fixed inset-0 z-[500] bg-black flex items-center justify-center" onClick={() => setViewingPhoto(null)}>
-          <button className="absolute top-4 right-4 w-10 h-10 rounded-full grid place-items-center bg-white/15 text-white z-10" onClick={() => setViewingPhoto(null)} aria-label="Close">✕</button>
-          <img src={viewingPhoto} alt="" className="w-full h-full object-contain" onClick={(e) => e.stopPropagation()} />
-        </div>
+        <PhotoViewer
+          photo={viewingPhoto}
+          currentUserId={myId}
+          onClose={() => setViewingPhoto(null)}
+        />
       )}
 
       {/* Options menu */}

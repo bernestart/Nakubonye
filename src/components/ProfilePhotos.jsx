@@ -31,7 +31,7 @@ export default function ProfilePhotos({ userId, onPhotoClick, emptySubtitle = "N
       setLoading(true)
       const [photosRes, albumsRes, tagsRes] = await Promise.all([
         supabase.from('photos')
-          .select('id, storage_path, bucket, source, album_id, created_at')
+          .select('id, user_id, storage_path, bucket, source, album_id, created_at')
           .eq('user_id', userId)
           .order('created_at', { ascending: false }),
         supabase.from('albums')
@@ -108,7 +108,7 @@ export default function ProfilePhotos({ userId, onPhotoClick, emptySubtitle = "N
             {openAlbumPhotos.map((p) => (
               <button
                 key={p.id}
-                onClick={() => onPhotoClick(photoUrl(p.bucket, p.storage_path))}
+                onClick={() => onPhotoClick(p)}
                 className="relative aspect-square rounded-lg overflow-hidden bg-black"
               >
                 <img src={photoUrl(p.bucket, p.storage_path)} alt="" className="w-full h-full object-cover" />
@@ -200,7 +200,7 @@ export default function ProfilePhotos({ userId, onPhotoClick, emptySubtitle = "N
           {listForTab.map((p) => (
             <button
               key={p.id}
-              onClick={() => onPhotoClick(photoUrl(p.bucket, p.storage_path))}
+              onClick={() => onPhotoClick(p)}
               className="relative aspect-square rounded-lg overflow-hidden bg-black"
             >
               <img src={photoUrl(p.bucket, p.storage_path)} alt="" className="w-full h-full object-cover" />
