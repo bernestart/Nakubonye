@@ -91,12 +91,13 @@ function BrowseTab({ nav, myId }) {
     setLoading(true)
     let q = supabase
       .from('listings')
-      .select('id, seller_id, title, price, currency, category, location, image_paths, status, created_at')
+      .select('id, seller_id, title, price, currency, category, condition, location, image_paths, status, created_at')
       .eq('status', 'active')
       .order('created_at', { ascending: false })
       .limit(60)
 
     if (category !== 'all') q = q.eq('category', category)
+    if (condition !== 'all') q = q.eq('condition', condition)
 
     const { data, error } = await q
     if (error) { console.warn('listings load:', error.message); setListings([]); setLoading(false); return }
@@ -113,16 +114,22 @@ function BrowseTab({ nav, myId }) {
 
     setListings((data || []).map((l) => ({ ...l, seller: sellerMap.get(l.seller_id) })))
     setLoading(false)
-  }, [category])
+  }, [category, condition])
 
   useEffect(() => { load() }, [load])
 
-  const filtered = search.trim()
+  const baseFiltered = search.trim()
     ? listings.filter((l) =>
         l.title.toLowerCase().includes(search.toLowerCase()) ||
         (l.location || '').toLowerCase().includes(search.toLowerCase())
       )
     : listings
+
+  const filtered = [...baseFiltered].sort((a, b) => {
+    if (sort === 'price_asc')  return (Number(a.price) || 0) - (Number(b.price) || 0)
+    if (sort === 'price_desc') return (Number(b.price) || 0) - (Number(a.price) || 0)
+    return new Date(b.created_at) - new Date(a.created_at)
+  })
 
   return (
     <>
@@ -156,6 +163,73 @@ function BrowseTab({ nav, myId }) {
           </button>
         ))}
       </div>
+
+      {/* Filter + sort bar */}
+      <div className="flex items-center gap-2 px-4 pb-2 shrink-0 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+        <button
+          onClick={() => { tap('light'); setFiltersOpen((v) => !v) }}
+          className="shrink-0 h-8 px-3 rounded-full text-[12px] font-bold flex items-center gap-1.5"
+          style={{
+            background: filtersOpen || condition !== 'all' ? 'rgba(236,72,153,0.15)' : 'rgba(255,255,255,0.05)',
+            border: filtersOpen || condition !== 'all' ? '1px solid rgba(236,72,153,0.5)' : '1px solid rgba(255,255,255,0.08)',
+            color: filtersOpen || condition !== 'all' ? '#F9A8D4' : '#aaa',
+          }}
+        >
+          <Filter size={13} /> Filters{condition !== 'all' ? ' · 1' : ''}
+        </button>
+
+        <div className="flex gap-1.5">
+          {[
+            { id: 'recent',     label: 'Recent' },
+            { id: 'price_asc',  label: 'Price ↑' },
+            { id: 'price_desc', label: 'Price ↓' },
+          ].map((so) => (
+            <button
+              key={so.id}
+              onClick={() => { tap('light'); setSort(so.id) }}
+              className="shrink-0 h-8 px-3 rounded-full text-[12px] font-bold"
+              style={{
+                background: sort === so.id ? 'rgba(168,85,247,0.2)' : 'rgba(255,255,255,0.05)',
+                border: sort === so.id ? '1px solid rgba(168,85,247,0.5)' : '1px solid rgba(255,255,255,0.08)',
+                color: sort === so.id ? '#DDD6FE' : '#aaa',
+              }}
+            >
+              {so.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {filtersOpen && (
+        <div className="px-4 pb-3 shrink-0">
+          <div className="rounded-2xl bg-surface border border-white/8 p-3">
+            <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">Condition</p>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { id: 'all', label: 'Any' },
+                { id: 'new', label: 'New' },
+                { id: 'like_new', label: 'Like new' },
+                { id: 'good', label: 'Good' },
+                { id: 'fair', label: 'Fair' },
+                { id: 'used', label: 'Used' },
+              ].map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => { tap('light'); setCondition(c.id) }}
+                  className="h-8 px-3 rounded-full text-[12px] font-bold"
+                  style={{
+                    background: condition === c.id ? 'linear-gradient(135deg, #EC4899 0%, #A855F7 100%)' : 'rgba(255,255,255,0.05)',
+                    border: condition === c.id ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                    color: condition === c.id ? '#fff' : '#aaa',
+                  }}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {loading ? (

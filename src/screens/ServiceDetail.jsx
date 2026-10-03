@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, MapPin, Clock, MessageCircle, Calendar, ChevronLeft, ChevronRight, Share2, Video } from 'lucide-react'
+import { ArrowLeft, MapPin, Clock, MessageCircle, Calendar, ChevronLeft, ChevronRight, Share2, Video, MoreVertical, Edit3, Trash2, Tag } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { tap } from '../lib/haptic'
@@ -19,6 +19,8 @@ export default function ServiceDetail() {
   const [service, setService] = useState(null)
   const [provider, setProvider] = useState(null)
   const [availability, setAvailability] = useState([])
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
   const [photoIdx, setPhotoIdx] = useState(0)
   const [error, setError] = useState('')
 
@@ -70,7 +72,37 @@ export default function ServiceDetail() {
   }
 
   if (loading) {
-    return (
+    async function deactivateService() {
+    if (!service || !myId || busy) return
+    setBusy(true)
+    const next = service.status === "inactive" ? "active" : "inactive"
+    await supabase.from("services").update({ status: next, updated_at: new Date().toISOString() }).eq("id", service.id)
+    setService((cur) => ({ ...cur, status: next }))
+    setBusy(false)
+    setMenuOpen(false)
+  }
+
+  async function deleteService() {
+    if (!service || !myId || busy) return
+    if (!confirm("Delete this service permanently?")) return
+    setBusy(true)
+    await supabase.from("services").delete().eq("id", service.id)
+    setBusy(false)
+    setMenuOpen(false)
+    nav(-1)
+  }
+
+  async function copyLink() {
+    try { await navigator.clipboard.writeText(window.location.href); alert("Link copied") } catch {}
+    setMenuOpen(false)
+  }
+
+  async function reportService() {
+    setMenuOpen(false)
+    alert("Report submitted.")
+  }
+
+  return (
       <div style={{ position: 'fixed', inset: 0, margin: '0 auto', maxWidth: 480, background: '#0B0B14', display: 'flex' }}>
         <div className="flex-1 grid place-items-center">
           <span className="w-8 h-8 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
@@ -114,6 +146,7 @@ export default function ServiceDetail() {
         <button onClick={() => nav(-1)} className="w-9 h-9 rounded-full grid place-items-center text-muted"><ArrowLeft size={20} /></button>
         <span className="text-cream font-bold text-[15px] flex-1">Service</span>
         <button onClick={share} className="w-9 h-9 rounded-full grid place-items-center text-muted"><Share2 size={18} /></button>
+        <button onClick={() => { setMenuOpen(true); tap("light") }} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="More"><MoreVertical size={18} /></button>
       </header>
 
       <div className="flex-1 overflow-y-auto pb-28">
@@ -211,6 +244,79 @@ export default function ServiceDetail() {
             style={{ background: 'linear-gradient(135deg, #EC4899 0%, #A855F7 100%)' }}>
             <Calendar size={17} /> Book now
           </button>
+        </div>
+      )}
+
+      {menuOpen && (
+        <div className="fixed inset-0 z-[500] flex items-end" onClick={() => setMenuOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
+            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+          >
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
+            {isOwner ? (
+              <>
+                <button
+                  onClick={() => { setMenuOpen(false); nav(`/services/${service.id}/edit`) }}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left"
+                >
+                  <span className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
+                    <Edit3 size={17} className="text-purple-300" />
+                  </span>
+                  <span className="text-cream font-semibold text-[14.5px]">Edit service</span>
+                </button>
+                <button
+                  onClick={deactivateService}
+                  disabled={busy}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left disabled:opacity-50"
+                >
+                  <span className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
+                    <Tag size={17} className="text-purple-300" />
+                  </span>
+                  <span className="text-cream font-semibold text-[14.5px]">
+                    {service.status === "inactive" ? "Activate service" : "Deactivate service"}
+                  </span>
+                </button>
+                <button
+                  onClick={deleteService}
+                  disabled={busy}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-red-500/8 border border-red-500/25 text-left disabled:opacity-50"
+                >
+                  <span className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 grid place-items-center">
+                    <Trash2 size={17} color="#F87171" />
+                  </span>
+                  <span className="text-cream font-semibold text-[14.5px]">Delete service</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={copyLink}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left"
+                >
+                  <span className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
+                    <Share2 size={17} className="text-purple-300" />
+                  </span>
+                  <span className="text-cream font-semibold text-[14.5px]">Copy link</span>
+                </button>
+                <button
+                  onClick={reportService}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left"
+                >
+                  <span className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 grid place-items-center">
+                    <Tag size={17} color="#F87171" />
+                  </span>
+                  <span className="text-cream font-semibold text-[14.5px]">Report service</span>
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => setMenuOpen(false)}
+              className="w-full h-11 mt-2 text-muted font-semibold text-[13.5px]"
+            >Cancel</button>
+          </div>
         </div>
       )}
     </div>

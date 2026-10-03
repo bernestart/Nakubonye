@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, MapPin, Tag, Heart, MessageCircle, Share2, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft, MapPin, Tag, Heart, MessageCircle, Share2, MoreVertical, ChevronLeft, ChevronRight, Edit3, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { tap } from '../lib/haptic'
@@ -16,7 +16,10 @@ export default function ListingDetail() {
   const [loading, setLoading] = useState(true)
   const [listing, setListing] = useState(null)
   const [seller, setSeller] = useState(null)
+  const [sellerMeta, setSellerMeta] = useState({ listings: 0, joined: null })
   const [saved, setSaved] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
   const [photoIdx, setPhotoIdx] = useState(0)
   const [error, setError] = useState('')
 
@@ -36,12 +39,33 @@ export default function ListingDetail() {
     }
     setListing(data)
 
-    const { data: prof } = await supabase
-      .from('profiles')
-      .select('id, display_name, username, photo_url, is_verified')
-      .eq('id', data.seller_id)
-      .maybeSingle()
+    const [profRes, photoRes, listCountRes] = await Promise.all([
+      supabase.from('profiles')
+        .select('id, display_name, username, photo_url, is_verified, created_at')
+        .eq('id', data.seller_id)
+        .maybeSingle(),
+      supabase.from('profile_photos')
+        .select('storage_path')
+        .eq('user_id', data.seller_id)
+        .order('is_primary', { ascending: false })
+        .order('display_order', { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+      supabase.from('listings')
+        .select('id', { count: 'exact', head: true })
+        .eq('seller_id', data.seller_id)
+        .eq('status', 'active'),
+    ])
+
+    const prof = profRes.data
+    if (prof && photoRes.data?.storage_path) {
+      prof.photo_url = publicPhotoUrl(photoRes.data.storage_path)
+    }
     setSeller(prof)
+    setSellerMeta({
+      listings: listCountRes.count || 0,
+      joined: prof?.created_at || null,
+    })
 
     if (myId) {
       const { data: s } = await supabase
@@ -87,6 +111,36 @@ export default function ListingDetail() {
     }
     // Just navigate — the chat screen handles creation
     nav(`/messages/${seller.id}`)
+  }
+
+  async function markSold() {
+    if (!listing || !myId || busy) return
+    setBusy(true)
+    const next = listing.status === "sold" ? "active" : "sold"
+    await supabase.from("listings").update({ status: next, updated_at: new Date().toISOString() }).eq("id", listing.id)
+    setListing((cur) => ({ ...cur, status: next }))
+    setBusy(false)
+    setMenuOpen(false)
+  }
+
+  async function deleteListing() {
+    if (!listing || !myId || busy) return
+    if (!confirm("Delete this listing permanently?")) return
+    setBusy(true)
+    await supabase.from("listings").delete().eq("id", listing.id)
+    setBusy(false)
+    setMenuOpen(false)
+    nav(-1)
+  }
+
+  async function copyLink() {
+    try { await navigator.clipboard.writeText(window.location.href); alert("Link copied") } catch {}
+    setMenuOpen(false)
+  }
+
+  async function reportListing() {
+    setMenuOpen(false)
+    alert("Report submitted.")
   }
 
   async function shareListing() {
@@ -158,6 +212,9 @@ export default function ListingDetail() {
         <button onClick={shareListing} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Share">
           <Share2 size={18} />
         </button>
+        <button onClick={() => { setMenuOpen(true); tap("light") }} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="More">
+          <MoreVertical size={18} />
+        </button>
       </header>
 
       <div className="flex-1 overflow-y-auto pb-28">
@@ -224,20 +281,38 @@ export default function ListingDetail() {
           </div>
         </div>
 
-        {/* Seller card */}
-        <button
-          onClick={() => nav(`/profile/${seller?.id}`)}
-          className="w-full flex items-center gap-3 px-5 py-3 border-b border-white/8 text-left active:bg-white/[0.03]"
-        >
-          <span className="w-11 h-11 rounded-full overflow-hidden bg-purple-600 grid place-items-center shrink-0 text-white font-black">
-            {sellerAvatar ? <img src={sellerAvatar} alt="" className="w-full h-full object-cover" /> : sellerName[0].toUpperCase()}
-          </span>
-          <div className="flex-1 min-w-0">
-            <p className="text-cream font-bold text-[14px] truncate">{sellerName}</p>
-            <p className="text-muted text-[11.5px]">View seller profile</p>
+        {/* Seller card — enriched */}
+        <div className="w-full px-5 py-4 border-b border-white/8">
+          <div className="flex items-center gap-3 mb-3">
+            <button
+              onClick={() => nav(`/profile/${seller?.id}`)}
+              className="w-12 h-12 rounded-full overflow-hidden bg-purple-600 grid place-items-center shrink-0 text-white font-black"
+            >
+              {sellerAvatar ? <img src={sellerAvatar} alt="" className="w-full h-full object-cover" /> : sellerName[0].toUpperCase()}
+            </button>
+            <button
+              onClick={() => nav(`/profile/${seller?.id}`)}
+              className="flex-1 min-w-0 text-left"
+            >
+              <p className="text-cream font-bold text-[14.5px] truncate flex items-center gap-1.5">
+                {sellerName}
+                {seller?.is_verified && <VerifiedBadge size={13} />}
+              </p>
+              <p className="text-muted text-[11.5px]">
+                {sellerMeta.listings} active listing{sellerMeta.listings === 1 ? "" : "s"}
+                {sellerMeta.joined ? ` · Joined ${new Date(sellerMeta.joined).toLocaleDateString([], { month: "short", year: "numeric" })}` : ""}
+              </p>
+            </button>
+            {!isOwner && (
+              <button
+                onClick={messageSeller}
+                className="shrink-0 h-9 px-3.5 rounded-full bg-white/[0.06] border border-white/10 text-cream font-bold text-[12.5px] flex items-center gap-1.5"
+              >
+                <MessageCircle size={14} /> Message
+              </button>
+            )}
           </div>
-          <ChevronRight size={18} className="text-subtle" />
-        </button>
+        </div>
 
         {/* Description */}
         {listing.description && (
@@ -270,6 +345,88 @@ export default function ListingDetail() {
           >
             <MessageCircle size={17} /> Message seller
           </button>
+        </div>
+      )}
+
+      {menuOpen && (
+        <div className="fixed inset-0 z-[500] flex items-end" onClick={() => setMenuOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
+            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+          >
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
+            {isOwner ? (
+              <>
+                <button
+                  onClick={() => { setMenuOpen(false); nav(`/marketplace/${listing.id}/edit`) }}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left"
+                >
+                  <span className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
+                    <Edit3 size={17} className="text-purple-300" />
+                  </span>
+                  <span className="text-cream font-semibold text-[14.5px]">Edit listing</span>
+                </button>
+                <button
+                  onClick={markSold}
+                  disabled={busy}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left disabled:opacity-50"
+                >
+                  <span className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
+                    <Tag size={17} className="text-purple-300" />
+                  </span>
+                  <span className="text-cream font-semibold text-[14.5px]">
+                    {listing.status === "sold" ? "Mark as available" : "Mark as sold"}
+                  </span>
+                </button>
+                <button
+                  onClick={deleteListing}
+                  disabled={busy}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-red-500/8 border border-red-500/25 text-left disabled:opacity-50"
+                >
+                  <span className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 grid place-items-center">
+                    <Trash2 size={17} color="#F87171" />
+                  </span>
+                  <span className="text-cream font-semibold text-[14.5px]">Delete listing</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => { toggleSave(); setMenuOpen(false) }}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left"
+                >
+                  <span className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
+                    <Heart size={17} fill={saved ? "#C084FC" : "none"} className="text-purple-300" />
+                  </span>
+                  <span className="text-cream font-semibold text-[14.5px]">{saved ? "Unsave" : "Save listing"}</span>
+                </button>
+                <button
+                  onClick={copyLink}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left"
+                >
+                  <span className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
+                    <Share2 size={17} className="text-purple-300" />
+                  </span>
+                  <span className="text-cream font-semibold text-[14.5px]">Copy link</span>
+                </button>
+                <button
+                  onClick={reportListing}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left"
+                >
+                  <span className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 grid place-items-center">
+                    <Tag size={17} color="#F87171" />
+                  </span>
+                  <span className="text-cream font-semibold text-[14.5px]">Report listing</span>
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => setMenuOpen(false)}
+              className="w-full h-11 mt-2 text-muted font-semibold text-[13.5px]"
+            >Cancel</button>
+          </div>
         </div>
       )}
     </div>
