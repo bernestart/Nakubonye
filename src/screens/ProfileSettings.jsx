@@ -4,7 +4,7 @@ import {
   ArrowLeft, ChevronRight, ChevronDown, LogOut, Bell, Gift, Crown,
   Wallet as WalletIcon, UserX, Shield, ShieldCheck, Info, FileText,
   Eye, Zap, Key, Users, Plus, Bookmark, LayoutGrid, Play, Heart,
-  Store, Briefcase, Calendar
+  Store, Briefcase, Calendar, Clock
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
