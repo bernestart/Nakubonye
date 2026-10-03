@@ -193,9 +193,18 @@ export default function Feed() {
       .eq("user_id", myId)
     const hiddenKeys = new Set((hideRows || []).map((h) => h.post_type + ":" + h.post_id))
 
+    // Snoozed users — filter their posts from feed
+    const { data: snoozeRows } = await supabase
+      .from("post_snoozes")
+      .select("snoozed_user_id")
+      .eq("user_id", myId)
+      .gt("until_at", new Date().toISOString())
+    const snoozedIds = new Set((snoozeRows || []).map((s) => s.snoozed_user_id))
+
     // 3e. Sort posts and reels separately
     const postsSorted = [...communityPosts, ...personalPosts, ...listingItems, ...serviceItems]
       .filter((r) => !hiddenKeys.has((r._source || "community") + ":" + r.id))
+      .filter((r) => !snoozedIds.has(r.author_id))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     const reelsSorted = reelItems
       .filter((r) => !hiddenKeys.has("reel:" + r.id))

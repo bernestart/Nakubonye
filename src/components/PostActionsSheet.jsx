@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { X, Pencil, Users, Trash2, Flag, EyeOff, Link2, Bookmark } from "lucide-react"
+import { X, Pencil, Users, Trash2, Flag, EyeOff, Link2, Bookmark , Clock , UserMinus } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
@@ -81,6 +81,39 @@ export default function PostActionsSheet({ post, onClose, onDeleted, onUpdated }
     if (err && !err.message.includes("duplicate")) { setError(err.message); return }
     onClose?.()
     alert("Saved!")
+  }
+
+  async function snoozeAuthor() {
+    if (!post.author_id || busy) return
+    tap("light")
+    setBusy(true)
+    const until = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    const { error: insErr } = await supabase
+      .from("post_snoozes")
+      .upsert(
+        { user_id: myId, snoozed_user_id: post.author_id, until_at: until },
+        { onConflict: "user_id,snoozed_user_id" }
+      )
+    setBusy(false)
+    if (insErr) { setError(insErr.message); return }
+    onDeleted?.(post.id)
+    onClose?.()
+  }
+
+  async function unfollowAuthor() {
+    if (!post.author_id || busy) return
+    if (!confirm("Unfollow this person? You'll stop seeing their posts.")) return
+    tap("light")
+    setBusy(true)
+    const { error: delErr } = await supabase
+      .from("follows")
+      .delete()
+      .eq("follower_id", myId)
+      .eq("following_id", post.author_id)
+    setBusy(false)
+    if (delErr) { setError(delErr.message); return }
+    onDeleted?.(post.id)
+    onClose?.()
   }
 
   async function hidePost() {
@@ -196,6 +229,38 @@ export default function PostActionsSheet({ post, onClose, onDeleted, onUpdated }
                   </div>
                   <div className="flex-1">
                     <p className="text-cream font-semibold text-[14.5px]">Hide post</p>
+                  </div>
+                </button>
+              )}
+
+              {!isMine && post.author_id && (
+                <button
+                  onClick={snoozeAuthor}
+                  disabled={busy}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left disabled:opacity-50"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
+                    <Clock size={17} className="text-purple-300" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-cream font-semibold text-[14.5px]">Snooze for 30 days</p>
+                    <p className="text-muted text-[12px]">Stop seeing posts from this person</p>
+                  </div>
+                </button>
+              )}
+
+              {!isMine && post.author_id && (
+                <button
+                  onClick={unfollowAuthor}
+                  disabled={busy}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left disabled:opacity-50"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
+                    <UserMinus size={17} className="text-purple-300" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-cream font-semibold text-[14.5px]">Unfollow</p>
+                    <p className="text-muted text-[12px]">Stop seeing their posts</p>
                   </div>
                 </button>
               )}
