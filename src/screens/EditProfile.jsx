@@ -218,6 +218,20 @@ export default function EditProfile() {
         display_order: inserted.display_order,
         url: publicPhotoUrl(inserted.storage_path),
       }])
+
+      try {
+        const { data: picAlbum } = await supabase.from('albums')
+          .select('id').eq('user_id', myId).eq('system_key', 'profile_pictures').maybeSingle()
+        if (picAlbum?.id) {
+          await supabase.from('photos').upsert({
+            user_id: myId,
+            album_id: picAlbum.id,
+            storage_path: inserted.storage_path,
+            bucket: 'profile-photos',
+            source: 'profile',
+          }, { onConflict: 'bucket,storage_path' })
+        }
+      } catch (e) { console.warn('photo register (profile) failed', e) }
     }
 
     setUploading(false)
@@ -228,6 +242,10 @@ export default function EditProfile() {
     tap('light')
     await supabase.storage.from('profile-photos').remove([photo.storage_path])
     await supabase.from('profile_photos').delete().eq('id', photo.id)
+    supabase.from('photos').delete()
+      .eq('bucket', 'profile-photos')
+      .eq('storage_path', photo.storage_path)
+      .then(() => {}, (e) => console.warn('photo delete mirror failed', e))
 
     const remaining = photos.filter((p) => p.id !== photo.id)
     // If we deleted the primary, promote the first remaining
@@ -281,12 +299,25 @@ export default function EditProfile() {
     // Upload cover photo if changed
     let coverPath = existingCoverPath || null
     if (coverFile) {
-      const path = `covers/${myId}.jpg`
+      const path = `covers/${myId}/${crypto.randomUUID()}.jpg`
       const { error: covErr } = await supabase.storage
         .from('profile-photos')
-        .upload(path, coverFile, { upsert: true, contentType: 'image/jpeg' })
+        .upload(path, coverFile, { upsert: false, contentType: 'image/jpeg' })
       if (covErr) { setSaving(false); setError(covErr.message); return }
       coverPath = path
+      try {
+        const { data: coverAlbum } = await supabase.from('albums')
+          .select('id').eq('user_id', myId).eq('system_key', 'cover_photos').maybeSingle()
+        if (coverAlbum?.id) {
+          await supabase.from('photos').upsert({
+            user_id: myId,
+            album_id: coverAlbum.id,
+            storage_path: path,
+            bucket: 'profile-photos',
+            source: 'cover',
+          }, { onConflict: 'bucket,storage_path' })
+        }
+      } catch (e) { console.warn('photo register (cover) failed', e) }
     }
 
     const { data: updated, error: pErr } = await supabase
