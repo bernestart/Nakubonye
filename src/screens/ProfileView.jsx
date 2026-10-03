@@ -50,7 +50,7 @@ export default function ProfileView() {
 
     const { data: prof, error: profErr } = await supabase
       .from('profiles')
-      .select('id, display_name, username, date_of_birth, bio, city, country, is_verified, looking_for, cover_photo_path')
+      .select('id, display_name, username, date_of_birth, bio, city, country, is_verified, looking_for, cover_photo_path, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children')
       .eq('id', userId)
       .single()
 
@@ -430,9 +430,105 @@ export default function ProfileView() {
           )}
 
           {activeTab === 'about' && (
-            <div className="px-4 py-12 text-center">
-              <p className="text-cream font-bold text-[15px] mb-1">About</p>
-              <p className="text-muted text-[13px]">Coming in the next step.</p>
+            <div className="px-4 py-3">
+              {person.bio && (
+                <AboutSection title="Bio">
+                  <p className="text-cream/90 text-[13.5px] leading-[1.55] whitespace-pre-wrap">{person.bio}</p>
+                </AboutSection>
+              )}
+
+              {(person.profession || person.education) && (
+                <AboutSection title="Work & Education">
+                  {person.profession && (
+                    <AboutRow icon="💼" label="Profession" value={person.profession} />
+                  )}
+                  {person.education && (
+                    <AboutRow icon="🎓" label="Education" value={person.education} />
+                  )}
+                </AboutSection>
+              )}
+
+              {(person.city || person.country) && (
+                <AboutSection title="Location">
+                  <AboutRow
+                    icon="📍"
+                    label="Lives in"
+                    value={[person.city, person.country].filter(Boolean).join(', ')}
+                  />
+                </AboutSection>
+              )}
+
+              {(person.date_of_birth || person.gender) && (
+                <AboutSection title="Basic info">
+                  {person.date_of_birth && (
+                    <AboutRow icon="🎂" label="Birthday" value={new Date(person.date_of_birth).toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })} />
+                  )}
+                  {person.gender && (
+                    <AboutRow icon="👤" label="Gender" value={person.gender} />
+                  )}
+                  {person.languages?.length > 0 && (
+                    <AboutRow icon="🗣️" label="Languages" value={Array.isArray(person.languages) ? person.languages.join(', ') : person.languages} />
+                  )}
+                </AboutSection>
+              )}
+
+              {(person.relationship_status || person.looking_for || person.relationship_preference) && (
+                <AboutSection title="Relationship">
+                  {person.relationship_status && (
+                    <AboutRow icon="💜" label="Status" value={person.relationship_status} />
+                  )}
+                  {person.looking_for && (
+                    <AboutRow icon="🔍" label="Looking for" value={person.looking_for} />
+                  )}
+                  {person.relationship_preference && (
+                    <AboutRow icon="💫" label="Interested in" value={person.relationship_preference} />
+                  )}
+                </AboutSection>
+              )}
+
+              {(person.smoker || person.drinking || person.exercise || person.diet || person.pets || person.children || person.partying) && (
+                <AboutSection title="Lifestyle">
+                  {person.smoker && <AboutRow icon="🚬" label="Smoking" value={person.smoker} />}
+                  {person.drinking && <AboutRow icon="🍷" label="Drinking" value={person.drinking} />}
+                  {person.exercise && <AboutRow icon="🏃" label="Exercise" value={person.exercise} />}
+                  {person.diet && <AboutRow icon="🥗" label="Diet" value={person.diet} />}
+                  {person.partying && <AboutRow icon="🎉" label="Partying" value={person.partying} />}
+                  {person.pets && <AboutRow icon="🐾" label="Pets" value={person.pets} />}
+                  {person.children && <AboutRow icon="👶" label="Children" value={person.children} />}
+                </AboutSection>
+              )}
+
+              {(person.body_type || person.personality || person.tattoos || person.body_height_cm) && (
+                <AboutSection title="Appearance & Personality">
+                  {person.body_height_cm && (
+                    <AboutRow icon="📏" label="Height" value={`${person.body_height_cm} cm`} />
+                  )}
+                  {person.body_type && (
+                    <AboutRow icon="💪" label="Body type" value={person.body_type} />
+                  )}
+                  {person.personality && (
+                    <AboutRow icon="✨" label="Personality" value={person.personality} />
+                  )}
+                  {person.tattoos && (
+                    <AboutRow icon="🖋️" label="Tattoos" value={person.tattoos} />
+                  )}
+                </AboutSection>
+              )}
+
+              {person.music_genres?.length > 0 && (
+                <AboutSection title="Music">
+                  <p className="text-cream/90 text-[13.5px]">
+                    {Array.isArray(person.music_genres) ? person.music_genres.join(', ') : person.music_genres}
+                  </p>
+                </AboutSection>
+              )}
+
+              {(!person.bio && !person.profession && !person.education && !person.city && !person.gender && !person.relationship_status && !person.body_type) && (
+                <div className="py-12 text-center">
+                  <p className="text-cream font-bold text-[15px] mb-1">Nothing to show yet</p>
+                  <p className="text-muted text-[13px]">They haven't filled in their details.</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -507,6 +603,29 @@ export default function ProfileView() {
       <ReportModal open={reportOpen} onClose={() => setReportOpen(false)} target={person} />
       <BlockConfirm open={blockOpen} onClose={() => setBlockOpen(false)} target={person} onBlocked={() => nav('/feed', { replace: true })} />
       <DirectMessageModal open={dmOpen} onClose={() => setDmOpen(false)} target={person} onSuccess={() => { setDmOpen(false); nav('/messages/' + userId) }} />
+    </div>
+  )
+}
+
+function AboutSection({ title, children }) {
+  return (
+    <div className="mb-5">
+      <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">{title}</p>
+      <div className="rounded-2xl bg-white/[0.03] border border-white/8 p-3.5 flex flex-col gap-2.5">
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function AboutRow({ icon, label, value }) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <span className="w-5 text-center text-[15px] shrink-0">{icon}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-muted text-[11.5px] mb-0.5">{label}</p>
+        <p className="text-cream text-[13.5px] leading-snug break-words">{value}</p>
+      </div>
     </div>
   )
 }
