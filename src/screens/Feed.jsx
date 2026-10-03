@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { ImagePlus, Heart, Send, X, Users, Play, Camera, PenSquare, Video, Image as ImageIcon, MessageCircle, Share2 , MoreVertical } from "lucide-react"
+import { ImagePlus, Heart, Send, X, Users, Play, Camera, PenSquare, Video, Image as ImageIcon, MessageCircle, Share2 , MoreVertical , Volume2 , VolumeX } from "lucide-react"
 import VerifiedBadge from "../components/VerifiedBadge"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
@@ -101,6 +101,7 @@ export default function Feed() {
   const [matchModal, setMatchModal] = useState(null)
   const [likesModalFor, setLikesModalFor] = useState(null)
   const [commentsModalFor, setCommentsModalFor] = useState(null)
+  const [feedMuted, setFeedMuted] = useState(true)
   const [composerChooserOpen, setComposerChooserOpen] = useState(false)
   const [postComposerOpen, setPostComposerOpen] = useState(false)
   const [pendingPosts, setPendingPosts] = useState([])
@@ -749,6 +750,12 @@ export default function Feed() {
     return () => obs.disconnect()
   }, [posts])
 
+  // Sync mute state to all feed videos when toggled
+  useEffect(() => {
+    const videos = document.querySelectorAll("[data-reel-video]")
+    videos.forEach((v) => { v.muted = feedMuted })
+  }, [feedMuted, posts])
+
   useEffect(() => { load() }, [load])
 
   useEffect(() => {
@@ -1004,50 +1011,79 @@ export default function Feed() {
                     )}
 
                     {/* Video / thumbnail — tap opens Reels player */}
-                    <button
-                      onClick={() => { tap("light"); nav("/reels") }}
-                      className="relative w-full block bg-black"
-                      style={{ aspectRatio: "9 / 16", maxHeight: "72vh" }}
-                    >
-                      {p.video_url ? (
-                        <>
-                          <div
-                            className="absolute inset-0"
-                            style={{
-                              background: "linear-gradient(160deg, #2A1B4A 0%, #4C1D95 40%, #831843 100%)",
-                            }}
-                          />
-                          <video
-                            data-reel-video="true"
-                            src={p.video_url}
-                            poster={p.thumbnail_url || undefined}
-                            muted
-                            loop
-                            playsInline
-                            preload="metadata"
+                    <div className="relative">
+                      <button
+                        onClick={() => { tap("light"); nav("/reels") }}
+                        className="relative w-full block bg-black"
+                        style={{ aspectRatio: "9 / 16", maxHeight: "72vh" }}
+                      >
+                        {p.video_url ? (
+                          <>
+                            <div
+                              className="absolute inset-0"
+                              style={{
+                                background: "linear-gradient(160deg, #2A1B4A 0%, #4C1D95 40%, #831843 100%)",
+                              }}
+                            />
+                            <video
+                              data-reel-video="true"
+                              src={p.video_url}
+                              poster={p.thumbnail_url || undefined}
+                              muted={feedMuted}
+                              loop
+                              playsInline
+                              preload="metadata"
+                              className="absolute inset-0 w-full h-full object-cover"
+                              style={{ transform: p.mirrored ? "scaleX(-1)" : "none" }}
+                            />
+                          </>
+                        ) : p.thumbnail_url ? (
+                          <img
+                            src={p.thumbnail_url}
+                            alt=""
                             className="absolute inset-0 w-full h-full object-cover"
                             style={{ transform: p.mirrored ? "scaleX(-1)" : "none" }}
                           />
-                        </>
-                      ) : p.thumbnail_url ? (
-                        <img
-                          src={p.thumbnail_url}
-                          alt=""
-                          className="absolute inset-0 w-full h-full object-cover"
-                          style={{ transform: p.mirrored ? "scaleX(-1)" : "none" }}
-                        />
-                      ) : (
-                        <div
-                          className="absolute inset-0 grid place-items-center p-6 text-center"
-                          style={{ background: "linear-gradient(160deg, #2A1B4A 0%, #4C1D95 40%, #831843 100%)" }}
+                        ) : (
+                          <div
+                            className="absolute inset-0 grid place-items-center p-6 text-center"
+                            style={{ background: "linear-gradient(160deg, #2A1B4A 0%, #4C1D95 40%, #831843 100%)" }}
+                          >
+                            <p className="text-white/85 text-[15px] font-semibold leading-tight line-clamp-4" style={{ textShadow: "0 1px 6px rgba(0,0,0,0.7)" }}>
+                              {p.content || "Watch this reel"}
+                            </p>
+                          </div>
+                        )}
+                      </button>
+
+                      {/* Sound toggle — only when there's a video */}
+                      {p.video_url && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); tap("light"); setFeedMuted((m) => !m) }}
+                          className="absolute top-2.5 right-2.5 z-10 w-9 h-9 rounded-full grid place-items-center"
+                          style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.15)" }}
+                          aria-label={feedMuted ? "Unmute" : "Mute"}
                         >
-                          <p className="text-white/85 text-[15px] font-semibold leading-tight line-clamp-4" style={{ textShadow: "0 1px 6px rgba(0,0,0,0.7)" }}>
-                            {p.content || "Watch this reel"}
+                          {feedMuted
+                            ? <VolumeX size={16} className="text-white" />
+                            : <Volume2 size={16} className="text-white" />}
+                        </button>
+                      )}
+
+                      {/* Caption overlay — bottom gradient with the reel caption */}
+                      {p.content && (
+                        <div
+                          className="absolute bottom-0 left-0 right-0 px-3 pb-2.5 pt-10 pointer-events-none"
+                          style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.72))" }}
+                        >
+                          <p className="text-white text-[12.5px] font-medium leading-snug line-clamp-2"
+                             style={{ textShadow: "0 1px 4px rgba(0,0,0,0.9)" }}>
+                            {p.content}
                           </p>
                         </div>
                       )}
-
-                    </button>
+                    </div>
 
                     {/* Footer */}
                     <button
