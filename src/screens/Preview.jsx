@@ -9,6 +9,8 @@ import AppHeader from '../components/AppHeader'
 import ProfileHeader from '../components/ProfileHeader'
 import BottomNav from '../components/BottomNav'
 import BrandGlow from '../components/BrandGlow'
+import ProfileConnections from '../components/ProfileConnections'
+import ProfileAbout from '../components/ProfileAbout'
 
 export default function Preview() {
   const nav = useNavigate()
@@ -244,19 +246,9 @@ export default function Preview() {
             )
           )}
 
-          {activeTab === "about" && (
-            <div className="px-4 py-12 text-center">
-              <p className="text-cream font-bold text-[15px] mb-1">About</p>
-              <p className="text-muted text-[13px]">Coming next step.</p>
-            </div>
-          )}
+          {activeTab === "about" && <ProfileAbout person={profile} />}
 
-          {activeTab === "connections" && (
-            <div className="px-4 py-12 text-center">
-              <p className="text-cream font-bold text-[15px] mb-1">Connections</p>
-              <p className="text-muted text-[13px]">Coming next step.</p>
-            </div>
-          )}
+          {activeTab === "connections" && <ProfileConnections userId={myId} />}
 
           {activeTab === "more" && (
             savedReels.length === 0 ? (
