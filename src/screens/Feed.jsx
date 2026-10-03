@@ -920,15 +920,15 @@ export default function Feed() {
         {loading ? (
           <div className="flex flex-col gap-2 pt-1">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="rounded-xl bg-white/[0.03] border border-white/8 p-3 animate-pulse">
+              <div key={i} className="rounded-xl bg-white/[0.03] border border-white/8 p-3">
                 <div className="flex items-center gap-2.5 mb-3">
-                  <div className="w-9 h-9 rounded-full bg-white/[0.06]" />
+                  <div className="w-9 h-9 rounded-full shimmer" />
                   <div className="flex-1">
-                    <div className="h-3 w-1/3 rounded bg-white/[0.08] mb-1.5" />
-                    <div className="h-2.5 w-1/4 rounded bg-white/[0.05]" />
+                    <div className="h-3 w-1/3 shimmer-sm mb-1.5" />
+                    <div className="h-2.5 w-1/4 shimmer-sm" />
                   </div>
                 </div>
-                <div className="h-48 rounded-xl bg-white/[0.05]" />
+                <div className="h-48 shimmer" />
               </div>
             ))}
           </div>

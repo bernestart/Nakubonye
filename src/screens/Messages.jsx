@@ -870,15 +870,15 @@ export default function Messages() {
         )}
 
         {loading ? (
-          <div className="flex flex-col gap-1 pt-2 animate-pulse">
+          <div className="flex flex-col gap-1 pt-2">
             {[0,1,2,3,4,5].map((i) => (
               <div key={i} className="flex items-center gap-3 p-3 rounded-2xl">
-                <div className="w-12 h-12 rounded-full bg-white/[0.06] border border-white/8 shrink-0" />
+                <div className="w-12 h-12 rounded-full shimmer shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <div className="h-3 w-1/3 rounded bg-white/[0.08] mb-2" />
-                  <div className="h-2.5 w-2/3 rounded bg-white/[0.05]" />
+                  <div className="h-3 w-1/3 shimmer-sm mb-2" />
+                  <div className="h-2.5 w-2/3 shimmer-sm" />
                 </div>
-                <div className="h-2.5 w-8 rounded bg-white/[0.05] shrink-0" />
+                <div className="h-2.5 w-8 shimmer-sm shrink-0" />
               </div>
             ))}
           </div>
