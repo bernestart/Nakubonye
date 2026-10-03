@@ -48,7 +48,7 @@ async function extractThumbnail(file, timeSec) {
   })
 }
 
-export default function ReelComposer({ onClose, onDone, remixOf }) {
+export default function ReelComposer({ onClose, onDone, remixOf, kind = "reel" }) {
   const { session } = useAuth()
   const myId = session?.user?.id
   const fileRef = useRef(null)
@@ -62,6 +62,7 @@ export default function ReelComposer({ onClose, onDone, remixOf }) {
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState("")
   const [duration, setDuration] = useState(0)
+  const maxSeconds = kind === "video" ? 600 : 60
   const [caption, setCaption] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
@@ -159,7 +160,7 @@ export default function ReelComposer({ onClose, onDone, remixOf }) {
       setRecordSec(0)
       timerRef.current = setInterval(() => {
         setRecordSec((s) => {
-          if (s + 1 >= MAX_RECORD_SECONDS) { stopRecording(); return MAX_RECORD_SECONDS }
+          if (s + 1 >= maxSeconds) { stopRecording(); return maxSeconds }
           return s + 1
         })
       }, 1000)
@@ -282,6 +283,7 @@ export default function ReelComposer({ onClose, onDone, remixOf }) {
 
     const { error: insErr } = await supabase.from("reels").insert({
       user_id: myId,
+      kind,
       video_url: firstUrl,
       clips: uploaded,
       caption: caption.trim() || null,
@@ -660,7 +662,7 @@ export default function ReelComposer({ onClose, onDone, remixOf }) {
             {recording && (
               <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 backdrop-blur-md rounded-full px-3 py-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
-                <span className="text-white text-[13px] font-bold">{recordSec}s / {MAX_RECORD_SECONDS}s</span>
+                <span className="text-white text-[13px] font-bold">{recordSec}s / {maxSeconds}s</span>
               </div>
             )}
             <div className="absolute top-4 right-4 flex flex-col gap-3">

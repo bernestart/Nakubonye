@@ -31,6 +31,8 @@ export default function Reels() {
   const [muted, setMuted] = useState(true)  // always start muted for autoplay
   const userMutedRef = useRef(true)
   const [composerOpen, setComposerOpen] = useState(false)
+  const [kindPickerOpen, setKindPickerOpen] = useState(false)
+  const [composerKind, setComposerKind] = useState("reel")
   const [loading, setLoading] = useState(true)
   const [currentIdx, setCurrentIdx] = useState(0)
   const [viewCounts, setViewCounts] = useState(new Map())
@@ -67,7 +69,7 @@ export default function Reels() {
     setLoading(true)
     const { data: rows } = await supabase
       .from("reels")
-      .select("id, user_id, video_url, clips, thumbnail_url, caption, duration_sec, trim_start, trim_end, mirrored, aspect_ratio, text_overlays, sticker_overlays, filter_id, audience, allow_comments, allow_remix, location, cover_frame_time, view_count, remix_of, created_at")
+      .select("id, user_id, kind, video_url, clips, thumbnail_url, caption, duration_sec, trim_start, trim_end, mirrored, aspect_ratio, text_overlays, sticker_overlays, filter_id, audience, allow_comments, allow_remix, location, cover_frame_time, view_count, remix_of, created_at")
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .limit(50)
@@ -91,6 +93,7 @@ export default function Reels() {
     }).filter((r) => {
       if (feedTab === "foryou") return true
       if (feedTab === "following") return followSet.has(r.user_id) || r.user_id === myId
+      if (feedTab === "watch") return r.kind === "video"
       return true
     })
     const ranked = feedTab === "foryou" ? [...list].sort((a, b) => fypScore(b) - fypScore(a)) : list
@@ -503,6 +506,7 @@ export default function Reels() {
           {[
             { id: "foryou", label: "For You" },
             { id: "following", label: "Following" },
+            { id: "watch", label: "Watch" },
           ].map((t) => (
             <button
               key={t.id}
@@ -588,7 +592,7 @@ export default function Reels() {
               <MessageCircle size={26} className="text-purple-300" />
             </div>
             <p className="text-white font-bold text-[17px] mb-1.5">
-              {feedTab === "following" ? "Nothing from your follows" : "No reels yet"}
+              {feedTab === "following" ? "Nothing from your follows" : feedTab === "watch" ? "No videos yet" : "No reels yet"}
             </p>
             <p className="text-white/60 text-[13.5px] mb-5">
               {feedTab === "following"
@@ -596,11 +600,11 @@ export default function Reels() {
                 : "Be the first to post one."}
             </p>
             <button
-              onClick={() => setComposerOpen(true)}
+              onClick={() => { tap("light"); setKindPickerOpen(true) }}
               className="h-12 px-6 rounded-full text-white font-bold text-[14px] inline-flex items-center gap-2"
               style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
             >
-              <Plus size={18} /> Create reel
+              <Plus size={18} /> Create
             </button>
           </div>
         </div>
@@ -764,6 +768,31 @@ export default function Reels() {
                 {/* Dark gradient bottom for readability */}
                 <div className="absolute inset-x-0 bottom-0 pointer-events-none"
                      style={{ height: "45%", background: "linear-gradient(0deg, rgba(0,0,0,0.75) 0%, transparent 100%)" }} />
+
+                {/* Kind badge — video (long-form) gets a progress scrubber */}
+                {reel.kind === "video" && (
+                  <div className="absolute left-0 right-0 bottom-0 z-20 px-3 pb-2 pointer-events-none">
+                    <div className="h-1 rounded-full bg-white/25 overflow-hidden">
+                      <div
+                        className="h-full bg-white transition-[width] duration-200"
+                        style={{ width: (() => {
+                          const v = videoRefs.current[idx]
+                          if (!v || !v.duration) return "0%"
+                          return ((v.currentTime / v.duration) * 100) + "%"
+                        })() }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {reel.kind === "video" && (
+                  <span
+                    className="absolute top-2.5 left-2.5 z-20 px-2 h-6 rounded-full text-[10.5px] font-black tracking-wider flex items-center gap-1"
+                    style={{ background: "rgba(59,130,246,0.25)", border: "1px solid rgba(59,130,246,0.55)", color: "#BFDBFE" }}
+                  >
+                    ▶ VIDEO
+                  </span>
+                )}
 
                 {/* Right action rail */}
                 <div className="absolute right-3 bottom-24 flex flex-col items-center gap-5 z-20">
@@ -948,7 +977,7 @@ export default function Reels() {
       {/* Floating "Create" FAB */}
       {!loading && reels.length > 0 && (
         <button
-          onClick={() => { tap("medium"); setComposerOpen(true) }}
+          onClick={() => { tap("medium"); setKindPickerOpen(true) }}
           className="absolute z-30 grid place-items-center"
           style={{
             right: 16,
@@ -965,9 +994,55 @@ export default function Reels() {
 
       {composerOpen && (
         <ReelComposer
+          kind={composerKind}
           onClose={() => setComposerOpen(false)}
-          onDone={() => { setComposerOpen(false); load() }}
+          onDone={() => { setComposerOpen(false); setComposerKind("reel"); load() }}
         />
+      )}
+
+      {kindPickerOpen && (
+        <div className="fixed inset-0 z-[500] flex items-end" onClick={() => setKindPickerOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
+            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+          >
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
+            <h3 className="text-cream font-extrabold text-[16px] mb-1">What would you like to post?</h3>
+
+            <button
+              onClick={() => { tap("light"); setKindPickerOpen(false); setComposerKind("reel"); setComposerOpen(true) }}
+              className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left active:opacity-80"
+            >
+              <span className="w-11 h-11 rounded-2xl grid place-items-center" style={{ background: "linear-gradient(135deg, #C084FC 0%, #EC4899 100%)" }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-cream font-bold text-[14.5px]">Short reel</p>
+                <p className="text-muted text-[12px]">Up to 60 seconds</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => { tap("light"); setKindPickerOpen(false); setComposerKind("video"); setComposerOpen(true) }}
+              className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left active:opacity-80"
+            >
+              <span className="w-11 h-11 rounded-2xl grid place-items-center" style={{ background: "linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%)" }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M17 10.5V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-4.5l5 4.5V6l-5 4.5z"/></svg>
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-cream font-bold text-[14.5px]">Long video</p>
+                <p className="text-muted text-[12px]">Up to 10 minutes</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setKindPickerOpen(false)}
+              className="w-full h-11 mt-2 text-muted font-semibold text-[13.5px]"
+            >Cancel</button>
+          </div>
+        </div>
       )}
 
       {remixFor && (
