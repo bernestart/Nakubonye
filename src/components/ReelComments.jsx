@@ -87,7 +87,27 @@ export default function ReelComments({ reelId, onClose, onCountChange }) {
       content: body.slice(0, 500),
     })
     setBusy(false)
-    if (!error) { setText(""); load() }
+    if (!error) {
+      setText(""); load()
+      // Notify reel owner (best-effort)
+      try {
+        const { data: r } = await supabase
+          .from("reels")
+          .select("user_id")
+          .eq("id", reelId)
+          .maybeSingle()
+        if (r?.user_id && r.user_id !== myId) {
+          await supabase.from("notifications").insert({
+            user_id: r.user_id,
+            actor_id: myId,
+            type: "reel_comment",
+            ref_id: String(reelId),
+            ref_type: "reel",
+            body: "commented on your reel",
+          })
+        }
+      } catch (e) { console.warn("reel comment notify failed", e) }
+    }
   }
 
   async function remove(id) {

@@ -35,13 +35,16 @@ function dayBucket(iso) {
 
 function TypeIcon({ type }) {
   const map = {
-    like_post:    { Icon: Heart,           color: "text-pink-400" },
-    comment_post: { Icon: MessageCircle,   color: "text-sky-400" },
-    match:        { Icon: Sparkles,        color: "text-purple-400" },
-    follow:       { Icon: UserPlus,        color: "text-emerald-400" },
-    reel_like:    { Icon: Play,            color: "text-pink-400" },
-    reel_comment: { Icon: MessageSquare,   color: "text-sky-400" },
-    message:      { Icon: MessageCircle,   color: "text-blue-400" },
+    like_post:         { Icon: Heart,           color: "text-pink-400" },
+    comment_post:      { Icon: MessageCircle,   color: "text-sky-400" },
+    match:             { Icon: Sparkles,        color: "text-purple-400" },
+    follow:            { Icon: UserPlus,        color: "text-emerald-400" },
+    reel_like:         { Icon: Play,            color: "text-pink-400" },
+    reel_comment:      { Icon: MessageSquare,   color: "text-sky-400" },
+    message:           { Icon: MessageCircle,   color: "text-blue-400" },
+    photo_tag:         { Icon: Users,           color: "text-purple-400" },
+    photo_tag_pending: { Icon: Users,           color: "text-purple-400" },
+    mention:           { Icon: AtSign,          color: "text-purple-400" },
   }
   const entry = map[type] || { Icon: Bell, color: "text-muted" }
   const { Icon, color } = entry

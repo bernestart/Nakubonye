@@ -95,7 +95,30 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
       content: body.slice(0, 800),
     })
     setBusy(false)
-    if (!error) { setText(""); load() }
+    if (!error) {
+      setText(""); load()
+      // Fire notification to post author (best-effort)
+      try {
+        const postTable = source === "personal" ? "user_posts" : "community_posts"
+        const idCol = source === "personal" ? "user_id" : "author_id"
+        const { data: p } = await supabase
+          .from(postTable)
+          .select(idCol)
+          .eq("id", postId)
+          .maybeSingle()
+        const targetId = p?.[idCol]
+        if (targetId && targetId !== myId) {
+          await supabase.from("notifications").insert({
+            user_id: targetId,
+            actor_id: myId,
+            type: "comment_post",
+            ref_id: String(postId),
+            ref_type: "post",
+            body: "commented on your post",
+          })
+        }
+      } catch (e) { console.warn("comment notify failed", e) }
+    }
   }
 
   async function remove(id) {

@@ -48,6 +48,18 @@ export default function FollowButton({ userId, size = "md", onFollowChange }) {
       const { error } = await supabase.from("follows").insert({ follower_id: myId, following_id: userId })
       if (error && !error.message.includes("duplicate")) {
         setState(prev); onFollowChange?.(false)
+      } else if (!error) {
+        // Notify the followed user (best-effort)
+        try {
+          await supabase.from("notifications").insert({
+            user_id: userId,
+            actor_id: myId,
+            type: "follow",
+            ref_id: myId,
+            ref_type: "profile",
+            body: "started following you",
+          })
+        } catch (e) { console.warn("follow notify failed", e) }
       }
     }
     setBusy(false)

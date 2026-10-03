@@ -848,6 +848,22 @@ export default function Feed() {
     return () => { supabase.removeChannel(ch) }
   }, [myId, load])
 
+  async function notifyReaction(post, emoji) {
+    // Determine target: post author
+    const targetId = post.author_id || post.user_id
+    if (!targetId || !myId || targetId === myId) return
+    try {
+      await supabase.from("notifications").insert({
+        user_id: targetId,
+        actor_id: myId,
+        type: "like_post",
+        ref_id: String(post.id),
+        ref_type: "post",
+        body: emoji === "❤️" ? "loved your post" : "reacted to your post",
+      })
+    } catch (e) { console.warn("notify failed", e) }
+  }
+
   async function toggleLike(postId, source = "community", emoji = null) {
     if (!myId) return
     tap("light")
@@ -903,6 +919,12 @@ export default function Feed() {
           ? { reel_id: postId, user_id: myId }
           : { post_id: postId, user_id: myId, reaction: useEmoji }
       await supabase.from(table).insert(row)
+
+      // Notify the author (skip for reels — different flow)
+      if (source !== "reel") {
+        const post = posts.find((x) => x.id === postId && x._source === source)
+        if (post) notifyReaction(post, useEmoji)
+      }
     }
   }
 

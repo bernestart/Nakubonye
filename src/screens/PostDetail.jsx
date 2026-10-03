@@ -117,6 +117,20 @@ export default function PostDetail() {
         ? { post_id: post.id, user_id: myId, reaction: useEmoji }
         : { post_id: post.id, user_id: myId, reaction: useEmoji }
       await supabase.from(likeTable).insert(row)
+
+      const targetId = post.author_id || post.user_id
+      if (targetId && targetId !== myId) {
+        try {
+          await supabase.from("notifications").insert({
+            user_id: targetId,
+            actor_id: myId,
+            type: "like_post",
+            ref_id: String(post.id),
+            ref_type: "post",
+            body: useEmoji === "❤️" ? "loved your post" : "reacted to your post",
+          })
+        } catch (e) { console.warn("notify failed", e) }
+      }
     } else {
       await supabase.from(likeTable).delete().eq("post_id", post.id).eq("user_id", myId)
     }

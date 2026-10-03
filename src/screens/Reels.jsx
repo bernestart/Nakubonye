@@ -428,6 +428,21 @@ export default function Reels() {
       nextCounts.set(reelId, (nextCounts.get(reelId) || 0) + 1)
       setLikes(nextLikes); setLikeCounts(nextCounts)
       await supabase.from("reel_likes").insert({ reel_id: reelId, user_id: myId })
+
+      // Notify reel owner (best-effort)
+      try {
+        const owner = reels.find((r) => r.id === reelId)?.user_id
+        if (owner && owner !== myId) {
+          await supabase.from("notifications").insert({
+            user_id: owner,
+            actor_id: myId,
+            type: "reel_like",
+            ref_id: String(reelId),
+            ref_type: "reel",
+            body: "liked your reel",
+          })
+        }
+      } catch (e) { console.warn("reel like notify failed", e) }
     }
   }
 
