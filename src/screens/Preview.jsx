@@ -11,6 +11,7 @@ import BottomNav from '../components/BottomNav'
 import BrandGlow from '../components/BrandGlow'
 import ProfileConnections from '../components/ProfileConnections'
 import ProfileIntro from '../components/ProfileIntro'
+import ProfilePhotos from '../components/ProfilePhotos'
 import ProfileAbout from '../components/ProfileAbout'
 
 export default function Preview() {
@@ -209,17 +210,7 @@ export default function Preview() {
           )}
 
           {activeTab === "photos" && (
-            photos.length === 0 ? (
-              <EmptyTab icon="📸" title="No photos" subtitle="Add photos from Edit profile." />
-            ) : (
-              <div className="grid grid-cols-3 gap-1 px-1">
-                {photos.map((url, i) => (
-                  <button key={i} onClick={() => setViewingPhoto(url)} className="relative aspect-square rounded-lg overflow-hidden bg-black">
-                    <img src={url} alt="" className="w-full h-full object-cover" />
-                  </button>
-                ))}
-              </div>
-            )
+            <ProfilePhotos userId={myId} onPhotoClick={setViewingPhoto} emptySubtitle="Add photos from Edit profile." />
           )}
 
           {activeTab === "about" && <ProfileAbout person={profile} />}

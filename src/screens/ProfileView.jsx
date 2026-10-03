@@ -8,6 +8,7 @@ import { tap } from '../lib/haptic'
 import BrandGlow from '../components/BrandGlow'
 import ProfileConnections from '../components/ProfileConnections'
 import ProfileIntro from '../components/ProfileIntro'
+import ProfilePhotos from '../components/ProfilePhotos'
 import ProfileAbout from '../components/ProfileAbout'
 import FollowButton from '../components/FollowButton'
 import DirectMessageModal from '../components/DirectMessageModal'
@@ -527,17 +528,7 @@ export default function ProfileView() {
           )}
 
           {activeTab === 'photos' && (
-            photos.length === 0 ? (
-              <EmptyTab icon="📸" title="No photos" subtitle="No photos on this profile yet." />
-            ) : (
-              <div className="grid grid-cols-3 gap-1 px-1">
-                {photos.map((url, i) => (
-                  <button key={i} onClick={() => setViewingPhoto(url)} className="relative aspect-square rounded-lg overflow-hidden bg-black">
-                    <img src={url} alt="" className="w-full h-full object-cover" />
-                  </button>
-                ))}
-              </div>
-            )
+            <ProfilePhotos userId={userId} onPhotoClick={setViewingPhoto} emptySubtitle="No photos on this profile yet." />
           )}
         </div>
 

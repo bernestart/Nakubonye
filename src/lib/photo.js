@@ -17,3 +17,9 @@ export function calcAge(dob) {
   if (m < 0 || (m === 0 && t.getDate() < b.getDate())) a--
   return a
 }
+
+export function photoUrl(bucket, storagePath) {
+  if (!bucket || !storagePath) return ''
+  const { data } = supabase.storage.from(bucket).getPublicUrl(storagePath)
+  return data?.publicUrl || ''
+}
