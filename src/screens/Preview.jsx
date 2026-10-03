@@ -162,33 +162,6 @@ export default function Preview() {
         <div className="pt-3">
           {activeTab === "posts" && (
             <>
-              {(interests.length > 0 || prompts.length > 0) && (
-                <div className="px-4 mb-4 pb-4 border-b border-white/8">
-                  {interests.length > 0 && (
-                    <div className="mb-4">
-                      <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">Interests</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {interests.map((n) => (
-                          <span key={n} className="px-2.5 py-1 rounded-full text-[12px] font-semibold border border-purple-500/30 text-purple-100" style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.20) 0%, rgba(236,72,153,0.10) 100%)' }}>{n}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {prompts.length > 0 && (
-                    <div>
-                      <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">Prompts</p>
-                      <div className="flex flex-col gap-2">
-                        {prompts.map((p, i) => (
-                          <div key={i} className="rounded-2xl bg-white/[0.04] border border-white/8 p-3">
-                            <p className="text-purple-200 text-[11.5px] font-bold mb-1">{p.prompt_key}</p>
-                            <p className="text-cream text-[13.5px]">{p.answer}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
               {myPosts.length === 0 ? (
                 <EmptyTab icon="✏️" title="No posts yet" subtitle="Share something from the Feed." />
               ) : (
@@ -251,6 +224,34 @@ export default function Preview() {
           {activeTab === "connections" && <ProfileConnections userId={myId} />}
 
           {activeTab === "more" && (
+            <>
+              {(interests.length > 0 || prompts.length > 0) && (
+                <div className="px-4 mb-4 pb-4 border-b border-white/8">
+                  {interests.length > 0 && (
+                    <div className="mb-4">
+                      <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">Interests</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {interests.map((n) => (
+                          <span key={n} className="px-2.5 py-1 rounded-full text-[12px] font-semibold border border-purple-500/30 text-purple-100" style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.20) 0%, rgba(236,72,153,0.10) 100%)' }}>{n}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {prompts.length > 0 && (
+                    <div>
+                      <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">Prompts</p>
+                      <div className="flex flex-col gap-2">
+                        {prompts.map((p, i) => (
+                          <div key={i} className="rounded-2xl bg-white/[0.04] border border-white/8 p-3">
+                            <p className="text-purple-200 text-[11.5px] font-bold mb-1">{p.prompt_key}</p>
+                            <p className="text-cream text-[13.5px]">{p.answer}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             savedReels.length === 0 ? (
               <EmptyTab icon="🔖" title="Nothing saved" subtitle="Save reels to see them here." />
             ) : (
@@ -267,6 +268,7 @@ export default function Preview() {
                 ))}
               </div>
             )
+            </>
           )}
         </div>
 
