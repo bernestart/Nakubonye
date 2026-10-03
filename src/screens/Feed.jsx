@@ -14,6 +14,7 @@ import StoriesRow from "../components/StoriesRow"
 import SuggestedPeople from "../components/SuggestedPeople"
 import PostImages from "../components/PostImages"
 import ExpandableText from "../components/ExpandableText"
+import PostLikesModal from "../components/PostLikesModal"
 import MatchModal from "../components/MatchModal"
 import PostCommentsSheet from "../components/PostCommentsSheet"
 import PostActionsSheet from "../components/PostActionsSheet"
@@ -38,6 +39,7 @@ export default function Feed() {
   const [actionsFor, setActionsFor] = useState(null)
   const [suggested, setSuggested] = useState([])
   const [matchModal, setMatchModal] = useState(null)
+  const [likesModalFor, setLikesModalFor] = useState(null)
   const [composerChooserOpen, setComposerChooserOpen] = useState(false)
   const [postComposerOpen, setPostComposerOpen] = useState(false)
   const [pendingPosts, setPendingPosts] = useState([])
@@ -1121,7 +1123,11 @@ export default function Feed() {
                 {/* Engagement summary */}
                 {((reactionCounts.get(p.id) || 0) > 0 || (commentCounts.get(p.id) || 0) > 0) && (
                   <div className="flex items-center justify-between px-3 pt-2.5 pb-1 border-t border-white/5">
-                    <span className="flex items-center gap-1.5 text-muted text-[12px]">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); tap("light"); setLikesModalFor({ postId: p.id, source: p._source }) }}
+                      className="flex items-center gap-1.5 text-muted text-[12px] active:opacity-70"
+                    >
                       {myReactions.has(p.id) ? (
                         <>{(() => {
                           const total = reactionCounts.get(p.id) || 0
@@ -1132,7 +1138,7 @@ export default function Feed() {
                       ) : (
                         <><strong className="text-cream">{reactionCounts.get(p.id) || 0}</strong> {reactionCounts.get(p.id) === 1 ? "reaction" : "reactions"}</>
                       )}
-                    </span>
+                    </button>
                     {(commentCounts.get(p.id) || 0) > 0 && (
                       <span className="text-muted text-[12px]">
                         {commentCounts.get(p.id)} {commentCounts.get(p.id) === 1 ? "comment" : "comments"}
@@ -1304,6 +1310,15 @@ export default function Feed() {
           onClose={() => setActionsFor(null)}
           onDeleted={(id) => setPosts((arr) => arr.filter((x) => x.id !== id || x._source !== actionsFor._source))}
           onUpdated={(next) => setPosts((arr) => arr.map((x) => (x.id === next.id && x._source === actionsFor._source) ? { ...x, ...next } : x))}
+        />
+      )}
+
+      {likesModalFor && (
+        <PostLikesModal
+          postId={likesModalFor.postId}
+          source={likesModalFor.source}
+          count={reactionCounts.get(likesModalFor.postId) || 0}
+          onClose={() => setLikesModalFor(null)}
         />
       )}
 
