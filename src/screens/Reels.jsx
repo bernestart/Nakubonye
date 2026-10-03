@@ -28,9 +28,8 @@ export default function Reels() {
   const [photos, setPhotos] = useState(new Map())
   const [likes, setLikes] = useState(new Set())
   const [likeCounts, setLikeCounts] = useState(new Map())
-  const [muted, setMuted] = useState(() => {
-    try { return localStorage.getItem("reels_muted") !== "false" } catch { return true }
-  })
+  const [muted, setMuted] = useState(true)  // always start muted for autoplay
+  const userMutedRef = useRef(true)
   const [composerOpen, setComposerOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [currentIdx, setCurrentIdx] = useState(0)
@@ -358,13 +357,16 @@ export default function Reels() {
       if (i === currentIdx) {
         const reel = visible[i]
         if (reel) clipIdxRefs.current[reel.id] = clipIdxRefs.current[reel.id] || 0
-        v.muted = muted
-        v.play().catch(() => {})
+        v.muted = true
+        v.play().then(() => {
+          // Autoplay succeeded muted. Only apply user preference after tap gesture.
+          // (Browser blocks unmuted autoplay without user interaction.)
+        }).catch(() => {})
       } else {
         try { v.pause() } catch {}
       }
     })
-  }, [currentIdx, reels, hiddenIds, muted])
+  }, [currentIdx, reels, hiddenIds])
 
   useEffect(() => { setReelProgress(0) }, [currentIdx])
 
@@ -625,6 +627,7 @@ export default function Reels() {
                   loop={false}
                   muted={muted}
                   playsInline
+                  autoPlay
                   preload={idx === currentIdx || idx === currentIdx + 1 ? "auto" : "metadata"}
                   onCanPlay={(e) => {
                     if (idx !== currentIdx) return
