@@ -196,9 +196,12 @@ export default function ProfileView() {
   }
 
   const tabs = [
-    { id: 'posts', label: 'Posts' },
-    { id: 'reels', label: 'Reels' },
-    { id: 'photos', label: 'Photos' },
+    { id: 'posts',       label: 'Posts' },
+    { id: 'about',       label: 'About' },
+    { id: 'connections', label: 'Connections' },
+    { id: 'photos',      label: 'Photos' },
+    { id: 'reels',       label: 'Reels' },
+    { id: 'more',        label: 'More' },
   ]
 
   return (
@@ -335,18 +338,18 @@ export default function ProfileView() {
         </div>
 
         {/* Tabs */}
-        <div className="px-4 border-b border-white/8">
-          <div className="flex">
+        <div className="border-b border-white/8">
+          <div className="flex overflow-x-auto px-4" style={{ scrollbarWidth: 'none' }}>
             {tabs.map((t) => (
               <button
                 key={t.id}
                 onClick={() => { tap('light'); setActiveTab(t.id) }}
-                className="flex-1 py-2.5 text-[13px] font-bold relative"
+                className="shrink-0 px-4 py-2.5 text-[13px] font-bold relative"
                 style={{ color: activeTab === t.id ? '#fff' : '#888' }}
               >
                 {t.label}
                 {activeTab === t.id && (
-                  <span className="absolute left-1/4 right-1/4 bottom-0 h-0.5 rounded-full" style={{ background: 'linear-gradient(90deg, #EC4899, #A855F7)' }} />
+                  <span className="absolute left-3 right-3 bottom-0 h-0.5 rounded-full" style={{ background: 'linear-gradient(90deg, #EC4899, #A855F7)' }} />
                 )}
               </button>
             ))}
@@ -424,6 +427,27 @@ export default function ProfileView() {
                 ))}
               </div>
             )
+          )}
+
+          {activeTab === 'about' && (
+            <div className="px-4 py-12 text-center">
+              <p className="text-cream font-bold text-[15px] mb-1">About</p>
+              <p className="text-muted text-[13px]">Coming in the next step.</p>
+            </div>
+          )}
+
+          {activeTab === 'connections' && (
+            <div className="px-4 py-12 text-center">
+              <p className="text-cream font-bold text-[15px] mb-1">Connections</p>
+              <p className="text-muted text-[13px]">Coming in the next step.</p>
+            </div>
+          )}
+
+          {activeTab === 'more' && (
+            <div className="px-4 py-12 text-center">
+              <p className="text-cream font-bold text-[15px] mb-1">More</p>
+              <p className="text-muted text-[13px]">Coming in the next step.</p>
+            </div>
           )}
 
           {activeTab === 'photos' && (
