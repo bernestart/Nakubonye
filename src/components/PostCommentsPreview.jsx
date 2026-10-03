@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { X, MessageCircle } from "lucide-react"
 import { supabase } from "../lib/supabase"
@@ -19,6 +19,11 @@ function relTime(iso) {
 export default function PostCommentsPreview({ postId, source, count, onClose, onOpenSheet }) {
   const nav = useNavigate()
   const [loading, setLoading] = useState(true)
+  const [backdropArmed, setBackdropArmed] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setBackdropArmed(true), 350)
+    return () => clearTimeout(t)
+  }, [])
   const [comments, setComments] = useState([])
   const [profiles, setProfiles] = useState(new Map())
   const [photos, setPhotos] = useState(new Map())
@@ -60,7 +65,7 @@ export default function PostCommentsPreview({ postId, source, count, onClose, on
   }, [postId, source])
 
   return (
-    <div className="fixed inset-0 z-[500] flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 z-[500] flex items-end" onClick={() => { if (backdropArmed) onClose?.() }}>
       <div className="absolute inset-0 bg-black/60" />
       <div
         onClick={(e) => e.stopPropagation()}

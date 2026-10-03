@@ -391,15 +391,19 @@ export default function Feed() {
         .select("post_id, user_id")
         .in("post_id", communityIds)
       ;(reactRows || []).forEach((r) => {
-        counts.set(r.post_id, (counts.get(r.post_id) || 0) + 1)
-        if (r.user_id === myId) myLikedIds.add(r.post_id)
+        const k = "community:" + r.post_id
+        counts.set(k, (counts.get(k) || 0) + 1)
+        if (r.user_id === myId) myLikedIds.add(k)
       })
 
       const { data: commentRows } = await supabase
         .from("community_post_comments")
         .select("post_id")
         .in("post_id", communityIds)
-      ;(commentRows || []).forEach((c) => cc.set(c.post_id, (cc.get(c.post_id) || 0) + 1))
+      ;(commentRows || []).forEach((c) => {
+        const k = "community:" + c.post_id
+        cc.set(k, (cc.get(k) || 0) + 1)
+      })
     }
 
     if (personalIds.length > 0) {
@@ -408,15 +412,33 @@ export default function Feed() {
         .select("post_id, user_id")
         .in("post_id", personalIds)
       ;(reactRows || []).forEach((r) => {
-        counts.set(r.post_id, (counts.get(r.post_id) || 0) + 1)
-        if (r.user_id === myId) myLikedIds.add(r.post_id)
+        const k = "personal:" + r.post_id
+        counts.set(k, (counts.get(k) || 0) + 1)
+        if (r.user_id === myId) myLikedIds.add(k)
       })
 
       const { data: commentRows } = await supabase
         .from("user_post_comments")
         .select("post_id")
         .in("post_id", personalIds)
-      ;(commentRows || []).forEach((c) => cc.set(c.post_id, (cc.get(c.post_id) || 0) + 1))
+      ;(commentRows || []).forEach((c) => {
+        const k = "personal:" + c.post_id
+        cc.set(k, (cc.get(k) || 0) + 1)
+      })
+    }
+
+    // Reel likes — separate table, composite key
+    const reelIds = list.filter((r) => r._source === "reel").map((r) => r.id)
+    if (reelIds.length > 0) {
+      const { data: reactRows } = await supabase
+        .from("reel_likes")
+        .select("reel_id, user_id")
+        .in("reel_id", reelIds)
+      ;(reactRows || []).forEach((r) => {
+        const k = "reel:" + r.reel_id
+        counts.set(k, (counts.get(k) || 0) + 1)
+        if (r.user_id === myId) myLikedIds.add(k)
+      })
     }
 
     setMyReactions(myLikedIds)
@@ -640,13 +662,14 @@ export default function Feed() {
       const freshReactions = new Map()
       const freshMyReactions = new Set()
       ;(reactRows || []).forEach((r) => {
-        freshReactions.set(r.post_id, (freshReactions.get(r.post_id) || 0) + 1)
-        if (r.user_id === myId) freshMyReactions.add(r.post_id)
+        const k = "community:" + r.post_id
+        freshReactions.set(k, (freshReactions.get(k) || 0) + 1)
+        if (r.user_id === myId) freshMyReactions.add(k)
       })
       setMyReactions((prev) => new Set([...prev, ...freshMyReactions]))
       setReactionCounts((prev) => {
         const next = new Map(prev)
-        freshReactions.forEach((c, pid) => next.set(pid, c))
+        freshReactions.forEach((c, k) => next.set(k, c))
         return next
       })
 
@@ -655,10 +678,13 @@ export default function Feed() {
         .select("post_id")
         .in("post_id", communityIds)
       const freshComments = new Map()
-      ;(commentRows || []).forEach((c) => freshComments.set(c.post_id, (freshComments.get(c.post_id) || 0) + 1))
+      ;(commentRows || []).forEach((c) => {
+        const k = "community:" + c.post_id
+        freshComments.set(k, (freshComments.get(k) || 0) + 1)
+      })
       setCommentCounts((prev) => {
         const next = new Map(prev)
-        freshComments.forEach((c, pid) => next.set(pid, c))
+        freshComments.forEach((c, k) => next.set(k, c))
         return next
       })
     }
@@ -671,13 +697,14 @@ export default function Feed() {
       const freshReactions = new Map()
       const freshMyReactions = new Set()
       ;(reactRows || []).forEach((r) => {
-        freshReactions.set(r.post_id, (freshReactions.get(r.post_id) || 0) + 1)
-        if (r.user_id === myId) freshMyReactions.add(r.post_id)
+        const k = "personal:" + r.post_id
+        freshReactions.set(k, (freshReactions.get(k) || 0) + 1)
+        if (r.user_id === myId) freshMyReactions.add(k)
       })
       setMyReactions((prev) => new Set([...prev, ...freshMyReactions]))
       setReactionCounts((prev) => {
         const next = new Map(prev)
-        freshReactions.forEach((c, pid) => next.set(pid, c))
+        freshReactions.forEach((c, k) => next.set(k, c))
         return next
       })
 
@@ -686,10 +713,35 @@ export default function Feed() {
         .select("post_id")
         .in("post_id", personalIds)
       const freshComments = new Map()
-      ;(commentRows || []).forEach((c) => freshComments.set(c.post_id, (freshComments.get(c.post_id) || 0) + 1))
+      ;(commentRows || []).forEach((c) => {
+        const k = "personal:" + c.post_id
+        freshComments.set(k, (freshComments.get(k) || 0) + 1)
+      })
       setCommentCounts((prev) => {
         const next = new Map(prev)
-        freshComments.forEach((c, pid) => next.set(pid, c))
+        freshComments.forEach((c, k) => next.set(k, c))
+        return next
+      })
+    }
+
+    // Reel likes for this page
+    const newReelIds = merged.filter((r) => r._source === "reel").map((r) => r.id)
+    if (newReelIds.length > 0) {
+      const { data: reactRows } = await supabase
+        .from("reel_likes")
+        .select("reel_id, user_id")
+        .in("reel_id", newReelIds)
+      const freshReactions = new Map()
+      const freshMyReactions = new Set()
+      ;(reactRows || []).forEach((r) => {
+        const k = "reel:" + r.reel_id
+        freshReactions.set(k, (freshReactions.get(k) || 0) + 1)
+        if (r.user_id === myId) freshMyReactions.add(k)
+      })
+      setMyReactions((prev) => new Set([...prev, ...freshMyReactions]))
+      setReactionCounts((prev) => {
+        const next = new Map(prev)
+        freshReactions.forEach((c, k) => next.set(k, c))
         return next
       })
     }
@@ -770,23 +822,30 @@ export default function Feed() {
   async function toggleLike(postId, source = "community") {
     if (!myId) return
     tap("light")
-    const isLiked = myReactions.has(postId)
+    const key = source + ":" + postId
+    const isLiked = myReactions.has(key)
     const nextMine = new Set(myReactions)
     const nextCounts = new Map(reactionCounts)
-    const table = source === "personal" ? "user_post_likes" : "community_post_reactions"
+
+    const table = source === "personal" ? "user_post_likes"
+                : source === "reel"     ? "reel_likes"
+                : "community_post_reactions"
+    const idCol = source === "reel" ? "reel_id" : "post_id"
 
     if (isLiked) {
-      nextMine.delete(postId)
-      nextCounts.set(postId, Math.max(0, (nextCounts.get(postId) || 1) - 1))
+      nextMine.delete(key)
+      nextCounts.set(key, Math.max(0, (nextCounts.get(key) || 1) - 1))
       setMyReactions(nextMine); setReactionCounts(nextCounts)
-      await supabase.from(table).delete().eq("post_id", postId).eq("user_id", myId)
+      await supabase.from(table).delete().eq(idCol, postId).eq("user_id", myId)
     } else {
-      nextMine.add(postId)
-      nextCounts.set(postId, (nextCounts.get(postId) || 0) + 1)
+      nextMine.add(key)
+      nextCounts.set(key, (nextCounts.get(key) || 0) + 1)
       setMyReactions(nextMine); setReactionCounts(nextCounts)
       const row = source === "personal"
         ? { post_id: postId, user_id: myId }
-        : { post_id: postId, user_id: myId, reaction: "❤️" }
+        : source === "reel"
+          ? { reel_id: postId, user_id: myId }
+          : { post_id: postId, user_id: myId, reaction: "❤️" }
       await supabase.from(table).insert(row)
     }
   }
@@ -1247,31 +1306,31 @@ export default function Feed() {
                 })()}
 
                 {/* Engagement summary */}
-                {((reactionCounts.get(p.id) || 0) > 0 || (commentCounts.get(p.id) || 0) > 0) && (
+                {((reactionCounts.get(p._source + ":" + p.id) || 0) > 0 || (commentCounts.get(p._source + ":" + p.id) || 0) > 0) && (
                   <div className="flex items-center justify-between px-3 pt-2.5 pb-1 border-t border-white/5">
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); tap("light"); setLikesModalFor({ postId: p.id, source: p._source }) }}
                       className="flex items-center gap-1.5 text-muted text-[12px] active:opacity-70"
                     >
-                      {myReactions.has(p.id) ? (
+                      {myReactions.has(p._source + ":" + p.id) ? (
                         <>{(() => {
-                          const total = reactionCounts.get(p.id) || 0
+                          const total = reactionCounts.get(p._source + ":" + p.id) || 0
                           if (total === 1) return <>You liked this</>
                           if (total === 2) return <>You and <strong className="text-cream">1</strong> other</>
                           return <>You and <strong className="text-cream">{total - 1}</strong> others</>
                         })()}</>
                       ) : (
-                        <><strong className="text-cream">{reactionCounts.get(p.id) || 0}</strong> {reactionCounts.get(p.id) === 1 ? "reaction" : "reactions"}</>
+                        <><strong className="text-cream">{reactionCounts.get(p._source + ":" + p.id) || 0}</strong> {reactionCounts.get(p._source + ":" + p.id) === 1 ? "reaction" : "reactions"}</>
                       )}
                     </button>
-                    {(commentCounts.get(p.id) || 0) > 0 && (
+                    {(commentCounts.get(p._source + ":" + p.id) || 0) > 0 && (
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); tap("light"); setCommentsModalFor({ postId: p.id, source: p._source }) }}
                         className="text-muted text-[12px] active:opacity-70"
                       >
-                        {commentCounts.get(p.id)} {commentCounts.get(p.id) === 1 ? "comment" : "comments"}
+                        {commentCounts.get(p._source + ":" + p.id)} {commentCounts.get(p._source + ":" + p.id) === 1 ? "comment" : "comments"}
                       </button>
                     )}
                   </div>
@@ -1286,11 +1345,11 @@ export default function Feed() {
                     <Heart
                       size={18}
                       strokeWidth={2.2}
-                      color={myReactions.has(p.id) ? "#EC4899" : "#888"}
-                      fill={myReactions.has(p.id) ? "#EC4899" : "none"}
+                      color={myReactions.has(p._source + ":" + p.id) ? "#EC4899" : "#888"}
+                      fill={myReactions.has(p._source + ":" + p.id) ? "#EC4899" : "none"}
                     />
-                    <span className="text-[12.5px] font-bold" style={{ color: myReactions.has(p.id) ? "#EC4899" : "#888" }}>
-                      {reactionCounts.get(p.id) || 0}
+                    <span className="text-[12.5px] font-bold" style={{ color: myReactions.has(p._source + ":" + p.id) ? "#EC4899" : "#888" }}>
+                      {reactionCounts.get(p._source + ":" + p.id) || 0}
                     </span>
                   </button>
                   <button
@@ -1298,7 +1357,7 @@ export default function Feed() {
                     className="flex items-center gap-1.5 px-3 py-2 rounded-xl flex-1 justify-center"
                   >
                     <MessageCircle size={18} strokeWidth={2.2} color="#888" />
-                    <span className="text-muted text-[12.5px] font-bold">{commentCounts.get(p.id) || 0}</span>
+                    <span className="text-muted text-[12.5px] font-bold">{commentCounts.get(p._source + ":" + p.id) || 0}</span>
                   </button>
                   <button
                     onClick={() => sharePost(p)}
@@ -1447,7 +1506,7 @@ export default function Feed() {
         <PostLikesModal
           postId={likesModalFor.postId}
           source={likesModalFor.source}
-          count={reactionCounts.get(likesModalFor.postId) || 0}
+          count={reactionCounts.get(likesModalFor.source + ":" + likesModalFor.postId) || 0}
           onClose={() => setLikesModalFor(null)}
         />
       )}
@@ -1456,7 +1515,7 @@ export default function Feed() {
         <PostCommentsPreview
           postId={commentsModalFor.postId}
           source={commentsModalFor.source}
-          count={commentCounts.get(commentsModalFor.postId) || 0}
+          count={commentCounts.get(commentsModalFor.source + ":" + commentsModalFor.postId) || 0}
           onClose={() => setCommentsModalFor(null)}
           onOpenSheet={() => setCommentsFor({ id: commentsModalFor.postId, source: commentsModalFor.source })}
         />
