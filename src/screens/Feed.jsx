@@ -658,6 +658,30 @@ export default function Feed() {
     return () => obs.disconnect()
   }, [loadMore])
 
+  // Reel autoplay — play when 60% visible, pause when scrolled away
+  useEffect(() => {
+    const videos = document.querySelectorAll("[data-reel-video]")
+    if (videos.length === 0) return
+
+    const obs = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const v = entry.target
+          if (entry.isIntersecting && entry.intersectionRatio > 0.6) {
+            const p = v.play()
+            if (p?.catch) p.catch(() => {})
+          } else {
+            try { v.pause() } catch {}
+          }
+        })
+      },
+      { threshold: [0, 0.6, 1] }
+    )
+
+    videos.forEach((v) => obs.observe(v))
+    return () => obs.disconnect()
+  }, [posts])
+
   useEffect(() => { load() }, [load])
 
   useEffect(() => {
@@ -918,16 +942,8 @@ export default function Feed() {
                       className="relative w-full block bg-black"
                       style={{ aspectRatio: "9 / 16", maxHeight: "72vh" }}
                     >
-                      {p.thumbnail_url ? (
-                        <img
-                          src={p.thumbnail_url}
-                          alt=""
-                          className="absolute inset-0 w-full h-full object-cover"
-                          style={{ transform: p.mirrored ? "scaleX(-1)" : "none" }}
-                        />
-                      ) : p.video_url ? (
+                      {p.video_url ? (
                         <>
-                          {/* Fallback gradient behind the video so it never shows pure black */}
                           <div
                             className="absolute inset-0"
                             style={{
@@ -935,20 +951,24 @@ export default function Feed() {
                             }}
                           />
                           <video
+                            data-reel-video="true"
                             src={p.video_url}
+                            poster={p.thumbnail_url || undefined}
                             muted
+                            loop
                             playsInline
-                            preload="auto"
-                            onLoadedMetadata={(e) => {
-                              try { e.target.currentTime = p.cover_frame_time || 0.5 } catch {}
-                            }}
-                            onSeeked={(e) => {
-                              try { e.target.pause() } catch {}
-                            }}
+                            preload="metadata"
                             className="absolute inset-0 w-full h-full object-cover"
                             style={{ transform: p.mirrored ? "scaleX(-1)" : "none" }}
                           />
                         </>
+                      ) : p.thumbnail_url ? (
+                        <img
+                          src={p.thumbnail_url}
+                          alt=""
+                          className="absolute inset-0 w-full h-full object-cover"
+                          style={{ transform: p.mirrored ? "scaleX(-1)" : "none" }}
+                        />
                       ) : (
                         <div
                           className="absolute inset-0 grid place-items-center p-6 text-center"
@@ -960,12 +980,6 @@ export default function Feed() {
                         </div>
                       )}
 
-                      {/* Play overlay */}
-                      <span className="absolute inset-0 grid place-items-center bg-black/15">
-                        <span className="w-16 h-16 rounded-full grid place-items-center bg-black/45 backdrop-blur-md border border-white/25">
-                          <span className="ml-1" style={{ width: 0, height: 0, borderTop: "10px solid transparent", borderBottom: "10px solid transparent", borderLeft: "16px solid #fff" }} />
-                        </span>
-                      </span>
                     </button>
 
                     {/* Footer */}
