@@ -18,7 +18,7 @@ export default function PostLikesModal({ postId, source, count, onClose }) {
       const table = source === "personal" ? "user_post_likes" : "community_post_reactions"
       const { data: rows } = await supabase
         .from(table)
-        .select("user_id")
+        .select("user_id, reaction")
         .eq("post_id", postId)
         .order("created_at", { ascending: false })
         .limit(200)
@@ -43,6 +43,7 @@ export default function PostLikesModal({ postId, source, count, onClose }) {
 
       setLikers((rows || []).map((r) => ({
         id: r.user_id,
+        reaction: r.reaction || "❤️",
         display_name: pMap.get(r.user_id)?.display_name,
         username: pMap.get(r.user_id)?.username,
         is_verified: pMap.get(r.user_id)?.is_verified,
@@ -68,7 +69,7 @@ export default function PostLikesModal({ postId, source, count, onClose }) {
                 <Heart size={14} fill="#EC4899" color="#EC4899" />
               </span>
               <p className="text-cream font-extrabold text-[16px]">
-                {count} {count === 1 ? "like" : "likes"}
+                {count} {count === 1 ? "reaction" : "reactions"}
               </p>
             </div>
             <button onClick={onClose} className="w-8 h-8 rounded-full grid place-items-center text-muted" aria-label="Close">
@@ -94,12 +95,20 @@ export default function PostLikesModal({ postId, source, count, onClose }) {
                   onClick={() => { tap("light"); onClose?.(); nav("/profile/" + u.id) }}
                   className="flex items-center gap-3 p-2.5 rounded-2xl hover:bg-white/[0.04] active:opacity-80 text-left"
                 >
-                  <div className="w-11 h-11 rounded-full overflow-hidden bg-purple-600 grid place-items-center text-white font-black shrink-0">
-                    {u.photo_url ? (
-                      <img src={u.photo_url} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      (u.display_name || u.username || "?")[0].toUpperCase()
-                    )}
+                  <div className="relative shrink-0">
+                    <div className="w-11 h-11 rounded-full overflow-hidden bg-purple-600 grid place-items-center text-white font-black">
+                      {u.photo_url ? (
+                        <img src={u.photo_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        (u.display_name || u.username || "?")[0].toUpperCase()
+                      )}
+                    </div>
+                    <span
+                      className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full grid place-items-center text-[11px]"
+                      style={{ background: "#0B0B14", border: "1px solid rgba(255,255,255,0.15)" }}
+                    >
+                      {u.reaction || "❤️"}
+                    </span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-cream font-semibold text-[14px] truncate flex items-center gap-1.5">

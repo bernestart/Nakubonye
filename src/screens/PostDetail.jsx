@@ -8,6 +8,7 @@ import { tap } from "../lib/haptic"
 import VerifiedBadge from "../components/VerifiedBadge"
 import PostCommentsSheet from "../components/PostCommentsSheet"
 import PostActionsSheet from "../components/PostActionsSheet"
+import ReactionPicker from "../components/ReactionPicker"
 import BrandGlow from "../components/BrandGlow"
 
 export default function PostDetail() {
@@ -25,6 +26,8 @@ export default function PostDetail() {
   const [likeCount, setLikeCount] = useState(0)
   const [commentCount, setCommentCount] = useState(0)
   const [busy, setBusy] = useState(false)
+  const [myEmoji, setMyEmoji] = useState("❤️")
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [error, setError] = useState("")
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
@@ -74,12 +77,13 @@ export default function PostDetail() {
         const likeTable  = source === "personal" ? "user_post_likes" : "community_post_reactions"
         const cmtTable   = source === "personal" ? "user_post_comments" : "community_post_comments"
         const [{ data: myLike }, { count: likeCnt }, { count: cmtCnt }] = await Promise.all([
-          myId ? supabase.from(likeTable).select("post_id").eq("post_id", id).eq("user_id", myId).maybeSingle() : Promise.resolve({ data: null }),
+          myId ? supabase.from(likeTable).select("post_id, reaction").eq("post_id", id).eq("user_id", myId).maybeSingle() : Promise.resolve({ data: null }),
           supabase.from(likeTable).select("post_id", { count: "exact", head: true }).eq("post_id", id),
           supabase.from(cmtTable).select("id", { count: "exact", head: true }).eq("post_id", id),
         ])
         if (cancelled) return
         setLiked(!!myLike)
+        if (myLike?.reaction) setMyEmoji(myLike.reaction)
         setLikeCount(likeCnt || 0)
         setCommentCount(cmtCnt || 0)
         setLoading(false)
@@ -90,17 +94,28 @@ export default function PostDetail() {
     return () => { cancelled = true }
   }, [id, source, myId])
 
-  async function toggleLike() {
+  async function toggleLike(emoji = null) {
     if (!myId || busy || !post) return
     tap("light"); setBusy(true)
+    const likeTable = source === "personal" ? "user_post_likes" : "community_post_reactions"
+
+    // Changing reaction on an already-liked post
+    if (emoji && liked && emoji !== myEmoji) {
+      setMyEmoji(emoji)
+      await supabase.from(likeTable).update({ reaction: emoji }).eq("post_id", post.id).eq("user_id", myId)
+      setBusy(false)
+      return
+    }
+
     const next = !liked
     setLiked(next)
     setLikeCount((c) => Math.max(0, c + (next ? 1 : -1)))
-    const likeTable = source === "personal" ? "user_post_likes" : "community_post_reactions"
     if (next) {
+      const useEmoji = emoji || "❤️"
+      setMyEmoji(useEmoji)
       const row = source === "personal"
-        ? { post_id: post.id, user_id: myId }
-        : { post_id: post.id, user_id: myId, reaction: "❤️" }
+        ? { post_id: post.id, user_id: myId, reaction: useEmoji }
+        : { post_id: post.id, user_id: myId, reaction: useEmoji }
       await supabase.from(likeTable).insert(row)
     } else {
       await supabase.from(likeTable).delete().eq("post_id", post.id).eq("user_id", myId)
@@ -262,12 +277,29 @@ export default function PostDetail() {
             {/* Action bar */}
             <div className="flex items-center justify-around px-3 py-2 border-t border-white/5">
               <button
-                onClick={toggleLike}
+                onClick={() => toggleLike()}
+                onContextMenu={(e) => { e.preventDefault(); setPickerOpen(true) }}
+                onTouchStart={(e) => {
+                  const t = setTimeout(() => setPickerOpen(true), 420)
+                  e.currentTarget._longPressTimer = t
+                }}
+                onTouchEnd={(e) => {
+                  if (e.currentTarget._longPressTimer) { clearTimeout(e.currentTarget._longPressTimer); e.currentTarget._longPressTimer = null }
+                }}
+                onTouchMove={(e) => {
+                  if (e.currentTarget._longPressTimer) { clearTimeout(e.currentTarget._longPressTimer); e.currentTarget._longPressTimer = null }
+                }}
                 disabled={busy}
                 className="flex items-center gap-1.5 h-9 px-3 rounded-full active:scale-[0.97] transition-transform disabled:opacity-50"
               >
-                <Heart size={18} strokeWidth={2.2} color={liked ? "#EC4899" : "#aaa"} fill={liked ? "#EC4899" : "none"} />
-                <span className="text-[12.5px] font-bold" style={{ color: liked ? "#EC4899" : "#aaa" }}>Like</span>
+                {liked ? (
+                  <span className="text-[18px] leading-none">{myEmoji}</span>
+                ) : (
+                  <Heart size={18} strokeWidth={2.2} color="#aaa" />
+                )}
+                <span className="text-[12.5px] font-bold" style={{ color: liked ? "#EC4899" : "#aaa" }}>
+                  {liked ? myEmoji === "❤️" ? "Love" : myEmoji === "👍" ? "Like" : "Reacted" : "Like"}
+                </span>
               </button>
               <button
                 onClick={() => { tap("light"); setCommentsOpen(true) }}
@@ -287,6 +319,20 @@ export default function PostDetail() {
           </article>
         )}
       </div>
+
+      {pickerOpen && post && (
+        <>
+          <div className="fixed inset-0 z-[400]" onClick={() => setPickerOpen(false)} />
+          <div className="fixed left-0 right-0 bottom-24 z-[401] flex justify-center pointer-events-none">
+            <div className="pointer-events-auto">
+              <ReactionPicker
+                onPick={(emoji) => toggleLike(emoji)}
+                onClose={() => setPickerOpen(false)}
+              />
+            </div>
+          </div>
+        </>
+      )}
 
       {actionsOpen && post && (
         <PostActionsSheet

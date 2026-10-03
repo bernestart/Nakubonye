@@ -78,6 +78,7 @@ import PostCommentsPreview from "../components/PostCommentsPreview"
 import MatchModal from "../components/MatchModal"
 import PostCommentsSheet from "../components/PostCommentsSheet"
 import PostActionsSheet from "../components/PostActionsSheet"
+import ReactionPicker from "../components/ReactionPicker"
 import FollowButton from "../components/FollowButton"
 import PostComposer from "../components/PostComposer"
 import BrandGlow from "../components/BrandGlow"
@@ -94,6 +95,9 @@ export default function Feed() {
   const [error, setError] = useState("")
   const [myReactions, setMyReactions] = useState(new Set())
   const [reactionCounts, setReactionCounts] = useState(new Map())
+  const [pickerFor, setPickerFor] = useState(null)
+  const [myReactionTypes, setMyReactionTypes] = useState(new Map())
+  const [reactionBreakdown, setReactionBreakdown] = useState(new Map())
   const [commentCounts, setCommentCounts] = useState(new Map())
   const [commentsFor, setCommentsFor] = useState(null)
   const [actionsFor, setActionsFor] = useState(null)
@@ -384,16 +388,25 @@ export default function Feed() {
     const myLikedIds = new Set()
     const counts = new Map()
     const cc = new Map()
+    const breakdown = new Map()
+    const reactionTypesMap = new Map()
 
     if (communityIds.length > 0) {
       const { data: reactRows } = await supabase
         .from("community_post_reactions")
-        .select("post_id, user_id")
+        .select("post_id, user_id, reaction")
         .in("post_id", communityIds)
       ;(reactRows || []).forEach((r) => {
         const k = "community:" + r.post_id
         counts.set(k, (counts.get(k) || 0) + 1)
-        if (r.user_id === myId) myLikedIds.add(k)
+        if (r.user_id === myId) {
+          myLikedIds.add(k)
+          myReactionTypes.set(k, r.reaction || "❤️")
+        }
+        if (!breakdown.has(k)) breakdown.set(k, new Map())
+        const bd = breakdown.get(k)
+        const em = r.reaction || "❤️"
+        bd.set(em, (bd.get(em) || 0) + 1)
       })
 
       const { data: commentRows } = await supabase
@@ -409,12 +422,19 @@ export default function Feed() {
     if (personalIds.length > 0) {
       const { data: reactRows } = await supabase
         .from("user_post_likes")
-        .select("post_id, user_id")
+        .select("post_id, user_id, reaction")
         .in("post_id", personalIds)
       ;(reactRows || []).forEach((r) => {
         const k = "personal:" + r.post_id
         counts.set(k, (counts.get(k) || 0) + 1)
-        if (r.user_id === myId) myLikedIds.add(k)
+        if (r.user_id === myId) {
+          myLikedIds.add(k)
+          myReactionTypes.set(k, r.reaction || "❤️")
+        }
+        if (!breakdown.has(k)) breakdown.set(k, new Map())
+        const bd = breakdown.get(k)
+        const em = r.reaction || "❤️"
+        bd.set(em, (bd.get(em) || 0) + 1)
       })
 
       const { data: commentRows } = await supabase
@@ -444,6 +464,12 @@ export default function Feed() {
     setMyReactions(myLikedIds)
     setReactionCounts(counts)
     setCommentCounts(cc)
+    setReactionBreakdown(breakdown)
+    setMyReactionTypes((cur) => {
+      const merged = new Map(cur)
+      myReactionTypes.forEach((v, k) => merged.set(k, v))
+      return merged
+    })
 
     setLoading(false)
   }, [myId])
@@ -822,33 +848,60 @@ export default function Feed() {
     return () => { supabase.removeChannel(ch) }
   }, [myId, load])
 
-  async function toggleLike(postId, source = "community") {
+  async function toggleLike(postId, source = "community", emoji = null) {
     if (!myId) return
     tap("light")
     const key = source + ":" + postId
     const isLiked = myReactions.has(key)
+    const currentEmoji = myReactionTypes.get(key) || "❤️"
     const nextMine = new Set(myReactions)
     const nextCounts = new Map(reactionCounts)
+    const nextTypes = new Map(myReactionTypes)
 
     const table = source === "personal" ? "user_post_likes"
                 : source === "reel"     ? "reel_likes"
                 : "community_post_reactions"
     const idCol = source === "reel" ? "reel_id" : "post_id"
 
+    const nextBD = new Map(reactionBreakdown)
+    const bd = new Map(nextBD.get(key) || [])
+
+    if (emoji && isLiked && emoji !== currentEmoji) {
+      // Change reaction — update row + breakdown
+      bd.set(currentEmoji, Math.max(0, (bd.get(currentEmoji) || 1) - 1))
+      if (bd.get(currentEmoji) === 0) bd.delete(currentEmoji)
+      bd.set(emoji, (bd.get(emoji) || 0) + 1)
+      nextBD.set(key, bd)
+      nextTypes.set(key, emoji)
+      setMyReactionTypes(nextTypes); setReactionBreakdown(nextBD)
+      if (source !== "reel") {
+        await supabase.from(table).update({ reaction: emoji }).eq(idCol, postId).eq("user_id", myId)
+      }
+      return
+    }
+
     if (isLiked) {
+      bd.set(currentEmoji, Math.max(0, (bd.get(currentEmoji) || 1) - 1))
+      if (bd.get(currentEmoji) === 0) bd.delete(currentEmoji)
+      nextBD.set(key, bd)
       nextMine.delete(key)
+      nextTypes.delete(key)
       nextCounts.set(key, Math.max(0, (nextCounts.get(key) || 1) - 1))
-      setMyReactions(nextMine); setReactionCounts(nextCounts)
+      setMyReactions(nextMine); setReactionCounts(nextCounts); setMyReactionTypes(nextTypes); setReactionBreakdown(nextBD)
       await supabase.from(table).delete().eq(idCol, postId).eq("user_id", myId)
     } else {
+      const useEmoji = emoji || "❤️"
+      bd.set(useEmoji, (bd.get(useEmoji) || 0) + 1)
+      nextBD.set(key, bd)
       nextMine.add(key)
+      nextTypes.set(key, useEmoji)
       nextCounts.set(key, (nextCounts.get(key) || 0) + 1)
-      setMyReactions(nextMine); setReactionCounts(nextCounts)
+      setMyReactions(nextMine); setReactionCounts(nextCounts); setMyReactionTypes(nextTypes); setReactionBreakdown(nextBD)
       const row = source === "personal"
-        ? { post_id: postId, user_id: myId }
+        ? { post_id: postId, user_id: myId, reaction: useEmoji }
         : source === "reel"
           ? { reel_id: postId, user_id: myId }
-          : { post_id: postId, user_id: myId, reaction: "❤️" }
+          : { post_id: postId, user_id: myId, reaction: useEmoji }
       await supabase.from(table).insert(row)
     }
   }
@@ -1317,10 +1370,17 @@ export default function Feed() {
                       onClick={(e) => { e.stopPropagation(); tap("light"); setLikesModalFor({ postId: p.id, source: p._source }) }}
                       className="flex items-center gap-1.5 text-muted text-[12px] active:opacity-70"
                     >
+                      {(() => {
+                        const bd = reactionBreakdown.get(p._source + ":" + p.id)
+                        const sorted = bd ? [...bd.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3) : []
+                        return sorted.length > 0
+                          ? <span className="flex items-center gap-0.5 text-[14px]">{sorted.map(([em], i) => <span key={i}>{em}</span>)}</span>
+                          : null
+                      })()}
                       {myReactions.has(p._source + ":" + p.id) ? (
                         <>{(() => {
                           const total = reactionCounts.get(p._source + ":" + p.id) || 0
-                          if (total === 1) return <>You liked this</>
+                          if (total === 1) return <>You reacted</>
                           if (total === 2) return <>You and <strong className="text-cream">1</strong> other</>
                           return <>You and <strong className="text-cream">{total - 1}</strong> others</>
                         })()}</>
@@ -1342,20 +1402,39 @@ export default function Feed() {
 
                 {/* Engagement bar */}
                 <div className="flex items-center justify-between px-2 py-1.5 border-t border-white/5">
-                  <button
-                    onClick={() => toggleLike(p.id, p._source)}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl flex-1 justify-center"
-                  >
-                    <Heart
-                      size={18}
-                      strokeWidth={2.2}
-                      color={myReactions.has(p._source + ":" + p.id) ? "#EC4899" : "#888"}
-                      fill={myReactions.has(p._source + ":" + p.id) ? "#EC4899" : "none"}
-                    />
-                    <span className="text-[12.5px] font-bold" style={{ color: myReactions.has(p._source + ":" + p.id) ? "#EC4899" : "#888" }}>
-                      {reactionCounts.get(p._source + ":" + p.id) || 0}
-                    </span>
-                  </button>
+                  <div className="relative flex-1">
+                    {(() => {
+                      const key = p._source + ":" + p.id
+                      const reacted = myReactions.has(key)
+                      const emoji = myReactionTypes.get(key) || "❤️"
+                      return (
+                        <button
+                          onClick={() => toggleLike(p.id, p._source)}
+                          onContextMenu={(e) => { e.preventDefault(); setPickerFor(key) }}
+                          onTouchStart={(e) => {
+                            const t = setTimeout(() => setPickerFor(key), 420)
+                            e.currentTarget._longPressTimer = t
+                          }}
+                          onTouchEnd={(e) => {
+                            if (e.currentTarget._longPressTimer) clearTimeout(e.currentTarget._longPressTimer)
+                          }}
+                          onTouchMove={(e) => {
+                            if (e.currentTarget._longPressTimer) { clearTimeout(e.currentTarget._longPressTimer); e.currentTarget._longPressTimer = null }
+                          }}
+                          className="w-full flex items-center gap-1.5 px-3 py-2 rounded-xl justify-center"
+                        >
+                          {reacted ? (
+                            <span className="text-[18px] leading-none">{emoji}</span>
+                          ) : (
+                            <Heart size={18} strokeWidth={2.2} color="#888" />
+                          )}
+                          <span className="text-[12.5px] font-bold" style={{ color: reacted ? "#EC4899" : "#888" }}>
+                            {reactionCounts.get(key) || 0}
+                          </span>
+                        </button>
+                      )
+                    })()}
+                  </div>
                   <button
                     onClick={() => { tap("light"); setCommentsFor({ id: p.id, source: p._source }) }}
                     className="flex items-center gap-1.5 px-3 py-2 rounded-xl flex-1 justify-center"
@@ -1371,6 +1450,25 @@ export default function Feed() {
                     <span className="text-muted text-[12.5px] font-bold">Share</span>
                   </button>
                 </div>
+
+                {pickerFor && (() => {
+                  const [pkSource, pkId] = pickerFor.split(":")
+                  const isThis = pkSource + ":" + pkId === p._source + ":" + p.id
+                  if (!isThis) return null
+                  return (
+                    <>
+                      <div className="fixed inset-0 z-[90]" onClick={() => setPickerFor(null)} />
+                      <div className="absolute left-0 right-0 bottom-16 z-[91] flex justify-center pointer-events-none">
+                        <div className="pointer-events-auto">
+                          <ReactionPicker
+                            onPick={(emoji) => toggleLike(p.id, p._source, emoji)}
+                            onClose={() => setPickerFor(null)}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )
+                })()}
               </article>
 
               {((idx + 1) % 4 === 0 || (idx === posts.length - 1 && posts.length < 4)) && suggested.length > 0 && (
