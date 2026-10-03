@@ -812,19 +812,19 @@ export default function Chat() {
         {loading ? (
           <div className="flex flex-col gap-2.5 pt-2">
             <div className="flex justify-start">
-              <div className="h-11 w-[58%] rounded-2xl rounded-bl-md bg-white/[0.04] animate-pulse" />
+              <div className="h-11 w-[58%] rounded-2xl rounded-bl-md bg-white/[0.04] shimmer" />
             </div>
             <div className="flex justify-end">
-              <div className="h-11 w-[42%] rounded-2xl rounded-br-md bg-white/[0.06] animate-pulse" />
+              <div className="h-11 w-[42%] rounded-2xl rounded-br-md bg-white/[0.06] shimmer" />
             </div>
             <div className="flex justify-start">
-              <div className="h-16 w-[64%] rounded-2xl rounded-bl-md bg-white/[0.04] animate-pulse" />
+              <div className="h-16 w-[64%] rounded-2xl rounded-bl-md bg-white/[0.04] shimmer" />
             </div>
             <div className="flex justify-end">
-              <div className="h-11 w-[46%] rounded-2xl rounded-br-md bg-white/[0.06] animate-pulse" />
+              <div className="h-11 w-[46%] rounded-2xl rounded-br-md bg-white/[0.06] shimmer" />
             </div>
             <div className="flex justify-start">
-              <div className="h-11 w-[52%] rounded-2xl rounded-bl-md bg-white/[0.04] animate-pulse" />
+              <div className="h-11 w-[52%] rounded-2xl rounded-bl-md bg-white/[0.04] shimmer" />
             </div>
           </div>
         ) : visibleMessages.length === 0 ? (

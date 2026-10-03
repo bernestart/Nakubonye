@@ -161,7 +161,7 @@ function BrowseTab({ nav, myId }) {
         {loading ? (
           <div className="grid grid-cols-2 gap-3">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="rounded-2xl bg-white/[0.03] animate-pulse" style={{ height: 200 }} />
+              <div key={i} className="rounded-2xl bg-white/[0.03] shimmer" style={{ height: 200 }} />
             ))}
           </div>
         ) : filtered.length === 0 ? (
@@ -225,7 +225,7 @@ function MyListingsTab({ nav, myId }) {
       {loading ? (
         <div className="flex flex-col gap-3">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="rounded-2xl bg-white/[0.03] animate-pulse" style={{ height: 100 }} />
+            <div key={i} className="rounded-2xl bg-white/[0.03] shimmer" style={{ height: 100 }} />
           ))}
         </div>
       ) : listings.length === 0 ? (
@@ -331,7 +331,7 @@ function SavedTab({ nav, myId }) {
       {loading ? (
         <div className="grid grid-cols-2 gap-3">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="rounded-2xl bg-white/[0.03] animate-pulse" style={{ height: 200 }} />
+            <div key={i} className="rounded-2xl bg-white/[0.03] shimmer" style={{ height: 200 }} />
           ))}
         </div>
       ) : items.length === 0 ? (

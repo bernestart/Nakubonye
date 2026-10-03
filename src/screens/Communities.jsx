@@ -190,7 +190,7 @@ export default function Communities() {
         )}
 
         {loading ? (
-          <div className="flex flex-col gap-2.5 animate-pulse">
+          <div className="flex flex-col gap-2.5 shimmer">
             {[0,1,2,3,4].map((i) => (
               <div key={i} className="flex items-center gap-3 p-3.5 rounded-2xl bg-white/[0.03] border border-white/8">
                 <div className="w-12 h-12 rounded-2xl bg-white/[0.06] shrink-0" />

@@ -87,7 +87,7 @@ export default function PostCommentsPreview({ postId, source, count, onClose, on
         <div className="flex-1 overflow-y-auto px-3 py-3">
           {loading ? (
             <div className="flex flex-col gap-2">
-              {[0,1,2].map((i) => <div key={i} className="h-16 rounded-2xl bg-white/[0.03] animate-pulse" />)}
+              {[0,1,2].map((i) => <div key={i} className="h-16 rounded-2xl bg-white/[0.03] shimmer" />)}
             </div>
           ) : comments.length === 0 ? (
             <p className="text-muted text-[13px] text-center py-8">No comments yet</p>

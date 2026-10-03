@@ -166,7 +166,7 @@ export default function Notifications() {
         {loading ? (
           <div className="flex flex-col gap-2">
             {[0,1,2,3,4].map((i) => (
-              <div key={i} className="rounded-2xl bg-white/[0.03] animate-pulse" style={{ height: 64 }} />
+              <div key={i} className="rounded-2xl bg-white/[0.03] shimmer" style={{ height: 64 }} />
             ))}
           </div>
         ) : !hasAny ? (

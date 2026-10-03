@@ -81,7 +81,7 @@ export default function PostLikesModal({ postId, source, count, onClose }) {
           {loading ? (
             <div className="flex flex-col gap-2">
               {[0,1,2,3].map((i) => (
-                <div key={i} className="h-14 rounded-2xl bg-white/[0.03] animate-pulse" />
+                <div key={i} className="h-14 rounded-2xl bg-white/[0.03] shimmer" />
               ))}
             </div>
           ) : likers.length === 0 ? (

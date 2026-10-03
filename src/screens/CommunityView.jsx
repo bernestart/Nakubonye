@@ -260,7 +260,20 @@ export default function CommunityView() {
         )}
 
         {loading ? (
-          <div className="grid place-items-center h-40 text-muted text-[13px]">Loading…</div>
+          <div className="flex flex-col gap-2 py-2">
+            {[0,1,2].map((i) => (
+              <div key={i} className="rounded-2xl bg-white/[0.03] border border-white/8 p-3">
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="w-9 h-9 rounded-full shimmer" />
+                  <div className="flex-1">
+                    <div className="h-3 w-1/3 shimmer-sm mb-1.5" />
+                    <div className="h-2.5 w-1/4 shimmer-sm" />
+                  </div>
+                </div>
+                <div className="h-32 shimmer" />
+              </div>
+            ))}
+          </div>
         ) : !community ? null : (
           <>
             <div

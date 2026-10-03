@@ -167,7 +167,7 @@ function BrowseTab({ nav }) {
         {loading ? (
           <div className="flex flex-col gap-3">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="rounded-2xl bg-white/[0.03] animate-pulse" style={{ height: 110 }} />
+              <div key={i} className="rounded-2xl bg-white/[0.03] shimmer" style={{ height: 110 }} />
             ))}
           </div>
         ) : filtered.length === 0 ? (
@@ -229,7 +229,7 @@ function MyServicesTab({ nav, myId }) {
       {loading ? (
         <div className="flex flex-col gap-3">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="rounded-2xl bg-white/[0.03] animate-pulse" style={{ height: 100 }} />
+            <div key={i} className="rounded-2xl bg-white/[0.03] shimmer" style={{ height: 100 }} />
           ))}
         </div>
       ) : services.length === 0 ? (
@@ -393,7 +393,7 @@ function BookingsTab({ nav, myId }) {
         {loading ? (
           <div className="flex flex-col gap-3">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="rounded-2xl bg-white/[0.03] animate-pulse" style={{ height: 140 }} />
+              <div key={i} className="rounded-2xl bg-white/[0.03] shimmer" style={{ height: 140 }} />
             ))}
           </div>
         ) : displayed.length === 0 ? (
