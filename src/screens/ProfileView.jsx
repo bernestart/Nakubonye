@@ -420,17 +420,17 @@ export default function ProfileView() {
 
         {/* Tabs */}
         <div className="border-b border-white/8">
-          <div className="flex overflow-x-auto px-4" style={{ scrollbarWidth: 'none' }}>
+          <div className="flex justify-around px-2">
             {tabs.map((t) => (
               <button
                 key={t.id}
                 onClick={() => { tap('light'); setActiveTab(t.id) }}
-                className="shrink-0 px-4 py-2.5 text-[13px] font-bold relative"
+                className="shrink-0 px-3 py-2.5 text-[12.5px] font-bold relative"
                 style={{ color: activeTab === t.id ? '#fff' : '#888' }}
               >
                 {t.label}
                 {activeTab === t.id && (
-                  <span className="absolute left-3 right-3 bottom-0 h-0.5 rounded-full" style={{ background: 'linear-gradient(90deg, #EC4899, #A855F7)' }} />
+                  <span className="absolute left-2 right-2 bottom-0 h-0.5 rounded-full" style={{ background: 'linear-gradient(90deg, #EC4899, #A855F7)' }} />
                 )}
               </button>
             ))}
