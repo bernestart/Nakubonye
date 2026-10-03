@@ -814,7 +814,10 @@ export default function Feed() {
     if (!myId) return
     const ch = supabase
       .channel("feed-realtime-" + myId)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "community_posts" }, () => load())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "community_posts" }, () => {
+        if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current)
+        realtimeDebounceRef.current = setTimeout(() => load(), 800)
+      })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [myId, load])
@@ -1422,13 +1425,16 @@ export default function Feed() {
 
       {commentsFor && (
         <PostCommentsSheet
+          key={commentsFor.source + ":" + commentsFor.id}
           postId={commentsFor.id}
           source={commentsFor.source}
           onClose={() => setCommentsFor(null)}
           onCountChange={(n) => {
+            const key = commentsFor.source + ":" + commentsFor.id
             setCommentCounts((prev) => {
+              if (prev.get(key) === n) return prev   // no-op if unchanged → breaks loop
               const next = new Map(prev)
-              next.set(commentsFor.id, n)
+              next.set(key, n)
               return next
             })
           }}
@@ -1513,6 +1519,7 @@ export default function Feed() {
 
       {commentsModalFor && (
         <PostCommentsPreview
+          key={commentsModalFor.source + ":" + commentsModalFor.postId}
           postId={commentsModalFor.postId}
           source={commentsModalFor.source}
           count={commentCounts.get(commentsModalFor.source + ":" + commentsModalFor.postId) || 0}

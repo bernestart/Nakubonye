@@ -19,6 +19,8 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
   const [canComment, setCanComment] = useState(true)
   const [canCommentReason, setCanCommentReason] = useState('')
   const listRef = useRef(null)
+  const onCountChangeRef = useRef(onCountChange)
+  useEffect(() => { onCountChangeRef.current = onCountChange }, [onCountChange])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -31,7 +33,7 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
 
     const list = rows || []
     setComments(list)
-    onCountChange?.(list.length)
+    onCountChangeRef.current?.(list.length)
 
     const ids = [...new Set(list.map((c) => c.user_id))]
     if (ids.length > 0) {
@@ -52,7 +54,7 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
       setPhotos(pm)
     }
     setLoading(false)
-  }, [postId, onCountChange, table])
+  }, [postId, table])
 
   useEffect(() => { load() }, [load])
 

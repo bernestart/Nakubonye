@@ -19,9 +19,10 @@ function relTime(iso) {
 export default function PostCommentsPreview({ postId, source, count, onClose, onOpenSheet }) {
   const nav = useNavigate()
   const [loading, setLoading] = useState(true)
-  const [backdropArmed, setBackdropArmed] = useState(false)
+  const backdropArmedRef = useRef(false)
   useEffect(() => {
-    const t = setTimeout(() => setBackdropArmed(true), 350)
+    backdropArmedRef.current = false
+    const t = setTimeout(() => { backdropArmedRef.current = true }, 350)
     return () => clearTimeout(t)
   }, [])
   const [comments, setComments] = useState([])
@@ -32,6 +33,9 @@ export default function PostCommentsPreview({ postId, source, count, onClose, on
     if (!postId) return
     ;(async () => {
       setLoading(true)
+      setComments([])
+      setProfiles(new Map())
+      setPhotos(new Map())
       const table = source === "personal" ? "user_post_comments" : "community_post_comments"
       const { data: rows } = await supabase
         .from(table)
@@ -65,7 +69,7 @@ export default function PostCommentsPreview({ postId, source, count, onClose, on
   }, [postId, source])
 
   return (
-    <div className="fixed inset-0 z-[500] flex items-end" onClick={() => { if (backdropArmed) onClose?.() }}>
+    <div className="fixed inset-0 z-[500] flex items-end" onClick={() => { if (backdropArmedRef.current) onClose?.() }}>
       <div className="absolute inset-0 bg-black/60" />
       <div
         onClick={(e) => e.stopPropagation()}
