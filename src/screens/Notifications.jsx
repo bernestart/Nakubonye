@@ -55,6 +55,33 @@ function TypeIcon({ type }) {
   )
 }
 
+// Group consecutive same-target notifications within 24h
+function groupItems(list) {
+  const out = []
+  const used = new Set()
+  for (let i = 0; i < list.length; i++) {
+    const n = list[i]
+    if (used.has(n.id)) continue
+    const group = [n]
+    used.add(n.id)
+    if (n.ref_id && n.ref_type) {
+      for (let j = i + 1; j < list.length; j++) {
+        const m = list[j]
+        if (used.has(m.id)) continue
+        if (m.type !== n.type) continue
+        if (m.ref_id !== n.ref_id || m.ref_type !== n.ref_type) continue
+        const dt = Math.abs(new Date(n.created_at) - new Date(m.created_at))
+        if (dt > 24 * 60 * 60 * 1000) continue
+        group.push(m)
+        used.add(m.id)
+        if (group.length >= 5) break
+      }
+    }
+    out.push(group)
+  }
+  return out
+}
+
 export default function Notifications() {
   const nav = useNavigate()
   const { session } = useAuth()
@@ -115,6 +142,14 @@ export default function Notifications() {
     else if (n.ref_type === "match" && n.actor_id) nav("/messages/" + n.actor_id)
     else if (n.ref_type === "profile" && n.actor_id) nav("/profile/" + n.actor_id)
     else if (n.actor_id) nav("/profile/" + n.actor_id)
+  }
+
+  async function markGroupRead(group) {
+    const unreadIds = group.filter((n) => !n.read_at).map((n) => n.id)
+    if (unreadIds.length === 0) return
+    const now = new Date().toISOString()
+    await supabase.from("notifications").update({ read_at: now }).in("id", unreadIds)
+    setItems((prev) => prev.map((x) => unreadIds.includes(x.id) ? { ...x, read_at: now } : x))
   }
 
   async function markAllRead() {
@@ -192,39 +227,92 @@ export default function Notifications() {
                   {sec.label}
                 </p>
                 <div className="flex flex-col gap-1">
-                  {list.map((n) => {
-                    const actor = actors.get(n.actor_id)
-                    const photoPath = photos.get(n.actor_id)
+                  {groupItems(list).map((group) => {
+                    const first = group[0]
+                    const actor = actors.get(first.actor_id)
+                    const photoPath = photos.get(first.actor_id)
                     const name = actor?.display_name || actor?.username || "Someone"
-                    const unread = !n.read_at
+                    const unread = group.some((n) => !n.read_at)
+
+                    if (group.length === 1) {
+                      return (
+                        <button
+                          key={first.id}
+                          onClick={() => openNotification(first)}
+                          className={`w-full flex items-start gap-3 p-3 rounded-2xl text-left active:bg-white/[0.04] transition-colors ${unread ? "bg-white/[0.03]" : ""}`}
+                        >
+                          <div className="relative shrink-0">
+                            <div className="w-11 h-11 rounded-full overflow-hidden bg-purple-600 grid place-items-center text-white font-black text-sm">
+                              {photoPath ? (
+                                <img src={publicPhotoUrl(photoPath)} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                name[0].toUpperCase()
+                              )}
+                            </div>
+                            <div className="absolute -bottom-1 -right-1">
+                              <TypeIcon type={first.type} />
+                            </div>
+                          </div>
+                          <div className="flex-1 min-w-0 pt-0.5">
+                            <p className="text-cream text-[13.5px] leading-snug">
+                              <strong className="font-bold">
+                                {name}
+                                {actor?.is_verified && <VerifiedBadge size={12} className="ml-1" />}
+                              </strong>
+                              {" "}
+                              <span className="text-cream/85">{first.body?.replace(name, "").trim() || "sent you a notification"}</span>
+                            </p>
+                            <p className="text-subtle text-[11px] mt-0.5">{relTime(first.created_at)}</p>
+                          </div>
+                          {unread && (
+                            <span className="shrink-0 w-2 h-2 rounded-full bg-pink-500 mt-3" />
+                          )}
+                        </button>
+                      )
+                    }
+
+                    // Grouped row: stacked avatars + "X and N others"
+                    const others = group.slice(1, 4)
+                    const extra = group.length - others.length - 1
+                    const verb = (first.body || "").split(" ").slice(1).join(" ").trim() || "reacted to your post"
                     return (
                       <button
-                        key={n.id}
-                        onClick={() => openNotification(n)}
+                        key={"g-" + first.id}
+                        onClick={() => { markGroupRead(group); openNotification(first) }}
                         className={`w-full flex items-start gap-3 p-3 rounded-2xl text-left active:bg-white/[0.04] transition-colors ${unread ? "bg-white/[0.03]" : ""}`}
                       >
                         <div className="relative shrink-0">
-                          <div className="w-11 h-11 rounded-full overflow-hidden bg-purple-600 grid place-items-center text-white font-black text-sm">
-                            {photoPath ? (
-                              <img src={publicPhotoUrl(photoPath)} alt="" className="w-full h-full object-cover" />
-                            ) : (
-                              name[0].toUpperCase()
+                          <div className="flex -space-x-2">
+                            {others.map((o) => {
+                              const oa = actors.get(o.actor_id)
+                              const op = photos.get(o.actor_id)
+                              const on = oa?.display_name || oa?.username || "?"
+                              return (
+                                <div key={o.id} className="w-9 h-9 rounded-full overflow-hidden bg-purple-600 grid place-items-center text-white font-black text-[12px] border-2 border-[#0B0B14]">
+                                  {op ? <img src={publicPhotoUrl(op)} alt="" className="w-full h-full object-cover" /> : on[0].toUpperCase()}
+                                </div>
+                              )
+                            })}
+                            {extra > 0 && (
+                              <div className="w-9 h-9 rounded-full grid place-items-center bg-elevated border-2 border-[#0B0B14] text-cream font-black text-[11px]">
+                                +{extra}
+                              </div>
                             )}
                           </div>
                           <div className="absolute -bottom-1 -right-1">
-                            <TypeIcon type={n.type} />
+                            <TypeIcon type={first.type} />
                           </div>
                         </div>
                         <div className="flex-1 min-w-0 pt-0.5">
                           <p className="text-cream text-[13.5px] leading-snug">
-                            <strong className="font-bold">
-                              {name}
-                              {actor?.is_verified && <VerifiedBadge size={12} className="ml-1" />}
-                            </strong>
+                            <strong className="font-bold">{name}</strong>
+                            {group.length > 1 && (
+                              <> and <strong className="font-bold">{group.length - 1} {group.length - 1 === 1 ? "other" : "others"}</strong></>
+                            )}
                             {" "}
-                            <span className="text-cream/85">{n.body?.replace(name, "").trim() || "sent you a notification"}</span>
+                            <span className="text-cream/85">{verb}</span>
                           </p>
-                          <p className="text-subtle text-[11px] mt-0.5">{relTime(n.created_at)}</p>
+                          <p className="text-subtle text-[11px] mt-0.5">{relTime(first.created_at)}</p>
                         </div>
                         {unread && (
                           <span className="shrink-0 w-2 h-2 rounded-full bg-pink-500 mt-3" />
