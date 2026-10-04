@@ -4,7 +4,7 @@ import {
   ArrowLeft, ChevronRight, ChevronDown, LogOut, Bell, Gift, Crown,
   Wallet as WalletIcon, UserX, Shield, ShieldCheck, Info, FileText,
   Eye, Zap, Key, Users, Plus, Bookmark, LayoutGrid, Play, Heart,
-  Store, Briefcase, Calendar, Clock, Camera
+  Store, Briefcase, Calendar, Clock, Camera, Star, Layers
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -198,6 +198,7 @@ export default function ProfileSettings() {
           <MenuRow icon={<FileText size={18} />} label="Muted words" to="/settings/muted-words" nav={nav} />
           <MenuRow icon={<UserX size={18} />} label="Muted users" to="/settings/muted-users" nav={nav} />
           <MenuRow icon={<Star size={18} />} label="Inner Circle" to="/inner-circle" nav={nav} />
+          <MenuRow icon={<Layers size={18} />} label="Circles" to="/circles" nav={nav} />
           <MenuRow icon={<ShieldCheck size={18} />} label="Tag review" to="/settings/pending-tags" nav={nav} />
           <MenuRow icon={<Bell size={18} />} label="Notifications" to="/notifications" nav={nav} />
           <MenuRow icon={<Bell size={18} />} label="Notification settings" to="/settings/notifications" nav={nav} />
