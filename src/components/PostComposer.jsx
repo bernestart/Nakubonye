@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { X, ImagePlus, Send } from "lucide-react"
+import { X, ImagePlus, Send, BarChart2, Trash2, Plus } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
@@ -23,6 +23,9 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
   const [imagePreviews, setImagePreviews] = useState([])
   const [audience, setAudience] = useState("public")
   const [audienceSheetOpen, setAudienceSheetOpen] = useState(false)
+  const [pollOpen, setPollOpen] = useState(false)
+  const [pollQuestion, setPollQuestion] = useState("")
+  const [pollOptions, setPollOptions] = useState(["", ""])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const [progress, setProgress] = useState(0)
@@ -82,6 +85,18 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
     e.target.value = ""
   }
 
+  function addPollOption() {
+    if (pollOptions.length >= 4) return
+    setPollOptions((cur) => [...cur, ""])
+  }
+  function setPollOption(idx, val) {
+    setPollOptions((cur) => cur.map((o, i) => i === idx ? val.slice(0, 80) : o))
+  }
+  function removePollOption(idx) {
+    if (pollOptions.length <= 2) return
+    setPollOptions((cur) => cur.filter((_, i) => i !== idx))
+  }
+
   function removeImage(idx) {
     setImageFiles((cur) => cur.filter((_, i) => i !== idx))
     setImagePreviews((cur) => {
@@ -123,14 +138,34 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
         if (upErr) throw new Error(upErr.message)
         uploadedPaths.push(path)
       }
-      const { error: insErr } = await supabase.from("user_posts").insert({
+      const { data: insertedRow, error: insErr } = await supabase.from("user_posts").insert({
         user_id: myId,
         content: body || null,
         image_path: uploadedPaths[0] || null,
         image_paths: uploadedPaths,
         audience: audienceSnapshot,
-      })
+      }).select("id").single()
       if (insErr) throw new Error(insErr.message)
+
+      // Poll — insert after post
+      const q = pollQuestion.trim()
+      const opts = pollOptions.map((o) => o.trim()).filter(Boolean)
+      if (q && opts.length >= 2 && insertedRow?.id) {
+        try {
+          const { data: pollRow } = await supabase.from("polls").insert({
+            post_id: insertedRow?.id,
+            post_type: "personal",
+            question: q,
+            multiple_choice: false,
+          }).select("id").single()
+          if (pollRow?.id) {
+            await supabase.from("poll_options").insert(
+              opts.map((label, i) => ({ poll_id: pollRow.id, label, display_order: i }))
+            )
+          }
+        } catch (e) { console.warn("poll insert failed", e) }
+      }
+
       onResolve?.(tempId)
     } catch (e) {
       onFail?.(tempId, e.message || String(e))
@@ -172,7 +207,8 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
   }, [])
 
   const activeAud = AUDIENCES.find((a) => a.id === audience) || AUDIENCES[0]
-  const canPost = (content.trim() || imageFiles.length > 0) && !busy
+  const pollReady = pollOpen && pollQuestion.trim() && pollOptions.filter((o) => o.trim()).length >= 2
+  const canPost = (content.trim() || imageFiles.length > 0 || pollReady) && !busy
 
   if (stage === "preview") {
     return (
@@ -374,6 +410,123 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
             <div className="h-full bg-purple-500 transition-all" style={{ width: progress + "%" }} />
           </div>
         )}
+
+
+        {/* Poll editor */}
+
+        <div className="mb-3">
+
+          {!pollOpen ? (
+
+            <button
+
+              onClick={() => { tap("light"); setPollOpen(true) }}
+
+              className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-white/[0.03] border border-white/8 text-left active:opacity-80"
+
+            >
+
+              <span className="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/30 grid place-items-center">
+
+                <BarChart2 size={18} className="text-purple-300" />
+
+              </span>
+
+              <div className="flex-1 min-w-0">
+
+                <p className="text-cream font-bold text-[13.5px]">Add a poll</p>
+
+                <p className="text-muted text-[12px]">Ask a question with up to 4 options</p>
+
+              </div>
+
+            </button>
+
+          ) : (
+
+            <div className="p-3 rounded-2xl bg-white/[0.03] border border-purple-500/25">
+
+              <div className="flex items-center justify-between mb-2">
+
+                <span className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase">Poll</span>
+
+                <button onClick={() => { setPollOpen(false); setPollQuestion(""); setPollOptions(["", ""]) }} className="text-muted text-[11.5px] font-semibold" aria-label="Remove poll">
+
+                  <Trash2 size={14} />
+
+                </button>
+
+              </div>
+
+              <input
+
+                value={pollQuestion}
+
+                onChange={(e) => setPollQuestion(e.target.value.slice(0, 120))}
+
+                placeholder="Ask a question…"
+
+                className="w-full h-11 rounded-xl bg-white/[0.05] border border-white/8 px-3 text-cream text-[14px] placeholder:text-subtle focus:outline-none focus:border-purple-500 mb-2"
+
+              />
+
+              <div className="flex flex-col gap-1.5">
+
+                {pollOptions.map((opt, i) => (
+
+                  <div key={i} className="flex items-center gap-2">
+
+                    <input
+
+                      value={opt}
+
+                      onChange={(e) => setPollOption(i, e.target.value)}
+
+                      placeholder={"Option " + (i + 1)}
+
+                      className="flex-1 h-10 rounded-xl bg-white/[0.05] border border-white/8 px-3 text-cream text-[13.5px] placeholder:text-subtle focus:outline-none focus:border-purple-500"
+
+                    />
+
+                    {pollOptions.length > 2 && (
+
+                      <button onClick={() => removePollOption(i)} className="w-9 h-9 rounded-full grid place-items-center bg-white/[0.05] border border-white/10 text-red-300" aria-label="Remove option">
+
+                        <X size={14} />
+
+                      </button>
+
+                    )}
+
+                  </div>
+
+                ))}
+
+              </div>
+
+              {pollOptions.length < 4 && (
+
+                <button
+
+                  onClick={addPollOption}
+
+                  className="mt-2 h-9 px-3 rounded-full bg-white/[0.05] border border-white/10 text-cream text-[12.5px] font-bold inline-flex items-center gap-1.5"
+
+                >
+
+                  <Plus size={13} /> Add option
+
+                </button>
+
+              )}
+
+            </div>
+
+          )}
+
+        </div>
+
+
 
         {/* Audience pill */}
         <button

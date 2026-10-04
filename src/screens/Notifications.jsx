@@ -91,6 +91,7 @@ export default function Notifications() {
   const [items, setItems] = useState([])
   const [actors, setActors] = useState(new Map())
   const [photos, setPhotos] = useState(new Map())
+  const [actionFor, setActionFor] = useState(null)
 
   const load = useCallback(async () => {
     if (!myId) return
@@ -128,6 +129,23 @@ export default function Notifications() {
   }, [myId])
 
   useEffect(() => { load() }, [load])
+
+  async function deleteNotif(ids) {
+    if (!ids || ids.length === 0) return
+    tap("light")
+    await supabase.from("notifications").delete().in("id", ids)
+    setItems((prev) => prev.filter((x) => !ids.includes(x.id)))
+    setActionFor(null)
+  }
+
+  async function markRead(ids) {
+    if (!ids || ids.length === 0) return
+    tap("light")
+    const now = new Date().toISOString()
+    await supabase.from("notifications").update({ read_at: now }).in("id", ids).is("read_at", null)
+    setItems((prev) => prev.map((x) => ids.includes(x.id) && !x.read_at ? { ...x, read_at: now } : x))
+    setActionFor(null)
+  }
 
   async function openNotification(n) {
     tap("light")
@@ -239,6 +257,13 @@ export default function Notifications() {
                         <button
                           key={first.id}
                           onClick={() => openNotification(first)}
+                          onContextMenu={(e) => { e.preventDefault(); setActionFor({ ids: [first.id] }) }}
+                          onTouchStart={(e) => {
+                            const t = setTimeout(() => setActionFor({ ids: [first.id] }), 500)
+                            e.currentTarget._lp = t
+                          }}
+                          onTouchEnd={(e) => { if (e.currentTarget._lp) { clearTimeout(e.currentTarget._lp); e.currentTarget._lp = null } }}
+                          onTouchMove={(e) => { if (e.currentTarget._lp) { clearTimeout(e.currentTarget._lp); e.currentTarget._lp = null } }}
                           className={`w-full flex items-start gap-3 p-3 rounded-2xl text-left active:bg-white/[0.04] transition-colors ${unread ? "bg-white/[0.03]" : ""}`}
                         >
                           <div className="relative shrink-0">
@@ -279,6 +304,13 @@ export default function Notifications() {
                       <button
                         key={"g-" + first.id}
                         onClick={() => { markGroupRead(group); openNotification(first) }}
+                        onContextMenu={(e) => { e.preventDefault(); setActionFor({ ids: group.map((g) => g.id) }) }}
+                        onTouchStart={(e) => {
+                          const t = setTimeout(() => setActionFor({ ids: group.map((g) => g.id) }), 500)
+                          e.currentTarget._lp = t
+                        }}
+                        onTouchEnd={(e) => { if (e.currentTarget._lp) { clearTimeout(e.currentTarget._lp); e.currentTarget._lp = null } }}
+                        onTouchMove={(e) => { if (e.currentTarget._lp) { clearTimeout(e.currentTarget._lp); e.currentTarget._lp = null } }}
                         className={`w-full flex items-start gap-3 p-3 rounded-2xl text-left active:bg-white/[0.04] transition-colors ${unread ? "bg-white/[0.03]" : ""}`}
                       >
                         <div className="relative shrink-0">
@@ -326,6 +358,39 @@ export default function Notifications() {
           })
         )}
       </div>
+
+      {actionFor && (
+        <div className="fixed inset-0 z-[500] flex items-end" onClick={() => setActionFor(null)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
+            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+          >
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
+            <button
+              onClick={() => markRead(actionFor.ids)}
+              className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left"
+            >
+              <span className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 grid place-items-center text-emerald-300 text-[15px]">✓</span>
+              <span className="text-cream font-semibold text-[14.5px]">Mark as read</span>
+            </button>
+            <button
+              onClick={() => deleteNotif(actionFor.ids)}
+              className="flex items-center gap-3 p-4 rounded-2xl bg-red-500/8 border border-red-500/25 text-left"
+            >
+              <span className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 grid place-items-center">
+                <Trash2 size={17} color="#F87171" />
+              </span>
+              <span className="text-cream font-semibold text-[14.5px]">Delete {actionFor.ids.length > 1 ? "notifications" : "notification"}</span>
+            </button>
+            <button
+              onClick={() => setActionFor(null)}
+              className="w-full h-11 mt-2 text-muted font-semibold text-[13.5px]"
+            >Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
