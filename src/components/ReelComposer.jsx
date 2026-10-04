@@ -309,6 +309,9 @@ export default function ReelComposer({ onClose, onDone, remixOf, kind = "reel" }
       voiceover_start_sec: voiceoverStartState,
     })
     if (insErr) { setError(insErr.message); setBusy(false); return }
+    // Clear both local + remote drafts
+    try { await clearReelDraft() } catch {}
+    try { await supabase.from("drafts").delete().eq("user_id", myId).eq("kind", "reel") } catch {}
     setProgress(100); setBusy(false); setStage("capture"); onDone?.()
   }
 

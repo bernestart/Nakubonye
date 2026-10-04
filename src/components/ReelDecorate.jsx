@@ -106,6 +106,38 @@ export default function ReelDecorate({ clips, onBack, onNext, initialOverlays })
         stickerOverlays,
         filterId,
       })
+
+      // Mirror into universal drafts table (for Drafts screen)
+      try {
+        const { data: authData } = await supabase.auth.getUser()
+        const uid = authData?.user?.id
+        if (uid) {
+          const { data: existing } = await supabase
+            .from("drafts")
+            .select("id")
+            .eq("user_id", uid)
+            .eq("kind", "reel")
+            .maybeSingle()
+          const row = {
+            user_id: uid,
+            kind: "reel",
+            payload: {
+              local_id: "current",
+              clip_count: serializableClips.length,
+              filter_id: filterId,
+              caption: "",
+            },
+            preview_url: serializableClips[0]?.url || null,
+            updated_at: new Date().toISOString(),
+          }
+          if (existing?.id) {
+            await supabase.from("drafts").update(row).eq("id", existing.id)
+          } else {
+            await supabase.from("drafts").insert(row)
+          }
+        }
+      } catch (e) { console.warn("draft mirror failed", e) }
+
       showToast("Draft saved")
     } catch (e) {
       console.error(e)

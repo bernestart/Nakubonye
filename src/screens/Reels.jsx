@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { motion } from "framer-motion"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { Heart, MessageCircle, Share2, Plus, Volume2, VolumeX, ArrowLeft, MoreVertical, Bookmark } from "lucide-react"
 import VerifiedBadge from "../components/VerifiedBadge"
 import { supabase } from "../lib/supabase"
@@ -31,6 +31,12 @@ export default function Reels() {
   const [muted, setMuted] = useState(true)  // always start muted for autoplay
   const userMutedRef = useRef(true)
   const [composerOpen, setComposerOpen] = useState(false)
+  const [searchParams] = useSearchParams()
+  useEffect(() => {
+    if (searchParams.get("compose")) {
+      setComposerOpen(true)
+    }
+  }, [searchParams])
   const [kindPickerOpen, setKindPickerOpen] = useState(false)
   const [composerKind, setComposerKind] = useState("reel")
   const [loading, setLoading] = useState(true)
