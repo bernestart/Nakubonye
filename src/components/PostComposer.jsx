@@ -23,6 +23,8 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
   const [imagePreviews, setImagePreviews] = useState([])
   const [audience, setAudience] = useState("public")
   const [audienceSheetOpen, setAudienceSheetOpen] = useState(false)
+  const [myCircles, setMyCircles] = useState([])
+  const [audienceView, setAudienceView] = useState("main")  // main | circles
   const [pollOpen, setPollOpen] = useState(false)
   const [pollQuestion, setPollQuestion] = useState("")
   const [pollOptions, setPollOptions] = useState(["", ""])
@@ -206,7 +208,14 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
     if (!handedOffRef.current) imagePreviews.forEach((p) => URL.revokeObjectURL(p))
   }, [])
 
-  const activeAud = AUDIENCES.find((a) => a.id === audience) || AUDIENCES[0]
+  const activeAud = (() => {
+    if (typeof audience === "string" && audience.startsWith("circle:")) {
+      const cid = audience.slice(7)
+      const c = myCircles.find((x) => x.id === cid)
+      return { id: audience, label: c?.name ? "Circle · " + c.name : "Circle", icon: "🔵", desc: "Only people in this circle" }
+    }
+    return AUDIENCES.find((a) => a.id === audience) || AUDIENCES[0]
+  })()
   const pollReady = pollOpen && pollQuestion.trim() && pollOptions.filter((o) => o.trim()).length >= 2
   const canPost = (content.trim() || imageFiles.length > 0 || pollReady) && !busy
 
@@ -530,7 +539,7 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
 
         {/* Audience pill */}
         <button
-          onClick={() => setAudienceSheetOpen(true)}
+          onClick={() => { setAudienceView("main"); setAudienceSheetOpen(true) }}
           className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-white/[0.03] border border-white/8 text-left"
         >
           <span className="text-2xl">{activeAud.icon}</span>
@@ -550,25 +559,84 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
             style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
-            <h3 className="text-cream font-extrabold text-[16px] mb-2">Who can see this?</h3>
-            {AUDIENCES.map((a) => (
-              <button
-                key={a.id}
-                onClick={() => { tap("light"); setAudience(a.id); setAudienceSheetOpen(false) }}
-                className="flex items-center gap-3 p-4 rounded-2xl text-left"
-                style={{
-                  background: audience === a.id ? "rgba(168,85,247,0.12)" : "rgba(255,255,255,0.03)",
-                  border: audience === a.id ? "1px solid rgba(168,85,247,0.5)" : "1px solid rgba(255,255,255,0.06)",
-                }}
-              >
-                <span className="text-2xl">{a.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-cream font-semibold text-[14px]">{a.label}</p>
-                  <p className="text-muted text-[12px]">{a.desc}</p>
-                </div>
-                {audience === a.id && <span className="text-purple-400 text-[16px]">✓</span>}
-              </button>
-            ))}
+            <h3 className="text-cream font-extrabold text-[16px] mb-2">
+              {audienceView === "circles" ? "Choose a Circle" : "Who can see this?"}
+            </h3>
+
+            {audienceView === "circles" ? (
+              <>
+                {myCircles.length === 0 ? (
+                  <div className="py-6 text-center">
+                    <p className="text-cream font-semibold text-[14px] mb-1">No circles yet</p>
+                    <p className="text-muted text-[12px]">Create circles in Profile → Circles.</p>
+                  </div>
+                ) : (
+                  myCircles.map((c) => {
+                    const id = "circle:" + c.id
+                    return (
+                      <button
+                        key={c.id}
+                        onClick={() => { tap("light"); setAudience(id); setAudienceSheetOpen(false) }}
+                        className="flex items-center gap-3 p-4 rounded-2xl text-left"
+                        style={{
+                          background: audience === id ? "rgba(59,130,246,0.12)" : "rgba(255,255,255,0.03)",
+                          border: audience === id ? "1px solid rgba(59,130,246,0.5)" : "1px solid rgba(255,255,255,0.06)",
+                        }}
+                      >
+                        <span className="text-2xl">🔵</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-cream font-semibold text-[14px]">{c.name}</p>
+                          <p className="text-muted text-[12px]">Only people in this circle</p>
+                        </div>
+                        {audience === id && <span className="text-blue-400 text-[16px]">✓</span>}
+                      </button>
+                    )
+                  })
+                )}
+                <button
+                  onClick={() => { tap("light"); setAudienceView("main") }}
+                  className="mt-2 h-11 w-full text-muted font-semibold text-[13px]"
+                >
+                  ← Back
+                </button>
+              </>
+            ) : (
+              <>
+                {AUDIENCES.map((a) => (
+                  <button
+                    key={a.id}
+                    onClick={() => { tap("light"); setAudience(a.id); setAudienceSheetOpen(false) }}
+                    className="flex items-center gap-3 p-4 rounded-2xl text-left"
+                    style={{
+                      background: audience === a.id ? "rgba(168,85,247,0.12)" : "rgba(255,255,255,0.03)",
+                      border: audience === a.id ? "1px solid rgba(168,85,247,0.5)" : "1px solid rgba(255,255,255,0.06)",
+                    }}
+                  >
+                    <span className="text-2xl">{a.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-cream font-semibold text-[14px]">{a.label}</p>
+                      <p className="text-muted text-[12px]">{a.desc}</p>
+                    </div>
+                    {audience === a.id && <span className="text-purple-400 text-[16px]">✓</span>}
+                  </button>
+                ))}
+                <button
+                  onClick={() => { tap("light"); setAudienceView("circles") }}
+                  className="flex items-center gap-3 p-4 rounded-2xl text-left"
+                  style={{
+                    background: typeof audience === "string" && audience.startsWith("circle:") ? "rgba(59,130,246,0.12)" : "rgba(255,255,255,0.03)",
+                    border: typeof audience === "string" && audience.startsWith("circle:") ? "1px solid rgba(59,130,246,0.5)" : "1px solid rgba(255,255,255,0.06)",
+                  }}
+                >
+                  <span className="text-2xl">🔵</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-cream font-semibold text-[14px]">Choose a Circle</p>
+                    <p className="text-muted text-[12px]">Share with a custom group</p>
+                  </div>
+                  <span className="text-muted text-[16px]">›</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

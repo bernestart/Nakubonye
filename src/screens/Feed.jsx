@@ -167,10 +167,12 @@ export default function Feed() {
     }
 
     // 3b. Personal posts (from me + matches + people I follow)
-    const [matchRes, followRes] = await Promise.all([
+    const [matchRes, followRes, myCirclesRes] = await Promise.all([
       supabase.from("matches").select("user_one_id, user_two_id").or("user_one_id.eq." + myId + ",user_two_id.eq." + myId),
       supabase.from("follows").select("following_id").eq("follower_id", myId),
+      supabase.from("circle_members").select("circle_id").eq("user_id", myId).limit(100),
     ])
+    const myCircleIds = new Set((myCirclesRes.data || []).map((r) => r.circle_id))
     const matchIds = (matchRes.data || []).map((m) => m.user_one_id === myId ? m.user_two_id : m.user_one_id)
     const followIds = (followRes.data || []).map((f) => f.following_id)
     const allowedUserIds = [...new Set([myId, ...matchIds, ...followIds])]
@@ -182,11 +184,18 @@ export default function Feed() {
       .eq("is_active", true)
       .order("created_at", { ascending: false })
       .limit(20)
-    const personalPosts = (personalRows || []).map((r) => ({
-      ...r,
-      author_id: r.user_id,
-      _source: "personal",
-    }))
+    const personalPosts = (personalRows || [])
+      .filter((r) => {
+        const aud = r.audience || "public"
+        if (!aud.startsWith("circle:")) return true
+        const cid = aud.slice(7)
+        return myCircleIds.has(cid)
+      })
+      .map((r) => ({
+        ...r,
+        author_id: r.user_id,
+        _source: "personal",
+      }))
 
     // 3c. Reels (public only, from anyone)
     const { data: reelRows } = await supabase
@@ -502,10 +511,12 @@ export default function Feed() {
     }
 
     // --- Personal posts from me + matches + follows ---
-    const [matchRes, followRes] = await Promise.all([
+    const [matchRes, followRes, myCirclesRes2] = await Promise.all([
       supabase.from("matches").select("user_one_id, user_two_id").or("user_one_id.eq." + myId + ",user_two_id.eq." + myId),
       supabase.from("follows").select("following_id").eq("follower_id", myId),
+      supabase.from("circle_members").select("circle_id").eq("user_id", myId).limit(100),
     ])
+    const myCircleIds2 = new Set((myCirclesRes2.data || []).map((r) => r.circle_id))
     const matchIds = (matchRes.data || []).map((m) => m.user_one_id === myId ? m.user_two_id : m.user_one_id)
     const followIds = (followRes.data || []).map((f) => f.following_id)
     const allowedUserIds = [...new Set([myId, ...matchIds, ...followIds])]
