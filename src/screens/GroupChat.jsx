@@ -11,6 +11,7 @@ import PollMessage from "../components/PollMessage"
 import InviteLinkSheet from "../components/InviteLinkSheet"
 import ReportModal from "../components/ReportModal"
 import MessageActionsSheet from "../components/MessageActionsSheet"
+import PollComposer from "../components/PollComposer"
 import ForwardPicker from "../components/ForwardPicker"
 import Linkify from "../components/chat/Linkify"
 import AudioBubble from "../components/chat/AudioBubble"
@@ -44,6 +45,7 @@ export default function GroupChat() {
   const [attachment, setAttachment] = useState(null)
   const [attachmentPreview, setAttachmentPreview] = useState("")
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
+  const [pollComposerOpen, setPollComposerOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
@@ -342,6 +344,25 @@ export default function GroupChat() {
     if (err) { setError(err.message); return }
     setMessages((cur) => cur.map((m) => m.id === editingMsg.id ? { ...m, content: body.slice(0, 2000), edited_at: nowIso } : m))
     setEditingMsg(null); setText("")
+  }
+
+  async function sendPoll(poll) {
+    if (!myId || !groupId) return
+    tap("light")
+    const payload = {
+      group_id: groupId,
+      sender_id: myId,
+      content: poll.question || "",
+      metadata: { poll },
+    }
+    const { data: inserted, error: err } = await supabase
+      .from("group_messages")
+      .insert(payload)
+      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, edited_at, created_at, is_system, metadata")
+      .single()
+    if (!err && inserted) {
+      setMessages((cur) => cur.some((x) => x.id === inserted.id) ? cur : [...cur, inserted])
+    }
   }
 
   async function send() {
@@ -976,9 +997,21 @@ export default function GroupChat() {
               <Paperclip size={18} className="text-purple-300" />
               <span className="font-semibold text-[14px]">Choose from gallery</span>
             </button>
+            <button onClick={() => { setAttachMenuOpen(false); setTimeout(() => setPollComposerOpen(true), 120) }}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream">
+              <span className="text-purple-300 text-[18px]">📊</span>
+              <span className="font-semibold text-[14px]">Create a poll</span>
+            </button>
             <button onClick={() => setAttachMenuOpen(false)} className="w-full h-11 mt-1 text-muted font-semibold text-[13.5px]">Cancel</button>
           </div>
         </div>
+      )}
+
+      {pollComposerOpen && (
+        <PollComposer
+          onClose={() => setPollComposerOpen(false)}
+          onSend={sendPoll}
+        />
       )}
 
       {/* Group menu */}

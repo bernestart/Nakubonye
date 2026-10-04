@@ -9,6 +9,7 @@ import Linkify from './chat/Linkify'
 import EmojiPicker from './chat/EmojiPicker'
 import ImageLightbox from './chat/ImageLightbox'
 import MessageActionsSheet from './MessageActionsSheet'
+import PollComposer from './PollComposer'
 import ForwardPicker from './ForwardPicker'
 import ReportModal from './ReportModal'
 import AudioBubble from './chat/AudioBubble'
@@ -38,6 +39,7 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
   const [attachment, setAttachment] = useState(null)
   const [attachmentPreview, setAttachmentPreview] = useState("")
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
+  const [pollComposerOpen, setPollComposerOpen] = useState(false)
   const [lightboxUrl, setLightboxUrl] = useState(null)
   const voice = useVoiceRecorder({ maxSeconds: 300 })
   const [replyingTo, setReplyingTo] = useState(null)
@@ -296,6 +298,25 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
   async function cancelVoice() {
     tap("light")
     await voice.stop(false)
+  }
+
+  async function sendPoll(poll) {
+    if (!myId || !communityId) return
+    tap('light')
+    const payload = {
+      community_id: communityId,
+      sender_id: myId,
+      content: poll.question || "",
+      metadata: { poll },
+    }
+    const { data: inserted, error: err } = await supabase
+      .from("community_messages")
+      .insert(payload)
+      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, created_at, highlighted_until, metadata")
+      .single()
+    if (!err && inserted) {
+      setMessages((cur) => cur.some((x) => x.id === inserted.id) ? cur : [...cur, inserted])
+    }
   }
 
   async function send() {
@@ -955,9 +976,21 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
               <Paperclip size={18} className="text-purple-300" />
               <span className="font-semibold text-[14px]">Choose from gallery</span>
             </button>
+            <button onClick={() => { setAttachMenuOpen(false); setTimeout(() => setPollComposerOpen(true), 120) }}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream">
+              <span className="text-purple-300 text-[18px]">📊</span>
+              <span className="font-semibold text-[14px]">Create a poll</span>
+            </button>
             <button onClick={() => setAttachMenuOpen(false)} className="w-full h-11 mt-1 text-muted font-semibold text-[13.5px]">Cancel</button>
           </div>
         </div>
+      )}
+
+      {pollComposerOpen && (
+        <PollComposer
+          onClose={() => setPollComposerOpen(false)}
+          onSend={sendPoll}
+        />
       )}
 
       <ImageLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
