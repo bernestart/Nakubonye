@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import {
   ArrowLeft, Search as SearchIcon, X, Users, FileText, Play, Store,
   Briefcase, MessageCircle, TrendingUp, MapPin, Heart, Clock,
@@ -28,6 +28,7 @@ export default function Search() {
   const myId = session?.user?.id
 
   const [query, setQuery] = useState("")
+  const [searchParams] = useSearchParams()
   const [tab, setTab] = useState("top")
   const [loading, setLoading] = useState(false)
 
@@ -242,6 +243,11 @@ export default function Search() {
   useEffect(() => {
     if (!isSearching) loadSuggestions()
   }, [isSearching, loadSuggestions])
+  useEffect(() => {
+    const q = searchParams.get("q")
+    if (q) setQuery(q.slice(0, 60))
+  }, [searchParams])
+
   const isSearching = query.trim().length >= 2
 
   // Results filtered by active tab
