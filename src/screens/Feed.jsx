@@ -72,6 +72,7 @@ import AppHeader from "../components/AppHeader"
 import StoriesRow from "../components/StoriesRow"
 import SuggestedPeople from "../components/SuggestedPeople"
 import PostImages from "../components/PostImages"
+import Poll from "../components/Poll"
 import ExpandableText from "../components/ExpandableText"
 import PostLikesModal from "../components/PostLikesModal"
 import PostCommentsPreview from "../components/PostCommentsPreview"
@@ -1391,6 +1392,8 @@ export default function Feed() {
                 {p.content && (
                   <ExpandableText text={p.content} className="px-3 pb-3 text-cream text-[14px] leading-[1.5] whitespace-pre-wrap" />
                 )}
+
+                <Poll postId={p.id} postType={p._source} />
 
                 {(() => {
                   const paths = Array.isArray(p.image_paths) && p.image_paths.length > 0

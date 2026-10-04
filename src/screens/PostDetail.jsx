@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 import VerifiedBadge from "../components/VerifiedBadge"
+import Poll from "../components/Poll"
 import PostCommentsSheet from "../components/PostCommentsSheet"
 import PostActionsSheet from "../components/PostActionsSheet"
 import ReactionPicker from "../components/ReactionPicker"
@@ -235,6 +236,8 @@ export default function PostDetail() {
             {post.content && (
               <p className="px-3 pb-3 text-cream text-[14.5px] leading-[1.5] whitespace-pre-wrap">{post.content}</p>
             )}
+
+            <Poll postId={post.id} postType={post._source} />
 
             {/* Image gallery */}
             {(() => {
