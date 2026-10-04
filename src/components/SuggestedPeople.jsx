@@ -57,6 +57,11 @@ export default function SuggestedPeople({ people, onMatch }) {
               <span className="text-cream text-[12px] font-semibold truncate w-full text-center">
                 {(u.display_name || u.username || "User").split(" ")[0]}
               </span>
+              {u.mutual_count > 0 && (
+                <span className="text-muted text-[10px] font-medium truncate w-full text-center">
+                  {u.mutual_count} mutual
+                </span>
+              )}
               <button
                 onClick={() => like(u)}
                 disabled={busy || isLiked}
