@@ -13,6 +13,16 @@ export default function ShareSheet({ post, source = "community", onClose, onShar
 
   // Audience mapping — FB-like cap: private posts aren't shareable
   const originalAudience = post?.audience || (source === "community" ? "public" : "public")
+
+  // Facebook rule: reshare inherits the ORIGINAL post's audience cap.
+  // Public → public. Matches → matches. Circle → same circle. Private → no share.
+  const inheritedAudience =
+    originalAudience === "public" || originalAudience === "everyone" ? "public" :
+    originalAudience === "matches" ? "matches" :
+    originalAudience === "following" ? "following" :
+    originalAudience === "private" ? null :
+    (typeof originalAudience === "string" && originalAudience.startsWith("circle:")) ? originalAudience :
+    "public"
   const canReshare =
     originalAudience === "public" ||
     originalAudience === "everyone" ||
@@ -41,7 +51,7 @@ export default function ShareSheet({ post, source = "community", onClose, onShar
       await supabase.from("user_posts").insert({
         user_id: myId,
         content: null,
-        audience: "public",
+        audience: inheritedAudience || "public",
         reshared_from_type: source,
         reshared_from_id: post.id,
         reshared_from_snapshot: snapshot,
@@ -140,6 +150,12 @@ export default function ShareSheet({ post, source = "community", onClose, onShar
           <Link2 size={20} strokeWidth={1.9} className="text-cream" />
           <span className="text-cream text-[15px] font-medium flex-1">Copy link</span>
         </button>
+
+        {inheritedAudience && inheritedAudience !== "public" && (
+          <p className="px-4 py-2 text-muted text-[11.5px] leading-snug">
+            This post is only visible to {inheritedAudience === "matches" ? "your matches" : inheritedAudience === "following" ? "people you follow" : "a specific circle"}. Your share will respect that limit.
+          </p>
+        )}
 
         <button
           onClick={onClose}

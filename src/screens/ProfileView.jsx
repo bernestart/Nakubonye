@@ -595,15 +595,36 @@ export default function ProfileView() {
                   <div className="grid grid-cols-3 gap-1 px-1">
                     {filtered.map((p) => {
                       const url = p.image_path ? supabase.storage.from('community-media').getPublicUrl(p.image_path).data?.publicUrl : null
+                      const isReshare = !!p.reshared_from_type
+                      const reshareThumb = isReshare && p.reshared_from_snapshot?.image_path
+                        ? supabase.storage.from("community-media").getPublicUrl(p.reshared_from_snapshot.image_path).data?.publicUrl
+                        : null
                       return (
-                        <button key={p._source + '-' + p.id} onClick={() => { tap('light'); nav('/feed') }}
-                          className="relative aspect-square rounded-lg overflow-hidden bg-white/[0.04] border border-white/8">
+                        <button
+                          key={p._source + '-' + p.id}
+                          onClick={() => {
+                            tap("light")
+                            if (isReshare && p.reshared_from_type && p.reshared_from_id) {
+                              nav("/post/" + p.reshared_from_type + "/" + p.reshared_from_id)
+                            } else {
+                              nav("/post/" + p._source + "/" + p.id)
+                            }
+                          }}
+                          className="relative aspect-square rounded-lg overflow-hidden bg-white/[0.04] border border-white/8"
+                        >
                           {url ? (
                             <img src={url} alt="" className="w-full h-full object-cover" />
+                          ) : reshareThumb ? (
+                            <img src={reshareThumb} alt="" className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full grid place-items-center p-2">
-                              <p className="text-muted text-[10.5px] leading-tight line-clamp-3 text-center">{p.content}</p>
+                              <p className="text-muted text-[10.5px] leading-tight line-clamp-3 text-center">{p.content || "Shared post"}</p>
                             </div>
+                          )}
+                          {isReshare && (
+                            <span className="absolute top-1.5 right-1.5 px-1.5 h-5 rounded-full bg-black/65 backdrop-blur-md text-white text-[9.5px] font-bold flex items-center gap-0.5">
+                              ↻
+                            </span>
                           )}
                         </button>
                       )
