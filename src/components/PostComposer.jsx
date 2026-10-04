@@ -3,6 +3,7 @@ import { X, ImagePlus, Send } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
+import { autosaveDraft, deleteDraftsByKind } from "../lib/drafts"
 
 const AUDIENCES = [
   { id: "public",  label: "Everyone",  icon: "🌍", desc: "Anyone on Nakubonye can see this" },
@@ -26,6 +27,39 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
   const [error, setError] = useState("")
   const [progress, setProgress] = useState(0)
   const [stage, setStage] = useState("compose") // compose | preview
+  const [resumeDraftId, setResumeDraftId] = useState(null)
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href)
+      const draftId = url.searchParams.get("draft")
+      if (draftId) setResumeDraftId(draftId)
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    if (!resumeDraftId) return
+    ;(async () => {
+      const { data } = await supabase.from("drafts").select("payload").eq("id", resumeDraftId).maybeSingle()
+      if (data?.payload) {
+        setContent(data.payload.content || "")
+        setAudience(data.payload.audience || "public")
+      }
+    })()
+  }, [resumeDraftId])
+
+
+  const schedulerRef = useRef(null)
+  if (!schedulerRef.current) schedulerRef.current = autosaveDraft(myId, "post", { content: "", image_paths: [], audience: "public" }, null)
+
+  useEffect(() => {
+    if (!myId) return
+    // Save whenever content/audience changes
+    const payload = { content: content.trim(), image_paths: [], audience }
+    // Draft preview — first local preview
+    const preview = imagePreviews[0] || null
+    schedulerRef.current = autosaveDraft(myId, "post", payload, preview)
+    schedulerRef.current()
+  }, [content, audience, imagePreviews.length, myId])
 
   function pickImages(e) {
     const files = Array.from(e.target.files || [])

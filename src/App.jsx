@@ -33,6 +33,7 @@ import EventDetail from './screens/EventDetail'
 import CommunityRequests from './screens/CommunityRequests'
 import StoryArchive from './screens/StoryArchive'
 import Memories from './screens/Memories'
+import Drafts from './screens/Drafts'
 import Reels from './screens/Reels'
 import FollowList from './screens/FollowList'
 import Create from './screens/Create'
@@ -229,6 +230,7 @@ export default function App() {
         <Route path="/saved" element={<Guard><Saved /></Guard>} />
         <Route path="/story-archive" element={<Guard><StoryArchive /></Guard>} />
         <Route path="/memories" element={<Guard><Memories /></Guard>} />
+        <Route path="/drafts" element={<Guard><Drafts /></Guard>} />
         <Route path="/community/:communityId/event/:eventId" element={<Guard><EventDetail /></Guard>} />
         <Route path="/communities/:id/requests" element={<Guard><CommunityRequests /></Guard>} />
         <Route path="/marketplace" element={<Guard><Marketplace /></Guard>} />
