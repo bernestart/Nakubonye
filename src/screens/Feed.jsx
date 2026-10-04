@@ -88,6 +88,8 @@ export default function Feed() {
   const { session, profile } = useAuth()
   const myId = session?.user?.id
   const [posts, setPosts] = useState([])
+  const [mutedWordsSet, setMutedWordsSet] = useState(new Set())
+  const [mutedUsersSet, setMutedUsersSet] = useState(new Set())
   const [communities, setCommunities] = useState(new Map())
   const [profiles, setProfiles] = useState(new Map())
   const [photos, setPhotos] = useState(new Map())
@@ -318,8 +320,18 @@ export default function Feed() {
       interactions: rankingSignals.interactions,
       reelAffinity: rankingSignals.reelAffinity,
     }
+    const filteredEnriched = (enrichedPosts || []).filter((p) => {
+      const authorId = p.author_id || p.user_id
+      if (authorId && mutedUsersSet.has(authorId)) return false
+      const text = (p.content || "").toLowerCase()
+      if (text && mutedWordsSet.size > 0) {
+        for (const w of mutedWordsSet) { if (text.includes(w)) return false }
+      }
+      return true
+    })
+
     const list = mixFeed({
-      posts: enrichedPosts,
+      posts: filteredEnriched,
       reels: enrichedReels,
       pageSize: 20,
       reelEvery: 10,
@@ -826,6 +838,24 @@ export default function Feed() {
     const videos = document.querySelectorAll("[data-reel-video]")
     videos.forEach((v) => { v.muted = feedMuted })
   }, [feedMuted, posts])
+
+  // Load mute filter (muted words + muted users) once per session
+  useEffect(() => {
+    if (!myId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const [wordsRes, mutesRes] = await Promise.all([
+          supabase.from("muted_words").select("word").eq("user_id", myId),
+          supabase.from("user_mutes").select("muted_id").eq("muter_id", myId),
+        ])
+        if (cancelled) return
+        setMutedWordsSet(new Set((wordsRes.data || []).map((r) => (r.word || "").toLowerCase()).filter(Boolean)))
+        setMutedUsersSet(new Set((mutesRes.data || []).map((r) => r.muted_id)))
+      } catch (e) { console.warn("mute load failed", e) }
+    })()
+    return () => { cancelled = true }
+  }, [myId])
 
   useEffect(() => { load() }, [load])
 
