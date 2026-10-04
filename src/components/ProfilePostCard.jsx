@@ -7,7 +7,7 @@ import { tap } from "../lib/haptic"
 import VerifiedBadge from "./VerifiedBadge"
 import ResharedPost from "./ResharedPost"
 
-export default function ProfilePostCard({ post, authorProfile, authorPhoto, isMe, onOpenMenu, reactionCount = 0, liked = false, reactionEmoji = "❤️", commentCount = 0, onToggleLike }) {
+export default function ProfilePostCard({ post, authorProfile, authorPhoto, isMe, onOpenMenu, reactionCount = 0, liked = false, reactionEmoji = "❤️", commentCount = 0, onToggleLike, topReactors = [] }) {
   const nav = useNavigate()
   const imageUrl = post.image_path
     ? supabase.storage.from("community-media").getPublicUrl(post.image_path).data?.publicUrl
@@ -90,13 +90,31 @@ export default function ProfilePostCard({ post, authorProfile, authorPhoto, isMe
       {(reactionCount > 0 || commentCount > 0) && (
         <div className="flex items-center justify-between px-4 py-2 border-t border-white/5">
           {reactionCount > 0 ? (
-            <span className="text-muted text-[12px] flex items-center gap-1.5">
-              <span className="text-[13px]">{reactionEmoji}</span>
-              {liked
-                ? reactionCount === 1
-                  ? "You reacted"
-                  : `You and ${reactionCount - 1} other${reactionCount - 1 === 1 ? "" : "s"}`
-                : `${reactionCount} reaction${reactionCount === 1 ? "" : "s"}`}
+            <span className="text-muted text-[12px] flex items-center gap-2">
+              <span className="flex -space-x-1.5">
+                {[...new Set(topReactors.map((r) => r.emoji))].slice(0, 3).map((em, i) => (
+                  <span
+                    key={i}
+                    className="w-4.5 h-4.5 rounded-full grid place-items-center text-[11px] bg-[#0B0B14] border border-white/10"
+                    style={{ width: 18, height: 18 }}
+                  >
+                    {em}
+                  </span>
+                ))}
+              </span>
+              <span className="truncate">
+                {liked ? (
+                  <>
+                    You{topReactors.length > 1 ? `, ${topReactors.filter((r) => r.name).slice(0, 1).map((r) => r.name.split(" ")[0]).join(", ")}` : ""}
+                    {reactionCount > 2 ? ` and ${reactionCount - (topReactors.length > 1 ? 2 : 1)} other${reactionCount - (topReactors.length > 1 ? 2 : 1) === 1 ? "" : "s"}` : ""}
+                  </>
+                ) : (
+                  <>
+                    {topReactors[0]?.name?.split(" ")[0] || "Someone"}
+                    {reactionCount > 1 ? ` and ${reactionCount - 1} other${reactionCount - 1 === 1 ? "" : "s"}` : ""}
+                  </>
+                )}
+              </span>
             </span>
           ) : <span />}
           {commentCount > 0 && (

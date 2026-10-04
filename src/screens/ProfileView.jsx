@@ -43,6 +43,7 @@ export default function ProfileView() {
   const [profileMyReactions, setProfileMyReactions] = useState(new Set())
   const [profileMyReactionTypes, setProfileMyReactionTypes] = useState(new Map())
   const [profileCommentCounts, setProfileCommentCounts] = useState(new Map())
+  const [profileTopReactors, setProfileTopReactors] = useState(new Map())  // key → [{name, emoji}]
   const [reels, setReels] = useState([])
   const [followersCount, setFollowersCount] = useState(0)
   const [followedBy, setFollowedBy] = useState({ people: [], more: 0 })
@@ -229,6 +230,48 @@ export default function ProfileView() {
       setProfileMyReactions(mine)
       setProfileMyReactionTypes(mineTypes)
       setProfileCommentCounts(cmtCounts)
+
+      // Fetch top 3 reactor names per post (own profile side)
+      const topReactors = new Map()
+      if (personalIds.length > 0) {
+        const { data: personalLikes } = await supabase
+          .from("user_post_likes")
+          .select("post_id, user_id, reaction, created_at")
+          .in("post_id", personalIds)
+          .order("created_at", { ascending: false })
+        const reactorIds = [...new Set((personalLikes || []).map((r) => r.user_id))].slice(0, 100)
+        let profMap = new Map()
+        if (reactorIds.length > 0) {
+          const { data: profs } = await supabase.from("profiles").select("id, display_name, username").in("id", reactorIds)
+          ;(profs || []).forEach((x) => profMap.set(x.id, x))
+        }
+        ;(personalLikes || []).forEach((r) => {
+          const k = "personal:" + r.post_id
+          if (!topReactors.has(k)) topReactors.set(k, [])
+          const arr = topReactors.get(k)
+          if (arr.length < 3) arr.push({ name: profMap.get(r.user_id)?.display_name || profMap.get(r.user_id)?.username || "Someone", emoji: r.reaction || "❤️", userId: r.user_id })
+        })
+      }
+      if (communityIds.length > 0) {
+        const { data: commLikes } = await supabase
+          .from("community_post_reactions")
+          .select("post_id, user_id, reaction, created_at")
+          .in("post_id", communityIds)
+          .order("created_at", { ascending: false })
+        const reactorIds = [...new Set((commLikes || []).map((r) => r.user_id))].slice(0, 100)
+        let profMap = new Map()
+        if (reactorIds.length > 0) {
+          const { data: profs } = await supabase.from("profiles").select("id, display_name, username").in("id", reactorIds)
+          ;(profs || []).forEach((x) => profMap.set(x.id, x))
+        }
+        ;(commLikes || []).forEach((r) => {
+          const k = "community:" + r.post_id
+          if (!topReactors.has(k)) topReactors.set(k, [])
+          const arr = topReactors.get(k)
+          if (arr.length < 3) arr.push({ name: profMap.get(r.user_id)?.display_name || profMap.get(r.user_id)?.username || "Someone", emoji: r.reaction || "❤️", userId: r.user_id })
+        })
+      }
+      setProfileTopReactors(topReactors)
     } catch (e) { console.warn("profile reactions load failed", e) }
 
     if (!isMe) {
@@ -704,6 +747,7 @@ export default function ProfileView() {
                           liked={profileMyReactions.has(p._source + ":" + p.id)}
                           reactionEmoji={profileMyReactionTypes.get(p._source + ":" + p.id) || "❤️"}
                           commentCount={profileCommentCounts.get(p._source + ":" + p.id) || 0}
+                          topReactors={profileTopReactors.get(p._source + ":" + p.id) || []}
                           onToggleLike={async () => {
                             const key = p._source + ":" + p.id
                             const isLiked = profileMyReactions.has(key)
