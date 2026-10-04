@@ -789,17 +789,23 @@ export default function ProfileView() {
             reels.length === 0 ? (
               <EmptyTab icon="🎬" title="No reels yet" subtitle="Nothing posted yet." />
             ) : (
-              <div className="grid grid-cols-3 gap-1 px-1">
-                {reels.map((r) => (
-                  <button key={r.id} onClick={() => setPlayingReel(r)} className="relative aspect-[9/16] rounded-lg overflow-hidden bg-black">
-                    {r.thumbnail_url ? (
-                      <img src={r.thumbnail_url} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <video src={r.video_url} muted playsInline preload="metadata" className="w-full h-full object-cover" />
-                    )}
-                    <span className="absolute bottom-1 left-1 text-white text-[10px] font-bold bg-black/60 rounded px-1.5 py-0.5">▶</span>
-                  </button>
-                ))}
+              <div className="flex flex-col">
+                <div className="flex items-center justify-between px-4 pt-3 pb-2">
+                  <h2 className="text-cream font-extrabold text-[17px]">Reels</h2>
+                  <span className="text-muted text-[12.5px]">{reels.length}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-1 px-1 pb-4">
+                  {reels.map((r) => (
+                    <button key={r.id} onClick={() => setPlayingReel(r)} className="relative aspect-[9/16] rounded-lg overflow-hidden bg-black">
+                      {r.thumbnail_url ? (
+                        <img src={r.thumbnail_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <video src={r.video_url} muted playsInline preload="metadata" className="w-full h-full object-cover" />
+                      )}
+                      <span className="absolute bottom-1 left-1 text-white text-[10px] font-bold bg-black/60 rounded px-1.5 py-0.5">▶</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )
           )}
