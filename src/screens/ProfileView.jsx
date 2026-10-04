@@ -10,6 +10,7 @@ import ProfileConnections from '../components/ProfileConnections'
 import ProfileIntro from '../components/ProfileIntro'
 import ProfilePhotos from '../components/ProfilePhotos'
 import ProfileHighlights from '../components/ProfileHighlights'
+import MutualConnections from '../components/MutualConnections'
 import PhotoViewer from '../components/PhotoViewer'
 import ReelViewer from '../components/ReelViewer'
 import ProfileAbout from '../components/ProfileAbout'
@@ -389,6 +390,8 @@ export default function ProfileView() {
           </div>
 
           <ProfileHighlights userId={userId} isOwn={isMe} />
+
+          {!isMe && <MutualConnections userId={userId} myId={myId} />}
 
           {(person.bio || (person.city && canSeeLocation)) && (
             <div className="mt-3">
