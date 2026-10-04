@@ -29,6 +29,7 @@ import Roadmap from './screens/Roadmap'
 import Feed from './screens/Feed'
 import PostDetail from './screens/PostDetail'
 import Saved from './screens/Saved'
+import EventDetail from './screens/EventDetail'
 import StoryArchive from './screens/StoryArchive'
 import Reels from './screens/Reels'
 import FollowList from './screens/FollowList'
@@ -225,6 +226,7 @@ export default function App() {
         <Route path="/me"         element={<Guard><ProfileSettings /></Guard>} />
         <Route path="/saved" element={<Guard><Saved /></Guard>} />
         <Route path="/story-archive" element={<Guard><StoryArchive /></Guard>} />
+        <Route path="/community/:communityId/event/:eventId" element={<Guard><EventDetail /></Guard>} />
         <Route path="/marketplace" element={<Guard><Marketplace /></Guard>} />
         <Route path="/groups/new" element={<Guard><CreateGroup /></Guard>} />
         <Route path="/groups/:id" element={<Guard><GroupChat /></Guard>} />

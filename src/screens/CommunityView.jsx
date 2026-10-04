@@ -9,6 +9,7 @@ import BrandGlow from '../components/BrandGlow'
 import ReportModal from '../components/ReportModal'
 import CommunityFeed from '../components/CommunityFeed'
 import CommunityChat from '../components/CommunityChat'
+import CommunityEvents from '../components/CommunityEvents'
 
 export default function CommunityView() {
   const nav = useNavigate()
@@ -358,6 +359,17 @@ export default function CommunityView() {
               </button>
               <button
                 type="button"
+                onClick={() => { tap('light'); setTab('events') }}
+                className={`flex-1 h-9 rounded-xl text-[13px] font-bold transition-colors ${
+                  tab === 'events'
+                    ? 'bg-white text-[#0B0B14] shadow-[0_2px_6px_rgba(0,0,0,0.25)]'
+                    : 'text-muted'
+                }`}
+              >
+                Events
+              </button>
+              <button
+                type="button"
                 onClick={() => { tap('light'); setTab('members') }}
                 className={`flex-1 h-9 rounded-xl text-[13px] font-bold transition-colors ${
                   tab === 'members'
@@ -373,6 +385,8 @@ export default function CommunityView() {
               <FeedErrorBoundary><CommunityFeed communityId={community.id} isMember={joined} /></FeedErrorBoundary>
             ) : tab === 'chat' ? (
               <CommunityChat communityId={community.id} isMember={joined} isPremium={isPremium} communityName={community.name} />
+            ) : tab === 'events' ? (
+              <CommunityEvents communityId={community.id} isMember={joined} />
             ) : (
               <>
                 <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-3">
