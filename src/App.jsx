@@ -36,6 +36,7 @@ import Memories from './screens/Memories'
 import Drafts from './screens/Drafts'
 import MutedWords from './screens/MutedWords'
 import MutedUsers from './screens/MutedUsers'
+import NotificationSettings from './screens/NotificationSettings'
 import Reels from './screens/Reels'
 import FollowList from './screens/FollowList'
 import Create from './screens/Create'
@@ -235,6 +236,7 @@ export default function App() {
         <Route path="/drafts" element={<Guard><Drafts /></Guard>} />
         <Route path="/settings/muted-words" element={<Guard><MutedWords /></Guard>} />
         <Route path="/settings/muted-users" element={<Guard><MutedUsers /></Guard>} />
+        <Route path="/settings/notifications" element={<Guard><NotificationSettings /></Guard>} />
         <Route path="/community/:communityId/event/:eventId" element={<Guard><EventDetail /></Guard>} />
         <Route path="/communities/:id/requests" element={<Guard><CommunityRequests /></Guard>} />
         <Route path="/marketplace" element={<Guard><Marketplace /></Guard>} />
