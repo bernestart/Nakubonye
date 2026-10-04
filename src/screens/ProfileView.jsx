@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Heart, Flag, Ban, MoreVertical, X , MessageCircle, Search, Pencil} from 'lucide-react'
+import { ArrowLeft, Heart, Flag, Ban, MoreVertical, X , MessageCircle, Search, Pencil, MapPin } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl, calcAge } from '../lib/photo'
@@ -489,115 +489,124 @@ export default function ProfileView() {
           )}
         </div>
 
-        {/* Header */}
-        <div className="px-4 pb-3">
-          <div className="flex items-start gap-4 -mt-14 relative">
-            <span className="shrink-0 block rounded-full overflow-hidden bg-elevated border-4 relative z-10" style={{ width: 96, height: 96, borderColor: '#0B0B14' }}>
+        {/* Header — centered Facebook layout */}
+        <div className="flex justify-center -mt-16 relative z-10">
+          <div className="relative">
+            <span className="block w-32 h-32 rounded-full overflow-hidden bg-elevated border-4" style={{ borderColor: '#0B0B14' }}>
               {photos[0] ? (
                 <img src={photos[0]} alt="" className="w-full h-full object-cover" />
               ) : (
-                <span className="w-full h-full grid place-items-center text-purple-400 font-black text-2xl">
+                <span className="w-full h-full grid place-items-center text-purple-400 font-black text-3xl">
                   {(person.display_name || person.username || '?')[0].toUpperCase()}
                 </span>
               )}
             </span>
-
-            <div className="flex-1 min-w-0 pt-16">
-              <div className="flex items-center gap-1.5 mb-1">
-                <h1 className="text-cream text-[18px] font-extrabold tracking-tight truncate">
-                  {person.display_name || person.username}
-                  {person.date_of_birth ? `, ${calcAge(person.date_of_birth)}` : ''}
-                </h1>
-                {person.is_verified && (
-                  <span className="w-[16px] h-[16px] rounded-full bg-[#1DA1F2] grid place-items-center shrink-0">
-                    <span className="text-white text-[10px] font-black">✓</span>
-                  </span>
-                )}
-              </div>
-              <p className="text-muted text-[13px] truncate mb-2">@{person.username || 'user'}</p>
-              {(() => {
-                const parts = []
-                if (person.profession) parts.push(person.profession)
-                if (person.education) parts.push(person.education)
-                if (person.city) parts.push('Lives in ' + person.city)
-                const line = parts.slice(0, 2).join(' · ')
-                return line ? <p className="text-muted text-[12.5px] mb-2 truncate">{line}</p> : null
-              })()}
-
-              <div className="flex items-center gap-1.5 text-[12.5px]">
-                <button onClick={() => { tap('light'); nav(`/user/${userId}/followers`) }} className="text-cream font-bold active:opacity-70">
-                  {followersCount} followers
-                </button>
-                <span className="text-muted">·</span>
-                <button onClick={() => { tap('light'); nav(`/user/${userId}/following`) }} className="text-cream font-bold active:opacity-70">
-                  {followingCount} following
-                </button>
-              </div>
-            </div>
+            <span className="absolute bottom-4 right-4 w-4 h-4 rounded-full bg-emerald-500 border-2 border-[#0B0B14]" />
           </div>
+        </div>
 
-          {!isMe && followedBy.people.length > 0 && (
-            <div className="mt-3 px-4 flex items-center gap-2 text-muted text-[12px]">
-              <span className="text-muted">Followed by</span>
+        <div className="flex items-center justify-center gap-1.5 mt-3 px-4">
+          <h1 className="text-cream text-[22px] font-extrabold tracking-tight text-center">
+            {person.display_name || person.username}
+          </h1>
+          {person.is_verified && (
+            <span className="w-[16px] h-[16px] rounded-full bg-[#1DA1F2] grid place-items-center shrink-0">
+              <span className="text-white text-[10px] font-black">✓</span>
+            </span>
+          )}
+        </div>
+
+        {(() => {
+          const parts = []
+          if (person.profession) parts.push(person.profession)
+          if (person.education) parts.push(person.education)
+          const line = parts.slice(0, 2).join(' · ')
+          return line ? (
+            <p className="text-cream/85 text-[13.5px] text-center mt-2 px-6 leading-snug">{line}</p>
+          ) : null
+        })()}
+
+        <div className="flex items-center justify-center gap-2 mt-3 text-[13.5px]">
+          <button onClick={() => { tap('light'); nav(`/user/${userId}/followers`) }} className="text-cream font-bold active:opacity-70">
+            {followersCount} follower{followersCount === 1 ? "" : "s"}
+          </button>
+          <span className="text-muted">·</span>
+          <button onClick={() => { tap('light'); nav(`/user/${userId}/following`) }} className="text-cream font-bold active:opacity-70">
+            {followingCount} following
+          </button>
+          <span className="text-muted">·</span>
+          <span className="text-cream font-bold">{myPosts.length} post{myPosts.length === 1 ? "" : "s"}</span>
+        </div>
+
+        {person.city && canSeeLocation && (
+          <div className="flex justify-center mt-3">
+            <span className="inline-flex items-center gap-1.5 px-3 h-7 rounded-full bg-white/[0.06] text-cream text-[12.5px] font-semibold">
+              <MapPin size={11} /> {person.city}{person.country ? `, ${person.country}` : ''}
+            </span>
+          </div>
+        )}
+
+        {person.bio && (
+          <p className="text-cream/85 text-[13.5px] leading-snug text-center px-6 mt-3 whitespace-pre-wrap">
+            {person.bio}
+          </p>
+        )}
+
+        {!isMe && followedBy.people.length > 0 && (
+          <div className="flex flex-col items-center mt-4 px-4">
+            <div className="flex -space-x-2 mb-2">
+              {followedBy.people.slice(0, 3).map((p) => (
+                <span key={p.id} className="w-7 h-7 rounded-full overflow-hidden bg-purple-600 border-2 border-[#0B0B14] grid place-items-center text-white text-[10px] font-black">
+                  {(p.display_name || p.username || "?")[0].toUpperCase()}
+                </span>
+              ))}
+            </div>
+            <p className="text-muted text-[12.5px] text-center leading-snug">
+              Followed by{" "}
               <span className="text-cream font-semibold">
                 {followedBy.people.map((p) => p.display_name || p.username).join(", ")}
-                {followedBy.more > 0 ? ` + ${followedBy.more} more` : ""}
               </span>
-            </div>
-          )}
+              {followedBy.more > 0 ? ` and ${followedBy.more} other${followedBy.more === 1 ? "" : "s"}` : ""}
+            </p>
+          </div>
+        )}
 
+        {!isMe && (
+          <div className="flex items-center gap-2 mt-4 px-4">
+            <div className="flex-1">
+              <FollowButton userId={userId} />
+            </div>
+            {isMatch ? (
+              <button
+                onClick={() => { tap('light'); nav('/messages/' + userId) }}
+                className="flex-1 h-9 rounded-full text-white font-bold text-[13px]"
+                style={{ background: 'linear-gradient(135deg, #EC4899 0%, #A855F7 100%)' }}
+              >Message</button>
+            ) : myLike ? (
+              <button disabled className="flex-1 h-9 rounded-full bg-white/[0.06] border border-white/10 text-white/60 font-semibold text-[13px]">
+                Like sent ✓
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => { tap('light'); setDmOpen(true) }}
+                  className="h-9 px-3 rounded-full bg-white/[0.06] border border-white/10 text-cream font-bold text-[12.5px] shrink-0"
+                >Message</button>
+                <button
+                  onClick={handleLike}
+                  disabled={busy}
+                  className="flex-1 h-9 rounded-full text-white font-bold text-[13px] flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  style={{ background: 'linear-gradient(135deg, #EC4899 0%, #A855F7 100%)' }}
+                >
+                  <Heart size={14} strokeWidth={2.6} fill="currentColor" /> Like
+                </button>
+              </>
+            )}
+          </div>
+        )}
           <ProfileHighlights userId={userId} isOwn={isMe} />
 
           {!isMe && <MutualConnections userId={userId} myId={myId} />}
-
-          {(person.bio || (person.city && canSeeLocation)) && (
-            <div className="mt-3">
-              {person.city && canSeeLocation && (
-                <p className="text-muted text-[12.5px] mb-1">📍 {person.city}{person.country ? `, ${person.country}` : ''}</p>
-              )}
-              {person.bio && (
-                <p className="text-cream/90 text-[13.5px] leading-[1.45] whitespace-pre-wrap">{person.bio}</p>
-              )}
-            </div>
-          )}
-
-          {/* Actions */}
-          {!isMe && (
-            <div className="mt-3 flex items-center gap-2">
-              <FollowButton userId={userId} />
-              {isMatch ? (
-                <button
-                  onClick={() => { tap('light'); nav('/messages/' + userId) }}
-                  className="flex-1 h-9 rounded-full text-white font-bold text-[13px]"
-                  style={{ background: 'linear-gradient(135deg, #EC4899 0%, #A855F7 100%)' }}
-                >
-                  Send a message
-                </button>
-              ) : myLike ? (
-                <button disabled className="flex-1 h-9 rounded-full bg-white/[0.06] border border-white/10 text-white/60 font-semibold text-[13px]">
-                  Like sent ✓
-                </button>
-              ) : (
-                <>
-                  <button
-                    onClick={() => { tap('light'); setDmOpen(true) }}
-                    className="h-9 px-3 rounded-full bg-white/[0.06] border border-white/10 text-cream font-bold text-[12.5px] shrink-0"
-                  >
-                    Message
-                  </button>
-                  <button
-                    onClick={handleLike}
-                    disabled={busy}
-                    className="flex-1 h-9 rounded-full text-white font-bold text-[13px] flex items-center justify-center gap-1.5 disabled:opacity-50"
-                    style={{ background: 'linear-gradient(135deg, #EC4899 0%, #A855F7 100%)' }}
-                  >
-                    <Heart size={14} strokeWidth={2.6} fill="currentColor" /> Like
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-        </div>
 
         {/* Tabs — sticky below top bar, flat text */}
         <div className="border-b border-white/8 sticky top-0 z-20" style={{ background: '#0B0B14' }}>
