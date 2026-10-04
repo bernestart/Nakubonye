@@ -7,7 +7,7 @@ import { tap } from "../lib/haptic"
 import VerifiedBadge from "./VerifiedBadge"
 import ResharedPost from "./ResharedPost"
 
-export default function ProfilePostCard({ post, authorProfile, authorPhoto, isMe, onOpenMenu }) {
+export default function ProfilePostCard({ post, authorProfile, authorPhoto, isMe, onOpenMenu, reactionCount = 0, liked = false, reactionEmoji = "❤️", commentCount = 0, onToggleLike }) {
   const nav = useNavigate()
   const imageUrl = post.image_path
     ? supabase.storage.from("community-media").getPublicUrl(post.image_path).data?.publicUrl
@@ -86,25 +86,51 @@ export default function ProfilePostCard({ post, authorProfile, authorPhoto, isMe
         />
       )}
 
+      {/* Engagement summary */}
+      {(reactionCount > 0 || commentCount > 0) && (
+        <div className="flex items-center justify-between px-4 py-2 border-t border-white/5">
+          {reactionCount > 0 ? (
+            <span className="text-muted text-[12px] flex items-center gap-1.5">
+              <span className="text-[13px]">{reactionEmoji}</span>
+              {liked
+                ? reactionCount === 1
+                  ? "You reacted"
+                  : `You and ${reactionCount - 1} other${reactionCount - 1 === 1 ? "" : "s"}`
+                : `${reactionCount} reaction${reactionCount === 1 ? "" : "s"}`}
+            </span>
+          ) : <span />}
+          {commentCount > 0 && (
+            <button
+              onClick={() => { tap("light"); nav("/post/" + post._source + "/" + post.id) }}
+              className="text-muted text-[12px] active:opacity-70"
+            >
+              {commentCount} comment{commentCount === 1 ? "" : "s"}
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Action bar */}
-      <div className="flex items-center px-3 py-2 border-t border-white/5">
+      <div className="flex items-center px-3 py-1 border-t border-white/5">
         <button
-          onClick={() => { tap("light"); nav("/post/personal/" + post.id) }}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg active:bg-white/[0.04]"
+          onClick={() => { tap("light"); onToggleLike?.() }}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg active:bg-white/[0.04]"
         >
-          <Heart size={17} strokeWidth={2.2} color="#888" />
-          <span className="text-muted text-[12.5px] font-bold">Like</span>
+          <Heart size={17} strokeWidth={2.2} color={liked ? "#EC4899" : "#888"} fill={liked ? "#EC4899" : "none"} />
+          <span className="text-[12.5px] font-bold" style={{ color: liked ? "#EC4899" : "#888" }}>
+            {liked ? "Liked" : "Like"}
+          </span>
         </button>
         <button
-          onClick={() => { tap("light"); nav("/post/personal/" + post.id) }}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg active:bg-white/[0.04]"
+          onClick={() => { tap("light"); nav("/post/" + post._source + "/" + post.id) }}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg active:bg-white/[0.04]"
         >
           <MessageCircle size={17} strokeWidth={2.2} color="#888" />
           <span className="text-muted text-[12.5px] font-bold">Comment</span>
         </button>
         <button
-          onClick={() => { tap("light"); nav("/post/personal/" + post.id) }}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg active:bg-white/[0.04]"
+          onClick={() => { tap("light"); nav("/post/" + post._source + "/" + post.id) }}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg active:bg-white/[0.04]"
         >
           <Share2 size={17} strokeWidth={2.2} color="#888" />
           <span className="text-muted text-[12.5px] font-bold">Share</span>
