@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Send, MessageCircle, Paperclip, X, Smile, Mic, Square, Play, Pause, MoreVertical, Trash2, Eye, Flag, Ban, Check, CheckCheck , Phone, Video, Pin, Bell, BellOff, Eraser , Camera, Image } from 'lucide-react'
 import VerifiedBadge from "../components/VerifiedBadge"
+import PollMessage from "../components/PollMessage"
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -923,6 +924,15 @@ export default function Chat() {
                 )}
                 <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                   <div className="max-w-[82%] relative group">
+                    {m.metadata?.poll && !deleted && (
+                      <PollMessage
+                        messageSource="dm"
+                        messageId={m.id}
+                        poll={m.metadata.poll}
+                        isMine={mine}
+                      />
+                    )}
+
                     {m.metadata?.story_reply && !deleted && !replyToMsg && (
                       <div className={`mb-1 px-2 py-2 rounded-xl flex items-center gap-2 ${mine ? 'bg-purple-500/15 border border-purple-500/30' : 'bg-white/5 border border-white/8'}`}>
                         <div className="w-8 h-8 rounded-lg overflow-hidden bg-black/40 shrink-0">

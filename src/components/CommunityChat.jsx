@@ -12,6 +12,7 @@ import MessageActionsSheet from './MessageActionsSheet'
 import ForwardPicker from './ForwardPicker'
 import ReportModal from './ReportModal'
 import AudioBubble from './chat/AudioBubble'
+import PollMessage from './PollMessage'
 import { useVoiceRecorder } from './chat/useVoiceRecorder'
 
 const UNSEND_WINDOW_MS = 3600000
@@ -76,7 +77,7 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
 
     const { data: rows, error: err } = await supabase
       .from('community_messages')
-      .select('id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, created_at, highlighted_until')
+      .select('id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, created_at, highlighted_until, metadata')
       .eq('community_id', communityId)
       .order('created_at', { ascending: true })
       .limit(200)
@@ -716,6 +717,17 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
                   {heartBurstId === m.id && (
                     <div className="absolute inset-0 grid place-items-center pointer-events-none" style={{ zIndex: 20 }}>
                       <span className="text-[44px] leading-none animate-ping">❤️</span>
+                    </div>
+                  )}
+
+                  {m.metadata?.poll && !m.deleted_at && (
+                    <div className={`mb-1 ${mine ? 'flex justify-end' : 'flex justify-start'}`}>
+                      <PollMessage
+                        messageSource="community"
+                        messageId={m.id}
+                        poll={m.metadata.poll}
+                        isMine={mine}
+                      />
                     </div>
                   )}
 
