@@ -18,6 +18,7 @@ export default function EditCommunity() {
   const [loading, setLoading] = useState(true)
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
+  const [rules, setRules] = useState("")
   const [emoji, setEmoji] = useState("💬")
   const [color, setColor] = useState("#EC4899")
   const [busy, setBusy] = useState(false)
@@ -27,13 +28,14 @@ export default function EditCommunity() {
     if (!id || !myId) return
     const { data: c, error: cErr } = await supabase
       .from("communities")
-      .select("id, name, description, emoji, cover_color, created_by")
+      .select("id, name, description, emoji, cover_color, created_by, rules, privacy")
       .eq("id", id)
       .maybeSingle()
     if (cErr || !c) { setError("Community not found"); setLoading(false); return }
     if (c.created_by !== myId) { setError("Only the creator can edit this community"); setLoading(false); return }
     setName(c.name || "")
     setDescription(c.description || "")
+    setRules(c.rules || "")
     setEmoji(c.emoji || "💬")
     setColor(c.cover_color || "#EC4899")
     setLoading(false)
@@ -49,6 +51,7 @@ export default function EditCommunity() {
       .update({
         name: name.trim(),
         description: description.trim() || null,
+        rules: rules.trim() || null,
         emoji,
         cover_color: color,
       })
@@ -123,6 +126,15 @@ export default function EditCommunity() {
           rows={4}
           className="w-full bg-elevated border border-white/10 rounded-xl px-4 py-3 text-cream text-[14.5px] placeholder:text-subtle focus:outline-none focus:border-purple-500 resize-none mb-5"
         />
+
+          <label className="text-muted text-[11.5px] font-bold uppercase tracking-wide mt-1 block">Community rules (optional)</label>
+          <textarea
+            value={rules}
+            onChange={(e) => setRules(e.target.value.slice(0, 2000))}
+            rows={4}
+            placeholder="1. Be kind&#10;2. No spam&#10;3. ..."
+            className="w-full rounded-2xl bg-white/[0.04] border border-white/8 px-4 py-3 text-cream text-[14px] placeholder:text-muted focus:outline-none focus:border-purple-500 resize-none"
+          />
 
         {/* Emoji */}
         <label className="block text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">

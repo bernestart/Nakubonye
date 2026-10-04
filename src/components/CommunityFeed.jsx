@@ -15,6 +15,9 @@ export default function CommunityFeed({ communityId, isMember }) {
   const [error, setError] = useState('')
   const [posts, setPosts] = useState([])
   const [text, setText] = useState('')
+  const [isAnnouncement, setIsAnnouncement] = useState(false)
+  const [announcementTitle, setAnnouncementTitle] = useState('')
+  const [myRole, setMyRole] = useState(null)
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -150,12 +153,16 @@ export default function CommunityFeed({ communityId, isMember }) {
         author_id: session.user.id,
         content: body || '',
         image_path: imagePath,
+        is_announcement: isAnnouncement && (myRole === 'owner' || myRole === 'admin'),
+        announcement_title: isAnnouncement && (myRole === 'owner' || myRole === 'admin') ? announcementTitle.trim() || null : null,
       })
 
     if (insErr) { setSubmitting(false); setError(insErr.message); return }
 
     setText('')
     clearImage()
+    setIsAnnouncement(false)
+    setAnnouncementTitle('')
     setSubmitting(false)
     load()
   }
@@ -224,6 +231,18 @@ export default function CommunityFeed({ communityId, isMember }) {
   }
 
 
+  useEffect(() => {
+    if (!session?.user?.id || !communityId) return
+    ;(async () => {
+      const { data } = await supabase.from('community_memberships')
+        .select('role')
+        .eq('community_id', communityId)
+        .eq('user_id', session.user.id)
+        .maybeSingle()
+      setMyRole(data?.role || null)
+    })()
+  }, [communityId, session?.user?.id])
+
   if (!isMember) {
     return (
       <div className="text-center py-12">
@@ -265,6 +284,28 @@ export default function CommunityFeed({ communityId, isMember }) {
             >
               <X size={13} strokeWidth={2.6} className="text-cream" />
             </button>
+          </div>
+        )}
+
+        {(myRole === 'owner' || myRole === 'admin') && (
+          <div className="mt-2 pt-2 border-t border-white/6">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isAnnouncement}
+                onChange={(e) => setIsAnnouncement(e.target.checked)}
+                className="w-4 h-4 accent-purple-500"
+              />
+              <span className="text-cream text-[12.5px] font-semibold">📢 Post as announcement</span>
+            </label>
+            {isAnnouncement && (
+              <input
+                value={announcementTitle}
+                onChange={(e) => setAnnouncementTitle(e.target.value.slice(0, 80))}
+                placeholder="Announcement title (optional)"
+                className="mt-2 w-full h-9 rounded-lg bg-white/[0.04] border border-white/8 px-3 text-cream text-[12.5px] placeholder:text-muted focus:outline-none focus:border-purple-500"
+              />
+            )}
           </div>
         )}
 
@@ -317,11 +358,23 @@ export default function CommunityFeed({ communityId, isMember }) {
         <div className="flex flex-col gap-3">
           {posts.map((post) => {
             const mine = post.author_id === session.user.id
+            const isAnn = !!post.is_announcement
             return (
               <div
                 key={post.id}
                 className="rounded-2xl bg-white/[0.04] border border-white/8 p-3"
+                style={isAnn ? { borderColor: 'rgba(236,72,153,0.4)', background: 'rgba(236,72,153,0.06)' } : undefined}
               >
+                {isAnn && (
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="px-2 h-6 rounded-full bg-pink-500/25 border border-pink-500/50 text-pink-200 text-[10.5px] font-black tracking-wider flex items-center gap-1">
+                      📢 ANNOUNCEMENT
+                    </span>
+                  </div>
+                )}
+                {isAnn && post.announcement_title && (
+                  <p className="text-cream font-black text-[15px] mb-2">{post.announcement_title}</p>
+                )}
                 <div className="flex items-start gap-3 mb-2">
                   <button
                     onClick={() => { tap('light'); nav('/profile/' + post.author_id) }}

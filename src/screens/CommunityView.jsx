@@ -82,7 +82,7 @@ export default function CommunityView() {
 
     const { data: c, error: cErr } = await supabase
       .from('communities')
-      .select('id, slug, name, description, emoji, cover_color, member_count, created_by, invite_code, invite_enabled')
+      .select('id, slug, name, description, emoji, cover_color, member_count, created_by, invite_code, invite_enabled, rules, privacy')
       .eq('id', id)
       .single()
 
@@ -406,7 +406,14 @@ export default function CommunityView() {
                   </div>
                 )}
 
-                Discover members →
+                {community.rules && (
+                <div className="mt-3 p-3 rounded-2xl bg-white/[0.03] border border-white/8">
+                  <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">📜 Rules</p>
+                  <p className="text-cream/90 text-[13px] leading-relaxed whitespace-pre-wrap">{community.rules}</p>
+                </div>
+              )}
+
+              Discover members →
               </button>
             </div>
 
