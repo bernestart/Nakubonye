@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { X, ImagePlus, RefreshCw, Send, Pencil } from "lucide-react"
 import { supabase } from "../lib/supabase"
+import { deleteDraftsByKind } from "../lib/drafts"
 import { useAuth } from "../lib/auth"
 import StoryEditor from "./StoryEditor"
 import { createPortal } from "react-dom"
@@ -56,6 +57,34 @@ export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve
   const [mode, setMode] = useState("media")
   const [textContent, setTextContent] = useState("")
   const [textBg, setTextBg] = useState(0)
+  const storyDraftTimerRef = useRef(null)
+  useEffect(() => {
+    if (!myId) return
+    if (mode === "media" && !preview && !caption.trim()) return
+    if (storyDraftTimerRef.current) clearTimeout(storyDraftTimerRef.current)
+    storyDraftTimerRef.current = setTimeout(async () => {
+      try {
+        const payload = mode === "text"
+          ? { mode: "text", text_content: textContent, text_bg: textBg }
+          : { mode: "media", caption }
+        const { data: existing } = await supabase
+          .from("drafts").select("id")
+          .eq("user_id", myId).eq("kind", "story")
+          .maybeSingle()
+        const row = {
+          user_id: myId,
+          kind: "story",
+          payload,
+          preview_url: preview || null,
+          updated_at: new Date().toISOString(),
+        }
+        if (existing?.id) await supabase.from("drafts").update(row).eq("id", existing.id)
+        else await supabase.from("drafts").insert(row)
+      } catch (e) { console.warn("story autosave failed", e) }
+    }, 1200)
+    return () => { if (storyDraftTimerRef.current) clearTimeout(storyDraftTimerRef.current) }
+  }, [myId, caption, textContent, textBg, mode, preview])
+
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { ArrowLeft, Users, Share2 } from "lucide-react"
 import BrandGlow from "../components/BrandGlow"
 import StoriesRow from "../components/StoriesRow"
@@ -13,6 +13,12 @@ export default function Stories() {
   const { session } = useAuth()
   const myId = session?.user?.id
   const [storyCount, setStoryCount] = useState(null)
+  const [searchParams] = useSearchParams()
+  const [composerOpen, setComposerOpen] = useState(false)
+  useEffect(() => {
+    if (searchParams.get("compose")) setComposerOpen(true)
+  }, [searchParams])
+
   const [suggested, setSuggested] = useState([])
   const [communities, setCommunities] = useState([])
   const [myCommunityIds, setMyCommunityIds] = useState(new Set())
