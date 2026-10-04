@@ -17,6 +17,7 @@ import BlockConfirm from '../components/BlockConfirm'
 import Linkify from '../components/chat/Linkify'
 import AudioBubble from '../components/chat/AudioBubble'
 import EmojiPicker from '../components/chat/EmojiPicker'
+import PollComposer from '../components/PollComposer'
 import ImageLightbox from '../components/chat/ImageLightbox'
 import ForwardPicker from '../components/ForwardPicker'
 import MessageActionsSheet from '../components/MessageActionsSheet'
@@ -134,6 +135,7 @@ export default function Chat() {
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
+  const [pollComposerOpen, setPollComposerOpen] = useState(false)
   const messagesRef = useRef([])
   const typingChannelRef = useRef(null)
   const typingTimeoutRef = useRef(null)
@@ -576,6 +578,25 @@ export default function Chat() {
     if (err) { setError(err.message); return }
     setMessages((cur) => cur.map((m) => m.id === editingMsg.id ? { ...m, content: body.slice(0, 2000), edited_at: nowIso } : m))
     setEditingMsg(null); setText('')
+  }
+
+  async function sendPoll(poll) {
+    if (!myId || !conversationId) return
+    tap("light")
+    const payload = {
+      conversation_id: conversationId,
+      sender_id: myId,
+      content: poll.question || "",
+      metadata: { poll },
+    }
+    const { data: inserted, error: err } = await supabase
+      .from("messages")
+      .insert(payload)
+      .select("id, sender_id, content, created_at, edited_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata")
+      .single()
+    if (!err && inserted) {
+      setMessages((cur) => cur.some((x) => x.id === inserted.id) ? cur : [...cur, inserted])
+    }
   }
 
   async function send() {
@@ -1333,6 +1354,13 @@ export default function Chat() {
 
       <ImageLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
 
+      {pollComposerOpen && (
+        <PollComposer
+          onClose={() => setPollComposerOpen(false)}
+          onSend={sendPoll}
+        />
+      )}
+
       {attachMenuOpen && (
         <div className="fixed inset-0 z-[500] flex items-end" onClick={() => setAttachMenuOpen(false)}>
           <div className="absolute inset-0 bg-black/60" />
@@ -1364,6 +1392,18 @@ export default function Chat() {
               <div className="flex-1">
                 <p className="font-bold text-[14.5px]">Choose from gallery</p>
                 <p className="text-muted text-[11.5px] mt-0.5">Pick an existing photo</p>
+              </div>
+            </button>
+            <button
+              onClick={() => { setAttachMenuOpen(false); setTimeout(() => setPollComposerOpen(true), 120) }}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+            >
+              <span className="w-10 h-10 rounded-xl bg-purple-500/20 grid place-items-center shrink-0">
+                <span className="text-purple-300 text-[16px]">📊</span>
+              </span>
+              <div className="flex-1">
+                <p className="font-bold text-[14.5px]">Create a poll</p>
+                <p className="text-muted text-[11.5px] mt-0.5">Ask a question with up to 4 options</p>
               </div>
             </button>
             <button onClick={() => setAttachMenuOpen(false)} className="w-full h-11 mt-1 text-muted font-semibold text-[13.5px]">Cancel</button>
