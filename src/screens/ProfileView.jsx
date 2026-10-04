@@ -15,6 +15,7 @@ import ProfileHobbies from '../components/ProfileHobbies'
 import ProfilePersonalDetails from '../components/ProfilePersonalDetails'
 import ProfileMenuSheet from '../components/ProfileMenuSheet'
 import ResharedPost from '../components/ResharedPost'
+import ProfilePostCard from '../components/ProfilePostCard'
 import MutualConnections from '../components/MutualConnections'
 import PhotoViewer from '../components/PhotoViewer'
 import ReelViewer from '../components/ReelViewer'
@@ -592,43 +593,59 @@ export default function ProfileView() {
                   return <EmptyTab icon="✏️" title="No posts yet" subtitle="When they post something, it shows here." />
                 }
                 return (
-                  <div className="grid grid-cols-3 gap-1 px-1">
-                    {filtered.map((p) => {
-                      const url = p.image_path ? supabase.storage.from('community-media').getPublicUrl(p.image_path).data?.publicUrl : null
-                      const isReshare = !!p.reshared_from_type
-                      const reshareThumb = isReshare && p.reshared_from_snapshot?.image_path
-                        ? supabase.storage.from("community-media").getPublicUrl(p.reshared_from_snapshot.image_path).data?.publicUrl
-                        : null
-                      return (
-                        <button
+                  <div className="flex flex-col">
+                    {/* Posts section header */}
+                    <h2 className="px-4 pt-3 pb-2 text-cream font-extrabold text-[17px]">Posts</h2>
+
+                    {/* Composer pill — own profile only */}
+                    {isMe && (
+                      <div className="px-4 pb-3">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => { tap("light"); nav("/create") }}
+                            className="flex-1 h-11 rounded-full bg-white/[0.06] border border-white/8 px-4 text-left text-muted text-[14px]"
+                          >
+                            What's on your mind?
+                          </button>
+                          <button
+                            onClick={() => { tap("light"); nav("/create") }}
+                            className="w-11 h-11 rounded-full grid place-items-center bg-white/[0.06] border border-white/8"
+                            aria-label="Add photo"
+                          >
+                            <span className="text-[18px]">🖼️</span>
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2.5 pl-1">
+                          {[
+                            { emoji: "🖼️", label: "Photo",   path: "/create" },
+                            { emoji: "🎬", label: "Reels",   path: "/create" },
+                            { emoji: "💜", label: "Life event", path: "/create" },
+                          ].map((c) => (
+                            <button
+                              key={c.label}
+                              onClick={() => { tap("light"); nav(c.path) }}
+                              className="flex-1 h-8 rounded-lg flex items-center justify-center gap-1.5 text-cream text-[12.5px] font-bold active:bg-white/[0.04]"
+                            >
+                              <span>{c.emoji}</span> {c.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Post cards */}
+                    <div className="flex flex-col">
+                      {filtered.map((p) => (
+                        <ProfilePostCard
                           key={p._source + '-' + p.id}
-                          onClick={() => {
-                            tap("light")
-                            if (isReshare && p.reshared_from_type && p.reshared_from_id) {
-                              nav("/post/" + p.reshared_from_type + "/" + p.reshared_from_id)
-                            } else {
-                              nav("/post/" + p._source + "/" + p.id)
-                            }
-                          }}
-                          className="relative aspect-square rounded-lg overflow-hidden bg-white/[0.04] border border-white/8"
-                        >
-                          {url ? (
-                            <img src={url} alt="" className="w-full h-full object-cover" />
-                          ) : reshareThumb ? (
-                            <img src={reshareThumb} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full grid place-items-center p-2">
-                              <p className="text-muted text-[10.5px] leading-tight line-clamp-3 text-center">{p.content || "Shared post"}</p>
-                            </div>
-                          )}
-                          {isReshare && (
-                            <span className="absolute top-1.5 right-1.5 px-1.5 h-5 rounded-full bg-black/65 backdrop-blur-md text-white text-[9.5px] font-bold flex items-center gap-0.5">
-                              ↻
-                            </span>
-                          )}
-                        </button>
-                      )
-                    })}
+                          post={p}
+                          authorProfile={person}
+                          authorPhoto={photos[0]}
+                          isMe={isMe}
+                          onOpenMenu={() => {}}
+                        />
+                      ))}
+                    </div>
                   </div>
                 )
               })()}
