@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { X, Pencil, Users, Trash2, Flag, EyeOff, Link2, Bookmark , Clock , UserMinus } from "lucide-react"
+import { BellOff, X, Pencil, Users, Trash2, Flag, EyeOff, Link2, Bookmark , Clock , UserMinus } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
@@ -97,6 +97,22 @@ export default function PostActionsSheet({ post, onClose, onDeleted, onUpdated, 
       onSaved?.(true, post)
       onClose?.()
     }
+  }
+
+  async function muteUser() {
+    if (!post.author_id || busy) return
+    tap("light")
+    setBusy(true)
+    const { error: insErr } = await supabase
+      .from("user_mutes")
+      .upsert(
+        { muter_id: myId, muted_id: post.author_id },
+        { onConflict: "muter_id,muted_id" }
+      )
+    setBusy(false)
+    if (insErr) { setError(insErr.message); return }
+    onDeleted?.(post.id)
+    onClose?.()
   }
 
   async function snoozeAuthor() {
@@ -265,6 +281,22 @@ export default function PostActionsSheet({ post, onClose, onDeleted, onUpdated, 
                   <div className="flex-1">
                     <p className="text-cream font-semibold text-[14.5px]">Snooze for 30 days</p>
                     <p className="text-muted text-[12px]">Stop seeing posts from this person</p>
+                  </div>
+                </button>
+              )}
+
+              {!isMine && post.author_id && (
+                <button
+                  onClick={muteUser}
+                  disabled={busy}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left disabled:opacity-50"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
+                    <BellOff size={17} className="text-purple-300" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-cream font-semibold text-[14.5px]">Mute this user</p>
+                    <p className="text-muted text-[12px]">Hide their posts without unfollowing</p>
                   </div>
                 </button>
               )}
