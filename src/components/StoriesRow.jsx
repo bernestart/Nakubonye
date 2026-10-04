@@ -13,11 +13,12 @@ const TILE_H = 170
 async function filterStoriesByVisibility(stories, myId) {
   const ownerIds = [...new Set(stories.map((r) => r.user_id).filter((id) => id !== myId))]
   if (ownerIds.length === 0) return stories
-  const [settingsRes, blocksRes, matchesRes, followsRes] = await Promise.all([
+  const [settingsRes, blocksRes, matchesRes, followsRes, innerCircleRes] = await Promise.all([
     supabase.from('user_settings').select('user_id, who_can_see_story').in('user_id', ownerIds),
     supabase.from('blocks').select('blocker_id, blocked_id').or(`blocker_id.eq.${myId},blocked_id.eq.${myId}`),
     supabase.from('matches').select('user_one_id, user_two_id').or(`user_one_id.eq.${myId},user_two_id.eq.${myId}`),
     supabase.from('follows').select('following_id').eq('follower_id', myId),
+    supabase.from('inner_circle').select('user_id, member_id').or(`user_id.eq.${myId},member_id.eq.${myId}`),
   ])
   const settingsMap = new Map((settingsRes.data || []).map((r) => [r.user_id, r.who_can_see_story || 'everyone']))
   const blockedSet = new Set()
@@ -31,6 +32,12 @@ async function filterStoriesByVisibility(stories, myId) {
     if (m.user_two_id === myId) matchSet.add(m.user_one_id)
   })
   const followSet = new Set((followsRes.data || []).map((f) => f.following_id))
+
+  // Inner Circle: which owners have me in their circle
+  const innerCircleVisibleSet = new Set()
+  ;(innerCircleRes?.data || []).forEach((row) => {
+    if (row.member_id === myId) innerCircleVisibleSet.add(row.user_id)
+  })
 
   return stories.filter((r) => {
     if (r.user_id === myId) return true
@@ -397,9 +404,17 @@ export default function StoriesRow() {
                 width: TILE_W, height: TILE_H,
                 borderRadius: 14,
                 border: seen ? "2px solid rgba(255,255,255,0.15)" : "2px solid transparent",
-                background: seen
-                  ? "rgba(255,255,255,0.03)"
-                  : "linear-gradient(#0B0B14,#0B0B14) padding-box, linear-gradient(135deg,#C084FC,#EC4899) border-box",
+                background: (() => {
+                  if (seen) return "rgba(255,255,255,0.03)"
+                  const first = g.stories[0]
+                  const aud = first?.audience
+                  // Inner Circle — green ring
+                  if (aud === "inner_circle" || aud === "close") {
+                    return "linear-gradient(#0B0B14,#0B0B14) padding-box, linear-gradient(135deg,#10B981,#34D399) border-box"
+                  }
+                  // Matches — pink/purple (default)
+                  return "linear-gradient(#0B0B14,#0B0B14) padding-box, linear-gradient(135deg,#C084FC,#EC4899) border-box"
+                })(),
               }}
             >
               {tileBody(g)}
@@ -409,6 +424,17 @@ export default function StoriesRow() {
                   {g.display_name.split(" ")[0]}
                 </span>
               </div>
+              {(() => {
+                const first = g.stories[0]
+                const aud = first?.audience
+                if (aud !== "inner_circle" && aud !== "close") return null
+                return (
+                  <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wider"
+                        style={{ background: "linear-gradient(135deg,#10B981,#34D399)", color: "#fff" }}>
+                    💫 IC
+                  </span>
+                )
+              })()}
             </button>
           )
         })}

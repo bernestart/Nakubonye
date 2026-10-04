@@ -57,6 +57,7 @@ export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve
   const [mode, setMode] = useState("media")
   const [textContent, setTextContent] = useState("")
   const [textBg, setTextBg] = useState(0)
+  const [audienceMode, setAudienceMode] = useState("everyone")
   const storyDraftTimerRef = useRef(null)
   useEffect(() => {
     if (!myId) return
@@ -182,10 +183,10 @@ export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve
 
       const tempId = "pending-story-" + crypto.randomUUID()
       const snapshot = body
-      onOptimistic?.(tempId, URL.createObjectURL(blob), snapshot, "everyone")
+      onOptimistic?.(tempId, URL.createObjectURL(blob), snapshot, audienceMode)
       setBusy(false)
       onClose?.()
-      runPublish(tempId, blob, "jpg", "image/jpeg", "image", snapshot, "everyone")
+      runPublish(tempId, blob, "jpg", "image/jpeg", "image", snapshot, audienceMode)
     } catch (e) {
       setBusy(false)
       setError(e.message || String(e))
@@ -224,7 +225,7 @@ export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve
     const mediaType = !editedBlob && file.type.startsWith("video/") ? "video" : "image"
     const tempId = "pending-story-" + crypto.randomUUID()
     const captionSnapshot = caption.trim()
-    const audienceSnapshot = 'everyone'
+    const audienceSnapshot = audienceMode
     const retry = () => {
       onRetryStart?.(tempId)
       runPublish(tempId, useFile, ext, contentType, mediaType, captionSnapshot, audienceSnapshot)
@@ -363,6 +364,42 @@ export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve
               >
                 <RefreshCw size={15} /> Change
               </button>
+
+            <div className="flex gap-2 mt-1">
+              <button
+                onClick={() => { tap("light"); setAudienceMode("everyone") }}
+                className="flex-1 h-9 rounded-full text-[12.5px] font-bold"
+                style={{
+                  background: audienceMode === "everyone" ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.05)",
+                  border: audienceMode === "everyone" ? "1px solid rgba(255,255,255,0.30)" : "1px solid rgba(255,255,255,0.08)",
+                  color: audienceMode === "everyone" ? "#fff" : "#aaa",
+                }}
+              >
+                🌍 Everyone
+              </button>
+              <button
+                onClick={() => { tap("light"); setAudienceMode("inner_circle") }}
+                className="flex-1 h-9 rounded-full text-[12.5px] font-bold"
+                style={{
+                  background: audienceMode === "inner_circle" ? "linear-gradient(135deg, rgba(16,185,129,0.30) 0%, rgba(5,150,105,0.30) 100%)" : "rgba(255,255,255,0.05)",
+                  border: audienceMode === "inner_circle" ? "1px solid rgba(16,185,129,0.55)" : "1px solid rgba(255,255,255,0.08)",
+                  color: audienceMode === "inner_circle" ? "#6EE7B7" : "#aaa",
+                }}
+              >
+                💫 Inner Circle
+              </button>
+              <button
+                onClick={() => { tap("light"); setAudienceMode("matches") }}
+                className="flex-1 h-9 rounded-full text-[12.5px] font-bold"
+                style={{
+                  background: audienceMode === "matches" ? "linear-gradient(135deg, rgba(236,72,153,0.30) 0%, rgba(168,85,247,0.30) 100%)" : "rgba(255,255,255,0.05)",
+                  border: audienceMode === "matches" ? "1px solid rgba(236,72,153,0.55)" : "1px solid rgba(255,255,255,0.08)",
+                  color: audienceMode === "matches" ? "#F9A8D4" : "#aaa",
+                }}
+              >
+                💜 Matches
+              </button>
+            </div>
               <button
                 onClick={() => { setMode("text"); setPreview(""); setFile(null); setEditedBlob(null) }}
                 className="flex-1 h-11 rounded-full bg-white/10 text-white font-semibold text-[13.5px] inline-flex items-center justify-center gap-2"
