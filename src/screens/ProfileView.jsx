@@ -35,6 +35,7 @@ export default function ProfileView() {
   const [myPosts, setMyPosts] = useState([])
   const [reels, setReels] = useState([])
   const [followersCount, setFollowersCount] = useState(0)
+  const [followedBy, setFollowedBy] = useState({ people: [], more: 0 })
   const [followingCount, setFollowingCount] = useState(0)
   const [isMatch, setIsMatch] = useState(false)
   const [myLike, setMyLike] = useState(false)
@@ -119,6 +120,33 @@ export default function ProfileView() {
     setReels(reelRes.data || [])
     setFollowersCount(f1.count || 0)
     setFollowingCount(f2.count || 0)
+
+    // Followed-by: people I follow who also follow this user
+    if (userId !== myId) {
+      try {
+        const [myFollowsRes, theirFollowersRes] = await Promise.all([
+          supabase.from('follows').select('following_id').eq('follower_id', myId).limit(500),
+          supabase.from('follows').select('follower_id').eq('following_id', userId).limit(500),
+        ])
+        const myFollowSet = new Set((myFollowsRes.data || []).map((r) => r.following_id))
+        const sharedIds = (theirFollowersRes.data || [])
+          .map((r) => r.follower_id)
+          .filter((id) => myFollowSet.has(id) && id !== myId && id !== userId)
+
+        if (sharedIds.length > 0) {
+          const top = sharedIds.slice(0, 3)
+          const { data: profs } = await supabase
+            .from('profiles')
+            .select('id, display_name, username')
+            .in('id', top)
+          const pMap = new Map((profs || []).map((p) => [p.id, p]))
+          const people = top.map((id) => pMap.get(id)).filter(Boolean)
+          setFollowedBy({ people, more: Math.max(0, sharedIds.length - people.length) })
+        } else {
+          setFollowedBy({ people: [], more: 0 })
+        }
+      } catch (e) { console.warn('followedBy failed', e) }
+    }
 
     if (linksRes.data?.length) {
       const ids = linksRes.data.map((l) => l.interest_id)
@@ -372,22 +400,27 @@ export default function ProfileView() {
                 return line ? <p className="text-muted text-[12.5px] mb-2 truncate">{line}</p> : null
               })()}
 
-              <div className="flex items-center gap-4">
-                <button className="text-left">
-                  <p className="text-cream text-[15px] font-extrabold leading-none">{myPosts.length}</p>
-                  <p className="text-muted text-[11px] mt-0.5">Posts</p>
+              <div className="flex items-center gap-1.5 text-[12.5px]">
+                <button onClick={() => { tap('light'); nav(`/user/${userId}/followers`) }} className="text-cream font-bold active:opacity-70">
+                  {followersCount} followers
                 </button>
-                <button onClick={() => { tap('light'); nav(`/user/${userId}/followers`) }} className="text-left">
-                  <p className="text-cream text-[15px] font-extrabold leading-none">{followersCount}</p>
-                  <p className="text-muted text-[11px] mt-0.5">Followers</p>
-                </button>
-                <button onClick={() => { tap('light'); nav(`/user/${userId}/following`) }} className="text-left">
-                  <p className="text-cream text-[15px] font-extrabold leading-none">{followingCount}</p>
-                  <p className="text-muted text-[11px] mt-0.5">Following</p>
+                <span className="text-muted">·</span>
+                <button onClick={() => { tap('light'); nav(`/user/${userId}/following`) }} className="text-cream font-bold active:opacity-70">
+                  {followingCount} following
                 </button>
               </div>
             </div>
           </div>
+
+          {!isMe && followedBy.people.length > 0 && (
+            <div className="mt-3 px-4 flex items-center gap-2 text-muted text-[12px]">
+              <span className="text-muted">Followed by</span>
+              <span className="text-cream font-semibold">
+                {followedBy.people.map((p) => p.display_name || p.username).join(", ")}
+                {followedBy.more > 0 ? ` + ${followedBy.more} more` : ""}
+              </span>
+            </div>
+          )}
 
           <ProfileHighlights userId={userId} isOwn={isMe} />
 
