@@ -41,6 +41,10 @@ export default function Search() {
   const [recent, setRecent] = useState(() => {
     try { return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]") } catch { return [] }
   })
+  const [suggestedPeople, setSuggestedPeople] = useState([])
+  const [suggestedCommunities, setSuggestedCommunities] = useState([])
+  const [trendingTags, setTrendingTags] = useState([])
+  const [suggestionsLoaded, setSuggestionsLoaded] = useState(false)
 
   const runSearch = useCallback(async (q) => {
     const term = q.trim()
@@ -176,6 +180,68 @@ export default function Search() {
   }
 
   const hasAny = people.length + posts.length + reels.length + communities.length + listings.length + services.length > 0
+  const loadSuggestions = useCallback(async () => {
+    if (!myId || suggestionsLoaded) return
+    try {
+      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+      const [rp, rcp] = await Promise.all([
+        supabase.from('user_posts').select('content').gt('created_at', since).limit(200),
+        supabase.from('community_posts').select('content').gt('created_at', since).limit(200),
+      ])
+      const stop = new Set(['the','a','an','and','or','to','of','in','is','it','this','that','for','on','with','i','you','my','me','we','be','are','was','has','have','do','does','so','at','as','but','not','from','by','can','no','yes','all','if','just','like','get','got','out','up','about','what','when','how'])
+      const counts = new Map()
+      const all = [...(rp.data||[]), ...(rcp.data||[])]
+      all.forEach((row) => {
+        const text = (row.content || '').toLowerCase()
+        const hashtags = text.match(/#([a-z0-9_]{2,20})/g) || []
+        hashtags.forEach((h) => { const key = h.slice(1); counts.set(key, (counts.get(key) || 0) + 2) })
+        text.split(/[^a-z0-9_]+/).forEach((w) => {
+          if (w.length < 3 || stop.has(w)) return
+          counts.set(w, (counts.get(w) || 0) + 1)
+        })
+      })
+      const top = [...counts.entries()].sort((a,b) => b[1] - a[1]).slice(0, 10).map(([t]) => t)
+
+      const { data: followsRows } = await supabase.from('follows').select('following_id').eq('follower_id', myId)
+      const followingSet = new Set((followsRows || []).map((f) => f.following_id))
+      followingSet.add(myId)
+      const excludeIds = [...followingSet].filter(Boolean)
+      let peopleQuery = supabase.from('profiles')
+        .select('id, display_name, username, is_verified, city')
+        .eq('is_active', true)
+        .limit(30)
+      if (excludeIds.length > 0) peopleQuery = peopleQuery.not('id', 'in', '(' + excludeIds.map((x) => '"' + x + '"').join(',') + ')')
+      const { data: peopleRows } = await peopleQuery
+      const peopleIds = (peopleRows || []).map((p) => p.id)
+      let photoMap = new Map()
+      if (peopleIds.length > 0) {
+        const { data: ph } = await supabase.from('profile_photos')
+          .select('user_id, storage_path, is_primary, display_order')
+          .in('user_id', peopleIds)
+          .order('is_primary', { ascending: false })
+          .order('display_order', { ascending: true })
+        ;(ph || []).forEach((x) => { if (!photoMap.has(x.user_id)) photoMap.set(x.user_id, x.storage_path) })
+      }
+
+      const { data: commRows } = await supabase.from('communities')
+        .select('id, slug, name, emoji, cover_color, member_count')
+        .eq('is_active', true)
+        .order('member_count', { ascending: false })
+        .limit(20)
+
+      setTrendingTags(top)
+      setSuggestedPeople((peopleRows || []).slice(0, 12).map((p) => ({
+        ...p,
+        _photo: photoMap.get(p.id) ? publicPhotoUrl(photoMap.get(p.id)) : null,
+      })))
+      setSuggestedCommunities(commRows || [])
+      setSuggestionsLoaded(true)
+    } catch (e) { console.warn('suggestions failed', e) }
+  }, [myId, suggestionsLoaded])
+
+  useEffect(() => {
+    if (!isSearching) loadSuggestions()
+  }, [isSearching, loadSuggestions])
   const isSearching = query.trim().length >= 2
 
   // Results filtered by active tab
@@ -285,6 +351,53 @@ export default function Search() {
                   <p className="text-muted text-[13px] max-w-[240px] mx-auto leading-relaxed">
                     Find people, posts, reels, communities, listings, and services.
                   </p>
+                </div>
+              </div>
+            )}
+
+            {trendingTags.length > 0 && (
+              <div className="mb-5">
+                <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2 px-1">Trending</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {trendingTags.map((t) => (
+                    <button key={t} onClick={() => setQuery(t)} className="h-8 px-3 rounded-full bg-purple-500/12 border border-purple-500/25 text-purple-200 text-[12.5px] font-bold">#{t}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {suggestedCommunities.length > 0 && (
+              <div className="mb-5">
+                <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2 px-1">Communities to explore</p>
+                <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                  {suggestedCommunities.slice(0, 10).map((c) => (
+                    <button key={c.id} onClick={() => { tap('light'); nav('/communities/' + (c.slug || c.id)) }} className="shrink-0 w-28 rounded-2xl bg-white/[0.03] border border-white/8 overflow-hidden text-left">
+                      <div className="h-14 grid place-items-center text-[26px]" style={{ background: c.cover_color || 'rgba(168,85,247,0.2)' }}>{c.emoji || '🌐'}</div>
+                      <div className="p-2">
+                        <p className="text-cream text-[11.5px] font-bold truncate">{c.name}</p>
+                        <p className="text-muted text-[10px]">{c.member_count || 0} members</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {suggestedPeople.length > 0 && (
+              <div>
+                <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2 px-1">People you may know</p>
+                <div className="flex flex-col gap-1.5">
+                  {suggestedPeople.slice(0, 6).map((u) => (
+                    <button key={u.id} onClick={() => { tap('light'); nav('/profile/' + u.id) }} className="flex items-center gap-3 p-2.5 rounded-2xl bg-white/[0.03] border border-white/8 text-left">
+                      <span className="w-10 h-10 rounded-full overflow-hidden bg-purple-600 grid place-items-center text-white font-black text-[14px] shrink-0">
+                        {u._photo ? <img src={u._photo} alt="" className="w-full h-full object-cover" /> : (u.display_name || u.username || '?')[0].toUpperCase()}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-cream text-[13.5px] font-bold truncate">{u.display_name || u.username}</p>
+                        {u.username && <p className="text-muted text-[11.5px] truncate">@{u.username}</p>}
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
