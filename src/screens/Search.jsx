@@ -203,25 +203,18 @@ export default function Search() {
       })
       const top = [...counts.entries()].sort((a,b) => b[1] - a[1]).slice(0, 10).map(([t]) => t)
 
-      const { data: followsRows } = await supabase.from('follows').select('following_id').eq('follower_id', myId)
-      const followingSet = new Set((followsRows || []).map((f) => f.following_id))
-      followingSet.add(myId)
-      const excludeIds = [...followingSet].filter(Boolean)
-      let peopleQuery = supabase.from('profiles')
-        .select('id, display_name, username, is_verified, city')
-        .eq('is_active', true)
-        .limit(30)
-      if (excludeIds.length > 0) peopleQuery = peopleQuery.not('id', 'in', '(' + excludeIds.map((x) => '"' + x + '"').join(',') + ')')
-      const { data: peopleRows } = await peopleQuery
-      const peopleIds = (peopleRows || []).map((p) => p.id)
-      let photoMap = new Map()
-      if (peopleIds.length > 0) {
-        const { data: ph } = await supabase.from('profile_photos')
-          .select('user_id, storage_path, is_primary, display_order')
-          .in('user_id', peopleIds)
-          .order('is_primary', { ascending: false })
-          .order('display_order', { ascending: true })
-        ;(ph || []).forEach((x) => { if (!photoMap.has(x.user_id)) photoMap.set(x.user_id, x.storage_path) })
+      let peopleRows = []
+      const { data: pymk, error: pymkErr } = await supabase.rpc('get_pymk_profiles', { p_limit: 12 })
+      if (!pymkErr && pymk && pymk.length > 0) {
+        peopleRows = pymk.map((r) => ({
+          id: r.id,
+          display_name: r.display_name,
+          username: r.username,
+          is_verified: r.is_verified,
+          city: r.city,
+          photo_url: r.primary_photo ? publicPhotoUrl(r.primary_photo) : null,
+          mutual_count: r.mutual_count || 0,
+        }))
       }
 
       const { data: commRows } = await supabase.from('communities')
@@ -233,7 +226,7 @@ export default function Search() {
       setTrendingTags(top)
       setSuggestedPeople((peopleRows || []).slice(0, 12).map((p) => ({
         ...p,
-        _photo: photoMap.get(p.id) ? publicPhotoUrl(photoMap.get(p.id)) : null,
+        _photo: p.photo_url || null,
       })))
       setSuggestedCommunities(commRows || [])
       setSuggestionsLoaded(true)

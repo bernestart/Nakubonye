@@ -354,15 +354,8 @@ export default function Feed() {
     }
 
     // Suggested people
-    const { data: sug } = await supabase.rpc("get_discover_profiles", {
-      p_limit: 10,
-      p_same_city: false,
-      p_shared_interests: false,
-      p_same_country: false,
-      p_verified_only: false,
-      p_online_only: false,
-      p_community_id: null,
-    })
+    const { data: sug } = await supabase.rpc("get_pymk_profiles", { p_limit: 12 })
+
     // Load my avatar for composer pill
     const { data: myProfilePhoto } = await supabase
       .from("profile_photos")
