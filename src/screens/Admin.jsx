@@ -21,6 +21,7 @@ export default function Admin() {
   const [users, setUsers] = useState([])
   const [reports, setReports] = useState([])
   const [reelReports, setReelReports] = useState([])
+  const [postReports, setPostReports] = useState([])
   const [maintenanceOn, setMaintenanceOn] = useState(false)
   const [maintenanceBusy, setMaintenanceBusy] = useState(false)
   const [search, setSearch] = useState('')
@@ -213,6 +214,68 @@ export default function Admin() {
                           className="flex-1 h-9 rounded-full bg-red-500/20 border border-red-500/50 text-red-300 font-bold text-[12px] disabled:opacity-40"
                         >
                           Ban user
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Reported posts */}
+            {postReports.length > 0 && (
+              <div className="mb-5">
+                <p className="text-red-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">
+                  Reported posts · {postReports.length}
+                </p>
+                <div className="flex flex-col gap-2">
+                  {postReports.slice(0, 10).map((r) => (
+                    <div key={r.id} className="rounded-2xl bg-red-500/8 border border-red-500/25 p-3 text-[12.5px]">
+                      <p className="text-cream font-semibold mb-1 truncate">
+                        Post #{r.post_id} · {r.post_type || "post"}
+                      </p>
+                      <p className="text-muted text-[11.5px] mb-1">
+                        Reported by: {r.reporter_id ? r.reporter_id.slice(0, 8) + "…" : "Unknown"}
+                      </p>
+                      <p className="text-red-300 font-semibold text-[11.5px] mb-0.5">{r.reason || "No reason"}</p>
+                      {r.details && <p className="text-muted text-[11.5px] line-clamp-2 mb-2">{r.details}</p>}
+                      <div className="flex gap-2 mt-2">
+                        <button
+                          onClick={() => run(async () => {
+                            const { error: e } = await supabase
+                              .from('post_reports')
+                              .update({ status: 'dismissed' })
+                              .eq('id', r.id)
+                            if (e) return { error: e }
+                            setPostReports((cur) => cur.filter((x) => x.id !== r.id))
+                            return { error: null }
+                          })}
+                          disabled={busy}
+                          className="flex-1 h-9 rounded-full bg-white/[0.06] border border-white/12 text-muted font-bold text-[12px] disabled:opacity-40"
+                        >
+                          Dismiss
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (!confirm("Hide this post? It will disappear from feed.")) return
+                            run(async () => {
+                              try {
+                                const table = r.post_type === 'personal' ? 'user_posts' : 'community_posts'
+                                await supabase.from(table).update({ deleted_at: new Date().toISOString() }).eq('id', r.post_id)
+                              } catch (e) { /* ignore if column doesn't exist */ }
+                              const { error: e2 } = await supabase
+                                .from('post_reports')
+                                .update({ status: 'actioned' })
+                                .eq('id', r.id)
+                              if (e2) return { error: e2 }
+                              setPostReports((cur) => cur.filter((x) => x.id !== r.id))
+                              return { error: null }
+                            })
+                          }}
+                          disabled={busy}
+                          className="flex-1 h-9 rounded-full bg-red-500/20 border border-red-500/50 text-red-300 font-bold text-[12px] disabled:opacity-40"
+                        >
+                          Hide post
                         </button>
                       </div>
                     </div>
