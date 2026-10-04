@@ -33,11 +33,41 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
   const [progress, setProgress] = useState(0)
   const [stage, setStage] = useState("compose") // compose | preview
   const [resumeDraftId, setResumeDraftId] = useState(null)
+  const [reshareRef, setReshareRef] = useState(null)  // { type, id, snapshot }
   useEffect(() => {
     try {
       const url = new URL(window.location.href)
       const draftId = url.searchParams.get("draft")
       if (draftId) setResumeDraftId(draftId)
+
+      const reshareType = url.searchParams.get("reshare_type")
+      const reshareId = url.searchParams.get("reshare_id")
+      if (reshareType && reshareId) {
+        ;(async () => {
+          try {
+            const table = reshareType === "personal" ? "user_posts" : "community_posts"
+            const cols = reshareType === "personal"
+              ? "id, user_id, content, image_path, image_paths, audience, created_at"
+              : "id, author_id, community_id, content, image_path, image_paths, created_at"
+            const { data } = await supabase.from(table).select(cols).eq("id", reshareId).maybeSingle()
+            if (data) {
+              setReshareRef({
+                type: reshareType,
+                id: Number(reshareId),
+                snapshot: {
+                  content: data.content || "",
+                  image_path: data.image_path || null,
+                  image_paths: data.image_paths || [],
+                  author_id: data.author_id || data.user_id || null,
+                  original_created_at: data.created_at || null,
+                  community_id: data.community_id || null,
+                  type: reshareType,
+                },
+              })
+            }
+          } catch (e) { console.warn("reshare load failed", e) }
+        })()
+      }
     } catch {}
   }, [])
 
@@ -146,6 +176,10 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
         image_path: uploadedPaths[0] || null,
         image_paths: uploadedPaths,
         audience: audienceSnapshot,
+        reshared_from_type: reshareRef?.type || null,
+        reshared_from_id: reshareRef?.id || null,
+        reshared_from_snapshot: reshareRef?.snapshot || null,
+        reshared_include_original: reshareRef ? true : null,
       }).select("id").single()
       if (insErr) throw new Error(insErr.message)
 
@@ -169,6 +203,7 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
       }
 
       onResolve?.(tempId)
+      setReshareRef(null)
     } catch (e) {
       onFail?.(tempId, e.message || String(e))
     }
@@ -353,6 +388,31 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 pb-4">
+        {reshareRef && (
+          <div className="mb-3 p-3 rounded-2xl border border-white/10 bg-white/[0.02]">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase">Sharing a post</p>
+              <button
+                onClick={() => setReshareRef(null)}
+                className="text-muted text-[11.5px] font-semibold"
+                aria-label="Remove reshare"
+              >Remove</button>
+            </div>
+            {reshareRef.snapshot.content && (
+              <p className="text-cream/85 text-[13.5px] leading-snug whitespace-pre-wrap line-clamp-4">
+                {reshareRef.snapshot.content}
+              </p>
+            )}
+            {(reshareRef.snapshot.image_path || reshareRef.snapshot.image_paths?.[0]) && (
+              <img
+                src={supabase.storage.from("community-media").getPublicUrl(reshareRef.snapshot.image_path || reshareRef.snapshot.image_paths[0]).data?.publicUrl}
+                alt=""
+                className="mt-2 rounded-xl max-h-48 w-full object-cover"
+              />
+            )}
+          </div>
+        )}
+
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value.slice(0, 1000))}

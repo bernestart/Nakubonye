@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Heart, Flag, Ban, MoreVertical, X , MessageCircle} from 'lucide-react'
+import { ArrowLeft, Heart, Flag, Ban, MoreVertical, X , MessageCircle, Search, Pencil} from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl, calcAge } from '../lib/photo'
@@ -10,6 +10,11 @@ import ProfileConnections from '../components/ProfileConnections'
 import ProfileIntro from '../components/ProfileIntro'
 import ProfilePhotos from '../components/ProfilePhotos'
 import ProfileHighlights from '../components/ProfileHighlights'
+import ProfileFriendsStrip from '../components/ProfileFriendsStrip'
+import ProfileHobbies from '../components/ProfileHobbies'
+import ProfilePersonalDetails from '../components/ProfilePersonalDetails'
+import ProfileMenuSheet from '../components/ProfileMenuSheet'
+import ResharedPost from '../components/ResharedPost'
 import MutualConnections from '../components/MutualConnections'
 import PhotoViewer from '../components/PhotoViewer'
 import ReelViewer from '../components/ReelViewer'
@@ -41,7 +46,7 @@ export default function ProfileView() {
   const [myLike, setMyLike] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [activeTab, setActiveTab] = useState('posts')
+  const [activeTab, setActiveTab] = useState('all')
   const [postsFilter, setPostsFilter] = useState('all')
   const [playingReel, setPlayingReel] = useState(null)
   const [viewingPhoto, setViewingPhoto] = useState(null)
@@ -317,12 +322,9 @@ export default function ProfileView() {
   }
 
   const tabs = [
-    { id: 'posts',       label: 'Posts' },
-    { id: 'about',       label: 'About' },
-    { id: 'connections', label: 'Connections' },
-    { id: 'photos',      label: 'Photos' },
-    { id: 'reels',       label: 'Reels' },
-    { id: 'more',        label: 'More' },
+    { id: 'all',    label: 'All' },
+    { id: 'photos', label: 'Photos' },
+    { id: 'reels',  label: 'Reels' },
   ]
 
   return (
@@ -335,24 +337,45 @@ export default function ProfileView() {
       <BrandGlow />
 
       {/* Top bar */}
-      <header className="shrink-0 h-12 px-3 flex items-center justify-between"
+      <header className="shrink-0 h-12 px-3 flex items-center gap-2"
               style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <button
           onClick={() => nav(-1)}
-          className="w-9 h-9 rounded-full grid place-items-center text-muted"
+          className="w-9 h-9 rounded-full grid place-items-center text-muted shrink-0"
           aria-label="Back"
         >
           <ArrowLeft size={20} strokeWidth={2.3} />
         </button>
-        {!isMe && (
+
+        <span className="text-cream font-extrabold text-[17px] truncate flex-1 min-w-0">
+          {person?.display_name || person?.username || "Profile"}
+        </span>
+
+        {isMe && (
           <button
-            onClick={() => { tap('light'); setMenuOpen(true) }}
-            className="w-9 h-9 rounded-full grid place-items-center text-muted"
-            aria-label="More"
+            onClick={() => { tap('light'); nav('/me/edit') }}
+            className="w-9 h-9 rounded-full grid place-items-center text-muted shrink-0"
+            aria-label="Edit profile"
           >
-            <MoreVertical size={20} />
+            <Pencil size={18} />
           </button>
         )}
+
+        <button
+          onClick={() => { tap('light'); nav('/search') }}
+          className="w-9 h-9 rounded-full grid place-items-center text-muted shrink-0"
+          aria-label="Search"
+        >
+          <Search size={19} />
+        </button>
+
+        <button
+          onClick={() => { tap('light'); setMenuOpen(true) }}
+          className="w-9 h-9 rounded-full grid place-items-center text-muted shrink-0"
+          aria-label="More"
+        >
+          <MoreVertical size={20} />
+        </button>
       </header>
 
       <div className="flex-1 overflow-y-auto pb-10">
@@ -475,19 +498,19 @@ export default function ProfileView() {
           )}
         </div>
 
-        {/* Tabs — sticky below top bar */}
+        {/* Tabs — sticky below top bar, flat text */}
         <div className="border-b border-white/8 sticky top-0 z-20" style={{ background: '#0B0B14' }}>
-          <div className="flex justify-around px-2">
+          <div className="flex px-2">
             {tabs.map((t) => (
               <button
                 key={t.id}
                 onClick={() => { tap('light'); setActiveTab(t.id) }}
-                className="shrink-0 px-3 py-2.5 text-[12.5px] font-bold relative"
-                style={{ color: activeTab === t.id ? '#fff' : '#888' }}
+                className="shrink-0 flex-1 max-w-[140px] px-3 py-3 text-[13.5px] font-semibold relative"
+                style={{ color: activeTab === t.id ? '#EC4899' : '#888' }}
               >
                 {t.label}
                 {activeTab === t.id && (
-                  <span className="absolute left-2 right-2 bottom-0 h-0.5 rounded-full" style={{ background: 'linear-gradient(90deg, #EC4899, #A855F7)' }} />
+                  <span className="absolute left-3 right-3 bottom-0 h-[2px] rounded-full" style={{ background: '#EC4899' }} />
                 )}
               </button>
             ))}
@@ -495,8 +518,15 @@ export default function ProfileView() {
         </div>
 
         <div className="pt-3">
-          {activeTab === 'posts' && (
+          {activeTab === 'all' && (
             <>
+              <ProfilePersonalDetails person={person} isMe={isMe} />
+
+              <ProfileHobbies interests={interests} isMe={isMe} />
+
+              <ProfileFriendsStrip userId={userId} isMe={isMe} />
+
+
               {/* Featured — pinned posts */}
               {(() => {
                 const now = Date.now()
@@ -694,26 +724,15 @@ export default function ProfileView() {
         />
       )}
 
-      {/* Options menu */}
-      {menuOpen && (
-        <div className="fixed inset-0 z-[400] flex items-end" onClick={() => setMenuOpen(false)}>
-          <div className="absolute inset-0 bg-black/60" />
-          <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5" style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}>
-            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-4" />
-            <div className="flex flex-col gap-2">
-              <button onClick={() => { setMenuOpen(false); setReportOpen(true) }} className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left">
-                <span className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center"><Flag size={17} className="text-purple-300" /></span>
-                <span className="text-cream font-semibold text-[14.5px]">Report</span>
-              </button>
-              <button onClick={() => { setMenuOpen(false); setBlockOpen(true) }} className="flex items-center gap-3 p-4 rounded-2xl bg-red-500/8 border border-red-500/25 text-left">
-                <span className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 grid place-items-center"><Ban size={17} className="text-red-400" /></span>
-                <span className="text-cream font-semibold text-[14.5px]">Block</span>
-              </button>
-              <button onClick={() => setMenuOpen(false)} className="w-full h-11 mt-2 text-muted font-semibold text-[13.5px]">Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ProfileMenuSheet
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        isMe={isMe}
+        userId={userId}
+        person={person}
+        onReport={() => setReportOpen(true)}
+        onBlock={() => setBlockOpen(true)}
+      />
 
       <ReportModal open={reportOpen} onClose={() => setReportOpen(false)} target={person} />
       <BlockConfirm open={blockOpen} onClose={() => setBlockOpen(false)} target={person} onBlocked={() => nav('/feed', { replace: true })} />

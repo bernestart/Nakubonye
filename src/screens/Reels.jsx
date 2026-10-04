@@ -9,6 +9,7 @@ import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 import ReelComposer from "../components/ReelComposer"
+import ShareSheet from "../components/ShareSheet"
 import ReelComments from "../components/ReelComments"
 import ReelActionsSheet from "../components/ReelActionsSheet"
 import FollowButton from "../components/FollowButton"
@@ -32,6 +33,7 @@ export default function Reels() {
   const [muted, setMuted] = useState(true)  // always start muted for autoplay
   const userMutedRef = useRef(true)
   const [composerOpen, setComposerOpen] = useState(false)
+  const [shareFor, setShareFor] = useState(null)
   const [searchParams] = useSearchParams()
   useEffect(() => {
     if (searchParams.get("compose")) {
@@ -916,7 +918,7 @@ export default function Reels() {
                   )}
 
                   <button
-                    onClick={() => share(reel)}
+                    onClick={() => { tap("light"); setShareFor(reel) }}
                     className="flex flex-col items-center gap-1"
                     aria-label="Share"
                   >
@@ -1153,6 +1155,21 @@ export default function Reels() {
             const nextIdx = Math.min(currentIdx, Math.max(0, visible.length - 1))
             setCurrentIdx(nextIdx)
           }}
+        />
+      )}
+
+      {shareFor && (
+        <ShareSheet
+          post={{
+            id: shareFor.id,
+            content: shareFor.caption || "",
+            thumbnail_url: shareFor.thumbnail_url,
+            author_id: shareFor.user_id,
+            created_at: shareFor.created_at,
+            audience: shareFor.audience || "public",
+          }}
+          source="reel"
+          onClose={() => setShareFor(null)}
         />
       )}
 

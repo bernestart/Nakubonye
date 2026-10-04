@@ -9,6 +9,16 @@ import { useState } from "react"
 export default function Create() {
   const nav = useNavigate()
   const [postComposerOpen, setPostComposerOpen] = useState(false)
+  // Auto-open PostComposer when arriving with reshare params
+  if (typeof window !== "undefined") {
+    try {
+      const sp = new URL(window.location.href).searchParams
+      if (sp.get("reshare_type") && sp.get("reshare_id") && !postComposerOpen) {
+        // set once
+        setTimeout(() => setPostComposerOpen(true), 60)
+      }
+    } catch {}
+  }
   const [storyComposerOpen, setStoryComposerOpen] = useState(false)
 
   return (

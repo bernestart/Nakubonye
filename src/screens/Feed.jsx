@@ -72,6 +72,7 @@ import AppHeader from "../components/AppHeader"
 import StoriesRow from "../components/StoriesRow"
 import SuggestedPeople from "../components/SuggestedPeople"
 import PostImages from "../components/PostImages"
+import ResharedPost from "../components/ResharedPost"
 import Poll from "../components/Poll"
 import ExpandableText from "../components/ExpandableText"
 import PostLikesModal from "../components/PostLikesModal"
@@ -79,6 +80,7 @@ import PostCommentsPreview from "../components/PostCommentsPreview"
 import MatchModal from "../components/MatchModal"
 import PostCommentsSheet from "../components/PostCommentsSheet"
 import PostActionsSheet from "../components/PostActionsSheet"
+import ShareSheet from "../components/ShareSheet"
 import ReactionPicker from "../components/ReactionPicker"
 import FollowButton from "../components/FollowButton"
 import PostComposer from "../components/PostComposer"
@@ -104,6 +106,7 @@ export default function Feed() {
   const [commentCounts, setCommentCounts] = useState(new Map())
   const [commentsFor, setCommentsFor] = useState(null)
   const [actionsFor, setActionsFor] = useState(null)
+  const [shareFor, setShareFor] = useState(null)
   const [suggested, setSuggested] = useState([])
   const [matchModal, setMatchModal] = useState(null)
   const [likesModalFor, setLikesModalFor] = useState(null)
@@ -1404,6 +1407,12 @@ export default function Feed() {
                   <ExpandableText text={p.content} className="px-3 pb-3 text-cream text-[14px] leading-[1.5] whitespace-pre-wrap" />
                 )}
 
+                {p.reshared_from_type && p.reshared_include_original && p.reshared_from_snapshot && (
+                  <div className="px-3 pb-3">
+                    <ResharedPost snapshot={{ ...p.reshared_from_snapshot, id: p.reshared_from_id, type: p.reshared_from_type }} />
+                  </div>
+                )}
+
                 <Poll postId={p.id} postType={p._source} />
 
                 {(() => {
@@ -1502,7 +1511,7 @@ export default function Feed() {
                     <span className="text-muted text-[12.5px] font-bold">{commentCounts.get(p._source + ":" + p.id) || 0}</span>
                   </button>
                   <button
-                    onClick={() => sharePost(p)}
+                    onClick={() => { tap("light"); setShareFor(p) }}
                     className="flex items-center gap-1.5 px-3 py-2 rounded-xl flex-1 justify-center"
                   >
                     <Share2 size={18} strokeWidth={2.2} color="#888" />
@@ -1663,6 +1672,18 @@ export default function Feed() {
           onClose={() => setActionsFor(null)}
           onDeleted={(id) => setPosts((arr) => arr.filter((x) => x.id !== id || x._source !== actionsFor._source))}
           onUpdated={(next) => setPosts((arr) => arr.map((x) => (x.id === next.id && x._source === actionsFor._source) ? { ...x, ...next } : x))}
+        />
+      )}
+
+      {shareFor && (
+        <ShareSheet
+          post={shareFor}
+          source={shareFor._source}
+          onClose={() => setShareFor(null)}
+          onShared={() => {
+            // Trigger a refresh of the feed after share
+            load?.()
+          }}
         />
       )}
 

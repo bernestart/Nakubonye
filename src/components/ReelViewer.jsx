@@ -5,6 +5,7 @@ import { Heart, MessageCircle, Share2, Volume2, VolumeX, MoreVertical, Bookmark 
 import VerifiedBadge from "./VerifiedBadge"
 import FollowButton from "./FollowButton"
 import ReelComments from "./ReelComments"
+import ShareSheet from "./ShareSheet"
 import ReelActionsSheet from "./ReelActionsSheet"
 import { supabase } from "../lib/supabase"
 import { publicPhotoUrl } from "../lib/photo"
@@ -43,6 +44,7 @@ export default function ReelViewer({ reel, currentUserId, onClose }) {
   const [saveCount, setSaveCount] = useState(0)
   const [viewCount, setViewCount] = useState(0)
   const [muted, setMuted] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const [heartBurst, setHeartBurst] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
@@ -271,7 +273,7 @@ export default function ReelViewer({ reel, currentUserId, onClose }) {
           </button>
         )}
 
-        <button onClick={share} className="flex flex-col items-center gap-1" aria-label="Share">
+        <button onClick={() => { tap("light"); setShareOpen(true) }} className="flex flex-col items-center gap-1" aria-label="Share">
           <span className="w-12 h-12 rounded-full grid place-items-center" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(10px)" }}>
             <Share2 size={22} strokeWidth={2.4} color="#fff" />
           </span>
@@ -353,6 +355,21 @@ export default function ReelViewer({ reel, currentUserId, onClose }) {
           reelId={reel.id}
           onClose={() => setCommentsOpen(false)}
           onCountChange={(n) => setCommentCount(n)}
+        />
+      )}
+
+      {shareOpen && (
+        <ShareSheet
+          post={{
+            id: reel.id,
+            content: reel.caption || "",
+            thumbnail_url: reel.thumbnail_url,
+            author_id: reel.user_id,
+            created_at: reel.created_at,
+            audience: reel.audience || "public",
+          }}
+          source="reel"
+          onClose={() => setShareOpen(false)}
         />
       )}
 
