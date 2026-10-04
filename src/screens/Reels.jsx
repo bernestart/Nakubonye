@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom"
 import { Heart, MessageCircle, Share2, Plus, Volume2, VolumeX, ArrowLeft, MoreVertical, Bookmark } from "lucide-react"
 import VerifiedBadge from "../components/VerifiedBadge"
 import { supabase } from "../lib/supabase"
+import { cacheReel, getCachedBlob } from "../lib/reelCache"
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
@@ -53,6 +54,9 @@ export default function Reels() {
   const [matchSet, setMatchSet] = useState(new Set())
   const containerRef = useRef(null)
   const videoRefs = useRef([])
+  const offlineBlobUrls = useRef(new Map())  // reelId → blob URL
+  const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true)
+  const [cachedIdSet, setCachedIdSet] = useState(new Set())
   const clipIdxRefs = useRef({})
   const viewedThisSession = useRef(new Set())
   const [heartBurstId, setHeartBurstId] = useState(null)
@@ -327,7 +331,69 @@ export default function Reels() {
     }
   }, [currentIdx, reels, hiddenIds, hasMore, loadMore])
 
+  // Revoke cached blob URLs on unmount
+  useEffect(() => {
+    const map = offlineBlobUrls.current
+    return () => { map.forEach((u) => URL.revokeObjectURL(u)) }
+  }, [])
+
   useEffect(() => { load() }, [load])
+
+  // Auto-cache the currently visible reel + prefetch next 2 in background
+  useEffect(() => {
+    if (!myId) return
+    const visible = reels.filter((r) => !hiddenIds.has(r.id))
+    const current = visible[currentIdx]
+    if (!current) return
+
+    const t = setTimeout(() => {
+      // Cache current reel
+      cacheReel(current, myId).catch(() => {})
+      // Prefetch next 2 silently
+      for (let i = 1; i <= 2; i++) {
+        const next = visible[currentIdx + i]
+        if (next) cacheReel(next, myId).catch(() => {})
+      }
+    }, 1500)
+
+    return () => clearTimeout(t)
+  }, [currentIdx, reels, hiddenIds, myId])
+
+  // Online/offline tracking
+  useEffect(() => {
+    const onOnline = () => setIsOnline(true)
+    const onOffline = () => setIsOnline(false)
+    window.addEventListener("online", onOnline)
+    window.addEventListener("offline", onOffline)
+    return () => {
+      window.removeEventListener("online", onOnline)
+      window.removeEventListener("offline", onOffline)
+    }
+  }, [])
+
+  // Load cached blob URLs for reels in the current list
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const { listCached } = await import("../lib/reelCache")
+      const rows = await listCached()
+      if (cancelled) return
+      const map = new Map()
+      const idSet = new Set()
+      rows.forEach((r) => {
+        if (r.blob) {
+          // Revoke previous URL if any
+          const prev = offlineBlobUrls.current.get(r.reelId)
+          if (prev) URL.revokeObjectURL(prev)
+          map.set(r.reelId, URL.createObjectURL(r.blob))
+          idSet.add(r.reelId)
+        }
+      })
+      offlineBlobUrls.current = map
+      setCachedIdSet(idSet)
+    })()
+    return () => { cancelled = true }
+  }, [reels.length])
 
   // Autoplay the currently visible video, pause others
   // Count a view when a reel stays visible for 3+ seconds
@@ -542,6 +608,15 @@ export default function Reels() {
         </button>
       </div>
 
+      {/* Offline indicator */}
+      {!isOnline && (
+        <div className="absolute left-0 right-0 flex justify-center pointer-events-none z-30" style={{ bottom: 72 }}>
+          <span className="h-8 px-3 rounded-full bg-black/70 backdrop-blur-md text-white text-[11.5px] font-bold inline-flex items-center gap-1.5">
+            📴 Offline · watching cached reels
+          </span>
+        </div>
+      )}
+
       {/* Pull-to-refresh indicator */}
       {(pullDistance > 0 || refreshing) && (
         <div
@@ -643,6 +718,9 @@ export default function Reels() {
                 <video
                   ref={(el) => (videoRefs.current[idx] = el)}
                   src={(() => {
+                    // Prefer cached blob (instant load, offline-friendly)
+                    const cached = offlineBlobUrls.current.get(reel.id)
+                    if (cached) return cached
                     const list = Array.isArray(reel.clips) && reel.clips.length > 0
                       ? reel.clips
                       : [{ url: reel.video_url, trim_start: reel.trim_start || 0, trim_end: reel.trim_end || null }]
