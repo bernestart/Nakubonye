@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Edit, Share2 } from 'lucide-react'
+import { Search, Pencil, MoreVertical, MapPin, Edit, Share2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl, calcAge } from '../lib/photo'
@@ -11,6 +11,11 @@ import BottomNav from '../components/BottomNav'
 import BrandGlow from '../components/BrandGlow'
 import ProfileConnections from '../components/ProfileConnections'
 import ProfilePhotos from '../components/ProfilePhotos'
+import ProfilePostCard from '../components/ProfilePostCard'
+import ProfileMenuSheet from '../components/ProfileMenuSheet'
+import ProfileFriendsStrip from '../components/ProfileFriendsStrip'
+import ProfileHobbies from '../components/ProfileHobbies'
+import ProfilePersonalDetails from '../components/ProfilePersonalDetails'
 import PhotoViewer from '../components/PhotoViewer'
 import ReelViewer from '../components/ReelViewer'
 import ProfileAbout from '../components/ProfileAbout'
@@ -30,7 +35,8 @@ export default function Preview() {
   const [followersCount, setFollowersCount] = useState(0)
   const [followingCount, setFollowingCount] = useState(0)
   const [matchesCount, setMatchesCount] = useState(0)
-  const [activeTab, setActiveTab] = useState("posts")
+  const [activeTab, setActiveTab] = useState("all")
+  const [menuOpen, setMenuOpen] = useState(false)
   const [playingReel, setPlayingReel] = useState(null)
   const [viewingPhoto, setViewingPhoto] = useState(null)
   const [copied, setCopied] = useState(false)
@@ -106,12 +112,9 @@ export default function Preview() {
   }
 
   const tabs = [
-    { id: "posts",       label: "Posts" },
-    { id: "about",       label: "About" },
-    { id: "connections", label: "Connections" },
-    { id: "photos",      label: "Photos" },
-    { id: "reels",       label: "Reels" },
-    { id: "more",        label: "More" },
+    { id: "all",    label: "All" },
+    { id: "photos", label: "Photos" },
+    { id: "reels",  label: "Reels" },
   ]
 
   return (
@@ -125,48 +128,145 @@ export default function Preview() {
       <AppHeader />
 
       <div className="flex-1 overflow-y-auto pb-24">
-        <ProfileHeader
-          profile={{ ...profile, age: profile?.date_of_birth ? calcAge(profile.date_of_birth) : null }}
-          photos={photos}
-          isOwn={true}
-          coverPhotoPath={profile?.cover_photo_path || null}
-          followersCount={followersCount}
-          followingCount={followingCount}
-          postsCount={myPosts.length}
-          matchesCount={matchesCount}
-          onMatchesClick={() => nav("/matches")}
-          onFollowersClick={() => nav(`/user/${myId}/followers`)}
-          onFollowingClick={() => nav(`/user/${myId}/following`)}
-          actions={
-            <>
-              <button
-                onClick={() => { tap('light'); nav('/me/edit') }}
-                className="flex-1 h-9 rounded-full bg-white/[0.08] border border-white/12 text-cream font-bold text-[13px] flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform"
-              >
-                <Edit size={14} /> Edit profile
-              </button>
-              <button
-                onClick={share}
-                className="flex-1 h-9 rounded-full bg-white/[0.08] border border-white/12 text-cream font-bold text-[13px] flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform"
-              >
-                <Share2 size={14} /> {copied ? 'Copied' : 'Share'}
-              </button>
-            </>
-          }
-        />
+        {/* Cover */}
+        <div className="relative -mx-4" style={{ height: 150 }}>
+          {profile?.cover_photo_path ? (
+            <img src={publicPhotoUrl(profile.cover_photo_path)} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full" style={{ background: "linear-gradient(135deg, rgba(168,85,247,0.35) 0%, rgba(236,72,153,0.35) 100%)" }} />
+          )}
+        </div>
+
+        {/* Top bar — name + edit + search + ⋯ */}
+        <div className="flex items-center gap-2 px-3 py-2">
+          <button onClick={() => nav(-1)} className="w-9 h-9 rounded-full grid place-items-center text-muted shrink-0" aria-label="Back">
+            <ArrowLeft size={20} strokeWidth={2.3} />
+          </button>
+          <span className="text-cream font-extrabold text-[17px] truncate flex-1 min-w-0">
+            {profile?.display_name || profile?.username || "Your profile"}
+          </span>
+          <button
+            onClick={() => { tap('light'); nav('/me/edit') }}
+            className="w-9 h-9 rounded-full grid place-items-center text-muted shrink-0"
+            aria-label="Edit profile"
+          >
+            <Pencil size={18} />
+          </button>
+          <button
+            onClick={() => { tap('light'); nav('/search') }}
+            className="w-9 h-9 rounded-full grid place-items-center text-muted shrink-0"
+            aria-label="Search"
+          >
+            <Search size={19} />
+          </button>
+          <button
+            onClick={() => { tap('light'); setMenuOpen(true) }}
+            className="w-9 h-9 rounded-full grid place-items-center text-muted shrink-0"
+            aria-label="More"
+          >
+            <MoreVertical size={20} />
+          </button>
+        </div>
+
+        {/* Avatar centered */}
+        <div className="flex justify-center -mt-16 relative z-10">
+          <div className="relative">
+            <span className="block w-32 h-32 rounded-full overflow-hidden bg-elevated border-4" style={{ borderColor: '#0B0B14' }}>
+              {photos[0] ? (
+                <img src={photos[0]} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span className="w-full h-full grid place-items-center text-purple-400 font-black text-3xl">
+                  {(profile?.display_name || profile?.username || '?')[0].toUpperCase()}
+                </span>
+              )}
+            </span>
+            <span className="absolute bottom-4 right-4 w-4 h-4 rounded-full bg-emerald-500 border-2 border-[#0B0B14]" />
+          </div>
+        </div>
+
+        {/* Name */}
+        <div className="flex items-center justify-center gap-1.5 mt-3 px-4">
+          <h1 className="text-cream text-[22px] font-extrabold tracking-tight text-center">
+            {profile?.display_name || profile?.username}
+          </h1>
+          {profile?.is_verified && (
+            <span className="w-[16px] h-[16px] rounded-full bg-[#1DA1F2] grid place-items-center shrink-0">
+              <span className="text-white text-[10px] font-black">✓</span>
+            </span>
+          )}
+        </div>
+
+        {/* Headline (profession · education) */}
+        {(() => {
+          const parts = []
+          if (profile?.profession) parts.push(profile.profession)
+          if (profile?.education) parts.push(profile.education)
+          const line = parts.slice(0, 2).join(' · ')
+          return line ? (
+            <p className="text-cream/85 text-[13.5px] text-center mt-2 px-6 leading-snug">{line}</p>
+          ) : null
+        })()}
+
+        {/* Stats */}
+        <div className="flex items-center justify-center gap-2 mt-3 text-[13.5px]">
+          <button onClick={() => { tap('light'); nav(`/user/${myId}/followers`) }} className="text-cream font-bold active:opacity-70">
+            {followersCount} follower{followersCount === 1 ? "" : "s"}
+          </button>
+          <span className="text-muted">·</span>
+          <button onClick={() => { tap('light'); nav(`/user/${myId}/following`) }} className="text-cream font-bold active:opacity-70">
+            {followingCount} following
+          </button>
+          <span className="text-muted">·</span>
+          <span className="text-cream font-bold">{myPosts.length} post{myPosts.length === 1 ? "" : "s"}</span>
+        </div>
+
+        {/* Location pill */}
+        {profile?.city && (
+          <div className="flex justify-center mt-3">
+            <span className="inline-flex items-center gap-1.5 px-3 h-7 rounded-full bg-white/[0.06] text-cream text-[12.5px] font-semibold">
+              <MapPin size={11} /> {profile.city}{profile.country ? `, ${profile.country}` : ''}
+            </span>
+          </div>
+        )}
+
+        {/* Bio */}
+        {profile?.bio && (
+          <p className="text-cream/85 text-[13.5px] leading-snug text-center px-6 mt-3 whitespace-pre-wrap">
+            {profile.bio}
+          </p>
+        )}
+
+        {/* Own action buttons */}
+        <div className="flex items-center gap-2 mt-4 px-4">
+          <button
+            onClick={() => { tap('light'); nav('/me/edit') }}
+            className="flex-1 h-9 rounded-full bg-white/[0.08] border border-white/12 text-cream font-bold text-[13px] flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform"
+          >
+            <Edit size={14} /> Edit profile
+          </button>
+          <button
+            onClick={share}
+            className="flex-1 h-9 rounded-full bg-white/[0.08] border border-white/12 text-cream font-bold text-[13px] flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform"
+          >
+            <Share2 size={14} /> {copied ? 'Copied' : 'Share'}
+          </button>
+        </div>
+
+        {/* Highlights */}
+        <ProfileHighlights userId={myId} isOwn={true} />
 
         <div className="border-b border-white/8 sticky top-0 z-20" style={{ background: '#0B0B14' }}>
-          <div className="flex justify-around px-2">
+          <div className="flex px-2">
             {tabs.map((t) => (
               <button
                 key={t.id}
                 onClick={() => { tap('light'); setActiveTab(t.id) }}
-                className="shrink-0 px-3 py-2.5 text-[12.5px] font-bold relative"
-                style={{ color: activeTab === t.id ? '#fff' : '#888' }}
+                className="shrink-0 flex-1 max-w-[140px] px-3 py-3 text-[13.5px] font-semibold relative"
+                style={{ color: activeTab === t.id ? '#EC4899' : '#888' }}
               >
                 {t.label}
                 {activeTab === t.id && (
-                  <span className="absolute left-2 right-2 bottom-0 h-0.5 rounded-full" style={{ background: 'linear-gradient(90deg, #EC4899, #A855F7)' }} />
+                  <span className="absolute left-3 right-3 bottom-0 h-[2px] rounded-full" style={{ background: '#EC4899' }} />
                 )}
               </button>
             ))}
@@ -174,29 +274,52 @@ export default function Preview() {
         </div>
 
         <div className="pt-3">
-          {activeTab === "posts" && (
+          {activeTab === "all" && (
             <>
-              {myPosts.length === 0 ? (
-                <EmptyTab icon="✏️" title="No posts yet" subtitle="Share something from the Feed." />
-              ) : (
-                <div className="grid grid-cols-3 gap-1 px-1">
-                  {myPosts.map((p) => {
-                    const url = p.image_path ? supabase.storage.from("community-media").getPublicUrl(p.image_path).data?.publicUrl : null
-                    return (
-                      <button key={p._source + "-" + p.id} onClick={() => { tap("light"); nav("/feed") }}
-                        className="relative aspect-square rounded-lg overflow-hidden bg-white/[0.04] border border-white/8">
-                        {url ? (
-                          <img src={url} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full grid place-items-center p-2">
-                            <p className="text-muted text-[10.5px] leading-tight line-clamp-3 text-center">{p.content}</p>
-                          </div>
-                        )}
-                      </button>
-                    )
-                  })}
+              <ProfilePersonalDetails person={profile} isMe={true} />
+
+              <ProfileHobbies interests={interests} isMe={true} />
+
+              <ProfileFriendsStrip userId={myId} isMe={true} />
+
+              <div className="flex flex-col">
+                <h2 className="px-4 pt-3 pb-2 text-cream font-extrabold text-[17px]">Posts</h2>
+
+                <div className="px-4 pb-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => { tap("light"); nav("/create") }}
+                      className="flex-1 h-11 rounded-full bg-white/[0.06] border border-white/8 px-4 text-left text-muted text-[14px]"
+                    >
+                      What's on your mind?
+                    </button>
+                    <button
+                      onClick={() => { tap("light"); nav("/create") }}
+                      className="w-11 h-11 rounded-full grid place-items-center bg-white/[0.06] border border-white/8"
+                      aria-label="Add photo"
+                    >
+                      <span className="text-[18px]">🖼️</span>
+                    </button>
+                  </div>
                 </div>
-              )}
+
+                {myPosts.length === 0 ? (
+                  <EmptyTab icon="✏️" title="No posts yet" subtitle="Share something from the Feed." />
+                ) : (
+                  <div className="flex flex-col">
+                    {myPosts.map((p) => (
+                      <ProfilePostCard
+                        key={p._source + "-" + p.id}
+                        post={p}
+                        authorProfile={profile}
+                        authorPhoto={photos[0]}
+                        isMe={true}
+                        onOpenMenu={() => {}}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </>
           )}
 
@@ -223,77 +346,6 @@ export default function Preview() {
             <ProfilePhotos userId={myId} onPhotoClick={setViewingPhoto} emptySubtitle="Add photos from Edit profile." />
           )}
 
-          {activeTab === "about" && <ProfileAbout person={profile} />}
-
-          {activeTab === "connections" && <ProfileConnections userId={myId} />}
-
-          {activeTab === "more" && (
-            <>
-              {(interests.length > 0 || prompts.length > 0) && (
-                <div className="px-4 mb-4 pb-4 border-b border-white/8">
-                  {interests.length > 0 && (
-                    <div className="mb-4">
-                      <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">Interests</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {interests.map((n) => (
-                          <span key={n} className="px-2.5 py-1 rounded-full text-[12px] font-semibold border border-purple-500/30 text-purple-100" style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.20) 0%, rgba(236,72,153,0.10) 100%)' }}>{n}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {prompts.length > 0 && (
-                    <div>
-                      <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">Prompts</p>
-                      <div className="flex flex-col gap-2">
-                        {prompts.map((p, i) => (
-                          <div key={i} className="rounded-2xl bg-white/[0.04] border border-white/8 p-3">
-                            <p className="text-purple-200 text-[11.5px] font-bold mb-1">{p.prompt_key}</p>
-                            <p className="text-cream text-[13.5px]">{p.answer}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            {communities.length > 0 && (
-              <div className="px-4 mb-4 pb-4 border-b border-white/8">
-                <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">Communities</p>
-                <div className="flex flex-col gap-1">
-                  {communities.map((c) => (
-                    <button
-                      key={c.id}
-                      onClick={() => { tap("light"); nav('/community/' + (c.slug || c.id)) }}
-                      className="flex items-center gap-3 p-2 rounded-2xl bg-white/[0.03] border border-white/8 text-left active:opacity-80"
-                    >
-                      <span className="w-10 h-10 rounded-xl grid place-items-center text-[18px] shrink-0" style={{ background: c.cover_color || 'rgba(168,85,247,0.25)' }}>
-                        {c.emoji || '🌐'}
-                      </span>
-                      <span className="flex-1 min-w-0 text-cream font-semibold text-[13.5px] truncate">{c.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            savedReels.length === 0 ? (
-              <EmptyTab icon="🔖" title="Nothing saved" subtitle="Save reels to see them here." />
-            ) : (
-              <div className="grid grid-cols-3 gap-1 px-1">
-                {savedReels.map((r) => (
-                  <button key={r.id} onClick={() => setPlayingReel(r)} className="relative aspect-[9/16] rounded-lg overflow-hidden bg-black">
-                    {r.thumbnail_url ? (
-                      <img src={r.thumbnail_url} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <video src={r.video_url} muted playsInline preload="metadata" className="w-full h-full object-cover" />
-                    )}
-                    <span className="absolute bottom-1 left-1 text-white text-[10px] font-bold bg-black/60 rounded px-1.5 py-0.5">▶</span>
-                  </button>
-                ))}
-              </div>
-            )
-            </>
-          )}
         </div>
 
         <div style={{ height: 40 }} />
@@ -328,6 +380,14 @@ function EmptyTab({ icon, title, subtitle }) {
         <p className="text-cream font-bold text-[15px] mb-1">{title}</p>
         <p className="text-muted text-[13px] leading-relaxed">{subtitle}</p>
       </div>
+      <ProfileMenuSheet
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        isMe={true}
+        userId={myId}
+        person={profile}
+      />
+
     </div>
   )
 }
