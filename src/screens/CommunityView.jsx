@@ -21,6 +21,9 @@ export default function CommunityView() {
   const [community, setCommunity] = useState(null)
   const [members, setMembers] = useState([])
   const [joined, setJoined] = useState(false)
+  const [myRole, setMyRole] = useState(null)
+  const [memberActionFor, setMemberActionFor] = useState(null)
+  const [busyMember, setBusyMember] = useState(false)
   const [busy, setBusy] = useState(false)
   const [isPremium, setIsPremium] = useState(false)
   const [tab, setTab] = useState('feed')
@@ -28,6 +31,50 @@ export default function CommunityView() {
   const [inviteCode, setInviteCode] = useState(null)
   const [inviteEnabled, setInviteEnabled] = useState(true)
   const [reportOpen, setReportOpen] = useState(false)
+
+  const canManage = myRole === 'owner' || myRole === 'admin'
+  const canModerate = canManage || myRole === 'moderator'
+
+  async function kickMember(userId) {
+    if (!canModerate || busyMember) return
+    if (!confirm("Remove this member from the community?")) return
+    setBusyMember(true)
+    try {
+      await supabase.from('community_memberships').delete().eq('community_id', id).eq('user_id', userId)
+      setMembers((cur) => cur.filter((m) => m.id !== userId))
+      setMemberActionFor(null)
+    } catch (e) { console.warn(e) }
+    setBusyMember(false)
+  }
+
+  async function banMember(userId) {
+    if (!canManage || busyMember) return
+    if (!confirm("Ban this member? They won't be able to rejoin.")) return
+    setBusyMember(true)
+    try {
+      await supabase.from('community_bans').insert({
+        community_id: id,
+        user_id: userId,
+        banned_by: session.user.id,
+        reason: null,
+      })
+      await supabase.from('community_memberships').delete().eq('community_id', id).eq('user_id', userId)
+      setMembers((cur) => cur.filter((m) => m.id !== userId))
+      setMemberActionFor(null)
+    } catch (e) { console.warn(e) }
+    setBusyMember(false)
+  }
+
+  async function promoteMember(userId, role) {
+    if (!canManage || busyMember) return
+    setBusyMember(true)
+    try {
+      await supabase.from('community_memberships').update({ role }).eq('community_id', id).eq('user_id', userId)
+      setMembers((cur) => cur.map((m) => m.id === userId ? { ...m, role } : m))
+      setMemberActionFor(null)
+    } catch (e) { console.warn(e) }
+    setBusyMember(false)
+  }
 
   const load = useCallback(async () => {
     if (!session?.user?.id || !id) return
@@ -46,15 +93,16 @@ export default function CommunityView() {
 
     const { data: meRow } = await supabase
       .from('community_memberships')
-      .select('user_id')
+      .select('user_id, role')
       .eq('user_id', session.user.id)
       .eq('community_id', id)
       .maybeSingle()
     setJoined(!!meRow)
+    setMyRole(meRow?.role || null)
 
     const { data: rows, error: mErr } = await supabase
       .from('community_memberships')
-      .select('user_id, joined_at')
+      .select('user_id, joined_at, role')
       .eq('community_id', id)
       .order('joined_at', { ascending: false })
       .limit(100)
@@ -97,6 +145,7 @@ export default function CommunityView() {
         is_verified: p.is_verified,
         photo_url: publicPhotoUrl(pmap.get(p.id)),
         joined_at: r.joined_at,
+        role: r.role || 'member',
       }
     }).filter(Boolean))
 
@@ -299,6 +348,17 @@ export default function CommunityView() {
                 </p>
               )}
               <p className="text-subtle text-[11.5px] mb-4">
+                {myRole && myRole !== 'member' && (
+                  <span className="ml-2 inline-block px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide"
+                    style={{
+                      background: myRole === 'owner' ? 'rgba(236,72,153,0.2)' : 'rgba(168,85,247,0.2)',
+                      border: myRole === 'owner' ? '1px solid rgba(236,72,153,0.5)' : '1px solid rgba(168,85,247,0.5)',
+                      color: myRole === 'owner' ? '#F9A8D4' : '#DDD6FE',
+                    }}
+                  >
+                    {myRole}
+                  </span>
+                )}
                 {community.member_count} {community.member_count === 1 ? 'member' : 'members'}
               </p>
 
@@ -329,6 +389,23 @@ export default function CommunityView() {
                 onClick={() => { tap('light'); nav('/communities/' + community.id + '/discover') }}
                 className="h-11 px-6 rounded-full font-bold text-[14px] flex items-center gap-2 mx-auto mt-3 bg-white/[0.06] border border-white/12 text-cream"
               >
+                {(myRole === 'owner' || myRole === 'admin' || myRole === 'moderator') && (
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      onClick={() => { tap("light"); nav('/communities/' + id + '/edit') }}
+                      className="flex-1 h-9 rounded-xl bg-white/[0.06] border border-white/12 text-cream font-bold text-[12.5px]"
+                    >
+                      ⚙ Manage
+                    </button>
+                    <button
+                      onClick={() => { tap("light"); nav('/communities/' + id + '/requests') }}
+                      className="flex-1 h-9 rounded-xl bg-white/[0.06] border border-white/12 text-cream font-bold text-[12.5px]"
+                    >
+                      📥 Requests
+                    </button>
+                  </div>
+                )}
+
                 Discover members →
               </button>
             </div>
@@ -403,40 +480,70 @@ export default function CommunityView() {
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
-                {members.map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => { tap('light'); nav('/profile/' + m.id) }}
-                    className="relative rounded-2xl overflow-hidden bg-surface border border-white/8 aspect-[3/4] text-left"
-                  >
-                    {m.photo_url ? (
-                      <img src={m.photo_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
-                    ) : (
-                      <div className="absolute inset-0 grid place-items-center text-4xl opacity-25">👤</div>
-                    )}
-                    <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-obsidian via-obsidian/55 to-transparent" />
+                {members.map((m) => {
+                  const isRole = m.role && m.role !== 'member'
+                  const showActions = canModerate && m.id !== session?.user?.id && !(myRole === 'moderator' && isRole) && !(myRole === 'admin' && m.role === 'owner')
+                  return (
+                    <div
+                      key={m.id}
+                      className="relative rounded-2xl overflow-hidden bg-surface border border-white/8 aspect-[3/4] text-left"
+                    >
+                      <button
+                        onClick={() => { tap('light'); nav('/profile/' + m.id) }}
+                        className="absolute inset-0"
+                        aria-label={"View " + (m.display_name || m.username || "member")}
+                      >
+                        {m.photo_url ? (
+                          <img src={m.photo_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                        ) : (
+                          <div className="absolute inset-0 grid place-items-center text-4xl opacity-25">👤</div>
+                        )}
+                        <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-obsidian via-obsidian/55 to-transparent" />
+                      </button>
 
-                    {m.is_verified && (
-                      <div className="absolute top-2 right-2 flex items-center gap-1 bg-purple-600 px-1.5 py-0.5 rounded-full">
-                        <Check size={9} strokeWidth={3} />
-                        <span className="text-[8.5px] font-bold text-white">VERIFIED</span>
-                      </div>
-                    )}
-
-                    <div className="absolute inset-x-0 bottom-0 p-2.5">
-                      <p className="text-white text-[14px] font-extrabold leading-tight drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]">
-                        {m.display_name || m.username || 'Someone'}
-                        {m.age ? `, ${m.age}` : ''}
-                      </p>
-                      {m.city && (
-                        <p className="text-white/85 text-[10.5px] font-medium flex items-center gap-1 mt-0.5">
-                          <MapPin size={9} />
-                          {m.city}
-                        </p>
+                      {/* Role badge */}
+                      {isRole && (
+                        <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-full"
+                             style={{
+                               background: m.role === 'owner' ? 'rgba(236,72,153,0.85)' : m.role === 'admin' ? 'rgba(168,85,247,0.85)' : 'rgba(59,130,246,0.85)',
+                             }}>
+                          <span className="text-[8.5px] font-black uppercase tracking-wide text-white">{m.role}</span>
+                        </div>
                       )}
+
+                      {m.is_verified && (
+                        <div className="absolute top-2 right-2 flex items-center gap-1 bg-purple-600 px-1.5 py-0.5 rounded-full">
+                          <Check size={9} strokeWidth={3} />
+                          <span className="text-[8.5px] font-bold text-white">VERIFIED</span>
+                        </div>
+                      )}
+
+                      {showActions && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); tap("light"); setMemberActionFor(m) }}
+                          className="absolute top-2 right-2 w-7 h-7 rounded-full grid place-items-center"
+                          style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)" }}
+                          aria-label="Member options"
+                        >
+                          <MoreVertical size={14} color="#fff" />
+                        </button>
+                      )}
+
+                      <div className="absolute inset-x-0 bottom-0 p-2.5 pointer-events-none">
+                        <p className="text-white text-[14px] font-extrabold leading-tight drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]">
+                          {m.display_name || m.username || 'Someone'}
+                          {m.age ? `, ${m.age}` : ''}
+                        </p>
+                        {m.city && (
+                          <p className="text-white/85 text-[10.5px] font-medium flex items-center gap-1 mt-0.5">
+                            <MapPin size={9} />
+                            {m.city}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </button>
-                ))}
+                  )
+                })}
               </div>
             )}
               </>
@@ -444,6 +551,84 @@ export default function CommunityView() {
           </>
         )}
       </div>
+
+      {memberActionFor && (
+        <div className="fixed inset-0 z-[500] flex items-end" onClick={() => setMemberActionFor(null)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
+            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+          >
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
+            <p className="text-cream font-bold text-[14.5px] mb-2 truncate">
+              {memberActionFor.display_name || memberActionFor.username || "Member"}
+            </p>
+
+            {canManage && memberActionFor.role !== 'owner' && (
+              <button
+                onClick={() => promoteMember(memberActionFor.id, 'moderator')}
+                disabled={busyMember || memberActionFor.role === 'moderator'}
+                className="flex items-center gap-3 p-3.5 rounded-2xl bg-white/[0.04] border border-white/8 text-left disabled:opacity-40"
+              >
+                <span className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-500/40 grid place-items-center text-blue-300 text-[14px]">🛡</span>
+                <span className="text-cream font-semibold text-[14px] flex-1">Make moderator</span>
+                {memberActionFor.role === 'moderator' && <span className="text-muted text-[11px]">Current</span>}
+              </button>
+            )}
+
+            {canManage && memberActionFor.role !== 'owner' && (
+              <button
+                onClick={() => promoteMember(memberActionFor.id, 'admin')}
+                disabled={busyMember || memberActionFor.role === 'admin'}
+                className="flex items-center gap-3 p-3.5 rounded-2xl bg-white/[0.04] border border-white/8 text-left disabled:opacity-40"
+              >
+                <span className="w-9 h-9 rounded-xl bg-purple-500/20 border border-purple-500/40 grid place-items-center text-purple-300 text-[14px]">⚡</span>
+                <span className="text-cream font-semibold text-[14px] flex-1">Make admin</span>
+                {memberActionFor.role === 'admin' && <span className="text-muted text-[11px]">Current</span>}
+              </button>
+            )}
+
+            {canManage && memberActionFor.role && memberActionFor.role !== 'member' && memberActionFor.role !== 'owner' && (
+              <button
+                onClick={() => promoteMember(memberActionFor.id, 'member')}
+                disabled={busyMember}
+                className="flex items-center gap-3 p-3.5 rounded-2xl bg-white/[0.04] border border-white/8 text-left disabled:opacity-40"
+              >
+                <span className="w-9 h-9 rounded-xl bg-white/[0.06] border border-white/10 grid place-items-center text-muted text-[14px]">↓</span>
+                <span className="text-cream font-semibold text-[14px]">Demote to member</span>
+              </button>
+            )}
+
+            {canModerate && memberActionFor.role !== 'owner' && (
+              <button
+                onClick={() => kickMember(memberActionFor.id)}
+                disabled={busyMember}
+                className="flex items-center gap-3 p-3.5 rounded-2xl bg-amber-500/8 border border-amber-500/25 text-left disabled:opacity-40"
+              >
+                <span className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 grid place-items-center text-amber-300 text-[14px]">→</span>
+                <span className="text-cream font-semibold text-[14px]">Remove from community</span>
+              </button>
+            )}
+
+            {canManage && memberActionFor.role !== 'owner' && (
+              <button
+                onClick={() => banMember(memberActionFor.id)}
+                disabled={busyMember}
+                className="flex items-center gap-3 p-3.5 rounded-2xl bg-red-500/8 border border-red-500/25 text-left disabled:opacity-40"
+              >
+                <span className="w-9 h-9 rounded-xl bg-red-500/20 border border-red-500/40 grid place-items-center text-red-300 text-[14px]">🚫</span>
+                <span className="text-cream font-semibold text-[14px]">Ban from community</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => setMemberActionFor(null)}
+              className="w-full h-11 mt-2 text-muted font-semibold text-[13.5px]"
+            >Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
