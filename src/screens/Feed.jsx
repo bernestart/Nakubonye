@@ -100,6 +100,7 @@ export default function Feed() {
   const [error, setError] = useState("")
   const [myReactions, setMyReactions] = useState(new Set())
   const [reactionCounts, setReactionCounts] = useState(new Map())
+  const [shareCounts, setShareCounts] = useState(new Map())
   const [pickerFor, setPickerFor] = useState(null)
   const [myReactionTypes, setMyReactionTypes] = useState(new Map())
   const [reactionBreakdown, setReactionBreakdown] = useState(new Map())
@@ -463,6 +464,22 @@ export default function Feed() {
         const k = "personal:" + c.post_id
         cc.set(k, (cc.get(k) || 0) + 1)
       })
+    }
+
+    // Count reshares per post — group by reshared_from_type + reshared_from_id
+    const resharedIds = posts.map((p) => p.id).filter(Boolean)
+    if (resharedIds.length > 0) {
+      const { data: reshareRows } = await supabase
+        .from("user_posts")
+        .select("reshared_from_type, reshared_from_id")
+        .in("reshared_from_id", resharedIds)
+      const sc = new Map()
+      ;(reshareRows || []).forEach((r) => {
+        if (!r.reshared_from_id || !r.reshared_from_type) return
+        const k = r.reshared_from_type + ":" + r.reshared_from_id
+        sc.set(k, (sc.get(k) || 0) + 1)
+      })
+      setShareCounts(sc)
     }
 
     // Reel likes — separate table, composite key
@@ -1464,6 +1481,11 @@ export default function Feed() {
                       >
                         {commentCounts.get(p._source + ":" + p.id)} {commentCounts.get(p._source + ":" + p.id) === 1 ? "comment" : "comments"}
                       </button>
+                    )}
+                    {(shareCounts.get(p._source + ":" + p.id) || 0) > 0 && (
+                      <span className="text-muted text-[12px]">
+                        {shareCounts.get(p._source + ":" + p.id)} {shareCounts.get(p._source + ":" + p.id) === 1 ? "share" : "shares"}
+                      </span>
                     )}
                   </div>
                 )}
