@@ -197,6 +197,7 @@ export default function ProfileSettings() {
           <MenuRow icon={<Shield size={18} />} label="Privacy & visibility" to="/settings/privacy" nav={nav} />
           <MenuRow icon={<FileText size={18} />} label="Muted words" to="/settings/muted-words" nav={nav} />
           <MenuRow icon={<UserX size={18} />} label="Muted users" to="/settings/muted-users" nav={nav} />
+          <MenuRow icon={<Star size={18} />} label="Inner Circle" to="/inner-circle" nav={nav} />
           <MenuRow icon={<ShieldCheck size={18} />} label="Tag review" to="/settings/pending-tags" nav={nav} />
           <MenuRow icon={<Bell size={18} />} label="Notifications" to="/notifications" nav={nav} />
           <MenuRow icon={<Bell size={18} />} label="Notification settings" to="/settings/notifications" nav={nav} />
