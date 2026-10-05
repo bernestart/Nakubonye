@@ -403,7 +403,7 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
 
       {/* Header — auto-hides when paused (WhatsApp behavior) */}
       <div
-        className="absolute top-8 left-3 right-3 flex items-center gap-3 z-20"
+        className="absolute top-6 left-3 right-3 flex items-center gap-3 z-20"
         style={{
           opacity: paused ? 0 : 1,
           transition: "opacity 200ms",
@@ -442,10 +442,11 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
         </button>
       </div>
 
-      {/* Caption */}
+      {/* Caption — plain text with shadow */}
       {story.caption && !paused && (
-        <div className="absolute bottom-28 left-4 right-4 z-20">
-          <p className="text-white text-[15px] font-medium bg-black/40 backdrop-blur-md rounded-2xl px-4 py-3">
+        <div className="absolute bottom-32 left-4 right-4 z-20 pointer-events-none">
+          <p className="text-white text-[15px] font-medium leading-snug"
+             style={{ textShadow: "0 2px 8px rgba(0,0,0,0.9), 0 0 1px rgba(0,0,0,0.9)" }}>
             {story.caption}
           </p>
         </div>
@@ -457,7 +458,7 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
         {isMine ? (
           <button
             onClick={() => setViewersOpen(true)}
-            className="flex items-center gap-2 h-11 rounded-full bg-white/10 border border-white/20 backdrop-blur-md px-4 text-white font-bold text-[13.5px]"
+            className="flex items-center gap-2 h-10 rounded-full bg-black/35 backdrop-blur-sm border border-white/15 px-3.5 text-white font-bold text-[13px]"
           >
             <Eye size={16} />
             Seen by {viewers.length || 0}
@@ -471,7 +472,7 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
               onFocus={pauseNow}
               onBlur={resumeNow}
               placeholder={"Reply to " + (group?.display_name?.split(" ")[0] || "them") + "…"}
-              className="flex-1 h-11 rounded-full bg-white/10 border border-white/20 backdrop-blur-md px-4 text-white text-[14px] placeholder:text-white/60 focus:outline-none focus:bg-white/15"
+              className="flex-1 h-10 rounded-full bg-black/35 backdrop-blur-sm border border-white/15 px-4 text-white text-[13.5px] placeholder:text-white/65 focus:outline-none focus:bg-black/50 focus:border-white/30"
             />
             {reply.trim() ? (
               <button
@@ -486,7 +487,7 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
               <>
                 <button
                   onClick={() => setReactionOpen((o) => !o)}
-                  className="w-11 h-11 rounded-full grid place-items-center shrink-0 bg-white/10 border border-white/20 backdrop-blur-md"
+                  className="w-10 h-10 rounded-full grid place-items-center shrink-0 bg-black/35 backdrop-blur-sm border border-white/15"
                   aria-label="Reactions"
                 >
                   <span className="text-[18px]">😊</span>
