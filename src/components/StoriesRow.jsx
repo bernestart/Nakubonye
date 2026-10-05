@@ -327,19 +327,29 @@ export default function StoriesRow() {
             className="shrink-0 relative overflow-hidden"
             style={{
               width: TILE_W, height: TILE_H,
-              borderRadius: 14,
+              borderRadius: 12,
               border: "2px solid transparent",
               background: "linear-gradient(#0B0B14,#0B0B14) padding-box, linear-gradient(135deg,#C084FC,#EC4899) border-box",
             }}
           >
             {tileBody(myStory)}
-            <span className="absolute top-1.5 left-1.5 z-10 w-6 h-6 rounded-full grid place-items-center text-white text-[11px] font-black"
-                  style={{ background: "#1D4ED8", border: "2px solid #fff" }}>
+            <span className="absolute top-1.5 right-1.5 z-10 h-6 px-1.5 rounded-full grid place-items-center text-white text-[10.5px] font-black"
+                  style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)" }}>
               {myStory.stories.length}
             </span>
-            <div className="absolute inset-x-0 bottom-0 px-2 pb-2 pt-6"
-                 style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.75))" }}>
-              <span className="text-white text-[11px] font-bold truncate block text-left">Your story</span>
+            <div className="absolute inset-x-0 bottom-0 px-2 pb-2 pt-8"
+                 style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.80) 60%)" }}>
+              <span className="text-white text-[11.5px] font-bold truncate block text-left leading-tight">Your story</span>
+              {myStory.stories[0]?.created_at && (
+                <span className="text-white/70 text-[9.5px] font-medium truncate block text-left">
+                  {(() => {
+                    const diff = Date.now() - new Date(myStory.stories[0].created_at).getTime()
+                    const mins = Math.floor(diff / 60000)
+                    if (mins < 60) return mins + "m"
+                    return Math.floor(mins / 60) + "h"
+                  })()}
+                </span>
+              )}
             </div>
           </button>
         )}
@@ -350,7 +360,7 @@ export default function StoriesRow() {
             key={ps._tempId}
             className="shrink-0 relative overflow-hidden"
             style={{
-              width: TILE_W, height: TILE_H, borderRadius: 14,
+              width: TILE_W, height: TILE_H, borderRadius: 12,
               border: "2px solid transparent",
               background: "linear-gradient(#0B0B14,#0B0B14) padding-box, linear-gradient(135deg,#C084FC,#EC4899) border-box",
             }}
@@ -387,7 +397,11 @@ export default function StoriesRow() {
                 </div>
               </div>
             )}
-            <div className="absolute bottom-1 left-1 right-1 text-[10px] font-bold text-white drop-shadow truncate">Your story</div>
+            <div className="absolute inset-x-0 bottom-0 px-2 pb-2 pt-8"
+                 style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.80) 60%)" }}>
+              <span className="text-white text-[11.5px] font-bold truncate block text-left leading-tight">Your story</span>
+              <span className="text-white/70 text-[9.5px] font-medium block text-left">Uploading…</span>
+            </div>
           </div>
         ))}
 
