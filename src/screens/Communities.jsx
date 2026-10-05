@@ -130,7 +130,7 @@ export default function Communities() {
         )}
 
         {/* Search bar */}
-        <div className="flex items-center gap-2 rounded-2xl bg-surface border border-white/8 px-3.5 h-11 mb-3">
+        <div className="flex items-center gap-2 rounded-full bg-white/[0.05] border border-white/8 px-3.5 h-11 mb-3">
           <Search size={16} className="text-muted shrink-0" />
           <input
             value={search}
@@ -192,7 +192,7 @@ export default function Communities() {
         {loading ? (
           <div className="flex flex-col gap-2.5 shimmer">
             {[0,1,2,3,4].map((i) => (
-              <div key={i} className="flex items-center gap-3 p-3.5 rounded-2xl bg-white/[0.03] border border-white/8">
+              <div key={i} className="flex items-center gap-3 px-4 py-3.5 border-b border-white/6">
                 <div className="w-12 h-12 rounded-2xl bg-white/[0.06] shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="h-3.5 w-1/2 rounded bg-white/[0.08] mb-2" />
@@ -205,7 +205,7 @@ export default function Communities() {
         ) : (
           filtered.length === 0 ? (
             <div className="pt-12 text-center px-6">
-              <div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/8 grid place-items-center mx-auto mb-4">
+              <div className="w-16 h-16 rounded-full bg-white/[0.04] grid place-items-center mx-auto mb-4">
                 <Users size={26} className="text-muted" />
               </div>
               <p className="text-cream font-bold text-[15px] mb-1">
@@ -224,21 +224,17 @@ export default function Communities() {
               </p>
             </div>
           ) : (
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col">
             {filtered.map((c) => {
               const joined = myIds.has(c.id)
               const busy = busyId === c.id
               return (
                 <div
                   key={c.id}
-                  className="flex items-center gap-3 p-4 rounded-2xl border transition-colors"
-                  style={{
-                    background: joined ? `${c.cover_color}22` : 'rgba(255,255,255,0.04)',
-                    borderColor: joined ? `${c.cover_color}66` : 'rgba(255,255,255,0.08)',
-                  }}
+                  className="flex items-center gap-4 px-4 py-3.5 border-b border-white/6 transition-colors"
                 >
                   <div
-                    className="w-12 h-12 rounded-2xl grid place-items-center shrink-0 text-[24px]"
+                    className="w-12 h-12 rounded-full grid place-items-center shrink-0 text-[22px]"
                     style={{ background: `${c.cover_color}26`, border: `1px solid ${c.cover_color}55` }}
                   >
                     {c.emoji || '💬'}
