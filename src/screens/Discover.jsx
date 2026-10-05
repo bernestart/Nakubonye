@@ -618,7 +618,7 @@ function ActionBtn({ children, onClick, disabled, label, size = 54, variant = 'n
 function EmptyState({ onRefresh }) {
   return (
     <div className="absolute inset-0 rounded-[18px] bg-surface border border-white/8 p-6 grid place-content-center text-center">
-      <div className="w-14 h-14 rounded-2xl bg-purple-500/15 border border-purple-500/30 grid place-items-center mx-auto mb-4 shadow-[0_0_24px_rgba(124,58,237,0.35)]">
+      <div className="w-14 h-14 rounded-full bg-purple-500/15 grid place-items-center mx-auto mb-4">
         <span className="text-2xl">✨</span>
       </div>
       <h2 className="text-cream text-[18px] font-extrabold mb-1.5">
@@ -640,7 +640,7 @@ function FilterToggle({ label, desc, on, onToggle }) {
   return (
     <button
       onClick={onToggle}
-      className="w-full flex items-center gap-3 p-3.5 mb-2 rounded-2xl bg-white/[0.04] border border-white/8 text-left"
+      className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left active:bg-white/[0.03]"
     >
       <div className="flex-1 min-w-0">
         <p className="text-cream font-semibold text-[14.5px] mb-0.5">{label}</p>
