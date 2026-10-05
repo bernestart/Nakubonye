@@ -18,6 +18,8 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
   const [photos, setPhotos] = useState(new Map())
   const [reactions, setReactions] = useState(new Map()) // commentId → Map(userId → emoji)
   const [text, setText] = useState("")
+  const [mentionResults, setMentionResults] = useState([])
+  const [mentionQuery, setMentionQuery] = useState(null)
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
   const [canComment, setCanComment] = useState(true)
@@ -102,6 +104,25 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight
   }, [comments.length])
+
+  // @mention autocomplete in the comment composer
+  useEffect(() => {
+    const t = text || ""
+    const m = t.match(/@([a-z0-9_]{0,20})$/i)
+    if (!m) { setMentionQuery(null); setMentionResults([]); return }
+    const q = m[1].toLowerCase()
+    setMentionQuery(q)
+    const timer = setTimeout(async () => {
+      try {
+        let query = supabase.from("profiles").select("id, display_name, username, is_verified").limit(8)
+        if (q.length >= 1) query = query.or(`username.ilike.${q}%,display_name.ilike.${q}%`)
+        if (myId) query = query.neq("id", myId)
+        const { data } = await query
+        setMentionResults(data || [])
+      } catch (e) { console.warn("mention lookup failed", e) }
+    }, 200)
+    return () => clearTimeout(timer)
+  }, [text, myId])
 
   async function submit() {
     if (!canComment) return
@@ -295,6 +316,30 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
         )}
 
         <div className="px-3 py-3 border-t border-white/8 shrink-0" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+
+          {mentionResults.length > 0 && mentionQuery !== null && (
+            <div className="mb-2 max-h-40 overflow-y-auto rounded-2xl bg-elevated border border-white/10">
+              {mentionResults.map((u) => (
+                <button
+                  key={u.id}
+                  onClick={() => {
+                    tap("light")
+                    setText((c) => c.replace(/@([a-z0-9_]{0,20})$/i, "@" + (u.username || "") + " "))
+                    setMentionResults([]); setMentionQuery(null)
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-left active:bg-white/[0.04] border-b border-white/6 last:border-b-0"
+                >
+                  <span className="w-8 h-8 rounded-full bg-purple-600 grid place-items-center text-white font-black text-[11px] shrink-0">
+                    {(u.display_name || u.username || "?")[0].toUpperCase()}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-cream text-[13px] font-semibold truncate">{u.display_name || u.username}</p>
+                    {u.username && <p className="text-muted text-[11px] truncate">@{u.username}</p>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
           {!canComment ? (
             <div className="px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-center">
               <p className="text-red-300 text-[12.5px] font-semibold">{canCommentReason || "You can't comment here"}</p>
