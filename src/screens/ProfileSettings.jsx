@@ -71,7 +71,7 @@ export default function ProfileSettings() {
         <button
           type="button"
           onClick={() => { tap('light'); nav('/me/preview') }}
-          className="w-full rounded-2xl bg-surface border border-white/8 p-3.5 flex items-center gap-4 text-left active:opacity-80 transition-opacity mb-5"
+          className="w-full flex items-center gap-4 px-4 py-4 text-left border-b border-white/6 active:bg-white/[0.03]"
         >
           <button
             type="button"
@@ -181,7 +181,7 @@ export default function ProfileSettings() {
         </div>
 
         {/* Feature tile grid — NO label */}
-        <div className="grid grid-cols-2 gap-2.5 mb-5">
+        <div className="flex flex-col mb-5">
           <FeatureTile icon={<Bookmark size={20} />} label="Saved" to="/saved" nav={nav} />
           <FeatureTile icon={<LayoutGrid size={20} />} label="Posts" to="/me/preview" nav={nav} />
           <FeatureTile icon={<Play size={20} />} label="Reels" to="/reels" nav={nav} />
@@ -306,17 +306,16 @@ function FeatureTile({ icon, label, to, nav, soon }) {
       type="button"
       onClick={handle}
       disabled={soon}
-      className={`rounded-2xl border p-3.5 flex flex-col items-start gap-2.5 text-left active:opacity-80 transition-opacity ${
-        soon ? 'bg-white/[0.02] border-white/5 opacity-50' : 'bg-surface border-white/8'
+      className={`w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03] ${
+        soon ? 'opacity-50' : ''
       }`}
     >
-      <span className="w-9 h-9 rounded-xl bg-purple-500/15 grid place-items-center text-purple-300 shrink-0">
-        {icon}
+      <span className="shrink-0 text-cream">{icon}</span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-cream text-[15px] font-medium truncate">{label}</span>
+        {soon && <span className="block text-muted text-[11px] mt-0.5">Coming soon</span>}
       </span>
-      <span className="min-w-0 w-full">
-        <span className="block text-cream font-bold text-[13.5px] truncate">{label}</span>
-        {soon && <span className="block text-subtle text-[10.5px] mt-0.5">Coming soon</span>}
-      </span>
+      <ChevronRight size={18} className="text-muted shrink-0" />
     </button>
   )
 }
