@@ -222,12 +222,12 @@ export default function Notifications() {
         {loading ? (
           <div className="flex flex-col gap-2">
             {[0,1,2,3,4].map((i) => (
-              <div key={i} className="rounded-2xl bg-white/[0.03] shimmer" style={{ height: 64 }} />
+              <div key={i} className="border-b border-white/6 bg-white/[0.02] shimmer" style={{ height: 64 }} />
             ))}
           </div>
         ) : !hasAny ? (
           <div className="pt-16 text-center px-6">
-            <div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/8 grid place-items-center mx-auto mb-4">
+            <div className="w-16 h-16 rounded-full grid place-items-center mx-auto mb-4">
               <Bell size={26} className="text-muted" />
             </div>
             <p className="text-cream font-bold text-[15px] mb-1">No notifications yet</p>
@@ -264,7 +264,7 @@ export default function Notifications() {
                           }}
                           onTouchEnd={(e) => { if (e.currentTarget._lp) { clearTimeout(e.currentTarget._lp); e.currentTarget._lp = null } }}
                           onTouchMove={(e) => { if (e.currentTarget._lp) { clearTimeout(e.currentTarget._lp); e.currentTarget._lp = null } }}
-                          className={`w-full flex items-start gap-3 p-3 rounded-2xl text-left active:bg-white/[0.04] transition-colors ${unread ? "bg-white/[0.03]" : ""}`}
+                          className={`w-full flex items-start gap-3 px-4 py-3 border-b border-white/6 text-left active:bg-white/[0.03] transition-colors`}
                         >
                           <div className="relative shrink-0">
                             <div className="w-11 h-11 rounded-full overflow-hidden bg-purple-600 grid place-items-center text-white font-black text-sm">
@@ -311,7 +311,7 @@ export default function Notifications() {
                         }}
                         onTouchEnd={(e) => { if (e.currentTarget._lp) { clearTimeout(e.currentTarget._lp); e.currentTarget._lp = null } }}
                         onTouchMove={(e) => { if (e.currentTarget._lp) { clearTimeout(e.currentTarget._lp); e.currentTarget._lp = null } }}
-                        className={`w-full flex items-start gap-3 p-3 rounded-2xl text-left active:bg-white/[0.04] transition-colors ${unread ? "bg-white/[0.03]" : ""}`}
+                        className={`w-full flex items-start gap-3 px-4 py-3 border-b border-white/6 text-left active:bg-white/[0.03] transition-colors`}
                       >
                         <div className="relative shrink-0">
                           <div className="flex -space-x-2">
