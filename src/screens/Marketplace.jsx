@@ -134,7 +134,7 @@ function BrowseTab({ nav, myId }) {
   return (
     <>
       <div className="px-4 pb-2 shrink-0">
-        <div className="flex items-center gap-2 rounded-2xl bg-surface border border-white/8 px-3.5 h-11">
+        <div className="flex items-center gap-2 rounded-full bg-white/[0.05] border border-white/8 px-3.5 h-11">
           <Search size={16} className="text-muted shrink-0" />
           <input
             value={search}
@@ -235,7 +235,7 @@ function BrowseTab({ nav, myId }) {
         {loading ? (
           <div className="grid grid-cols-2 gap-3">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="rounded-2xl bg-white/[0.03] shimmer" style={{ height: 200 }} />
+              <div key={i} className="border-b border-white/6 bg-white/[0.02] shimmer" style={{ height: 200 }} />
             ))}
           </div>
         ) : filtered.length === 0 ? (
@@ -299,7 +299,7 @@ function MyListingsTab({ nav, myId }) {
       {loading ? (
         <div className="flex flex-col gap-3">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="rounded-2xl bg-white/[0.03] shimmer" style={{ height: 100 }} />
+            <div key={i} className="border-b border-white/6 bg-white/[0.02] shimmer" style={{ height: 100 }} />
           ))}
         </div>
       ) : listings.length === 0 ? (
@@ -324,19 +324,19 @@ function MyListingsTab({ nav, myId }) {
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             <p className="text-cream font-bold text-[15px] mb-2 truncate">{menuFor.title}</p>
             <button onClick={() => { tap('light'); setMenuFor(null); nav(`/marketplace/${menuFor.id}`) }}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream">
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]">
               <Eye size={18} /> <span className="font-semibold text-[14px]">View listing</span>
             </button>
             <button onClick={() => { tap('light'); setMenuFor(null); nav(`/marketplace/${menuFor.id}/edit`) }}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream">
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]">
               <Edit3 size={18} /> <span className="font-semibold text-[14px]">Edit listing</span>
             </button>
             <button onClick={() => markSold(menuFor.id, menuFor.status)}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream">
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]">
               <Tag size={18} /> <span className="font-semibold text-[14px]">{menuFor.status === 'sold' ? 'Mark as available' : 'Mark as sold'}</span>
             </button>
             <button onClick={() => deleteListing(menuFor.id)}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-danger/10 border border-danger/30 text-left text-danger">
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-danger/20 text-left text-danger active:bg-red-500/[0.06]">
               <Trash2 size={18} /> <span className="font-semibold text-[14px]">Delete listing</span>
             </button>
             <button onClick={() => setMenuFor(null)} className="w-full h-11 mt-1 text-muted font-semibold text-[13.5px]">Cancel</button>
@@ -405,7 +405,7 @@ function SavedTab({ nav, myId }) {
       {loading ? (
         <div className="grid grid-cols-2 gap-3">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="rounded-2xl bg-white/[0.03] shimmer" style={{ height: 200 }} />
+            <div key={i} className="border-b border-white/6 bg-white/[0.02] shimmer" style={{ height: 200 }} />
           ))}
         </div>
       ) : items.length === 0 ? (
@@ -460,7 +460,7 @@ function ListingCard({ listing, onClick }) {
 function Empty({ title, sub, cta, onCta, icon }) {
   return (
     <div className="text-center py-16 px-6">
-      <div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/8 grid place-items-center mx-auto mb-4">
+      <div className="w-16 h-16 rounded-full bg-white/[0.04] grid place-items-center mx-auto mb-4">
         {icon || <Store size={26} className="text-muted" />}
       </div>
       <p className="text-cream font-bold text-[15px] mb-1">{title}</p>
