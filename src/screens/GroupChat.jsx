@@ -988,17 +988,17 @@ export default function GroupChat() {
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             <button onClick={() => { setAttachMenuOpen(false); setTimeout(() => cameraInputRef.current?.click(), 100) }}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream">
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]">
               <Camera size={18} className="text-purple-300" />
               <span className="font-semibold text-[14px]">Take photo</span>
             </button>
             <button onClick={() => { setAttachMenuOpen(false); setTimeout(() => fileInputRef.current?.click(), 100) }}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream">
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]">
               <Paperclip size={18} className="text-purple-300" />
               <span className="font-semibold text-[14px]">Choose from gallery</span>
             </button>
             <button onClick={() => { setAttachMenuOpen(false); setTimeout(() => setPollComposerOpen(true), 120) }}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream">
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]">
               <span className="text-purple-300 text-[18px]">📊</span>
               <span className="font-semibold text-[14px]">Create a poll</span>
             </button>
@@ -1019,7 +1019,7 @@ export default function GroupChat() {
         <div onClick={() => setMenuOpen(false)} className="fixed inset-0 z-[500] bg-black/60">
           <div
             onClick={(e) => e.stopPropagation()}
-            className="absolute top-16 right-3 w-56 bg-surface rounded-2xl border border-white/10 shadow-2xl overflow-hidden"
+            className="absolute top-16 right-3 w-56 bg-surface rounded-xl border border-white/10 overflow-hidden"
           >
             <MenuItem icon={<Users size={16} />} label={`${members.length} members`} onClick={() => { setMenuOpen(false); nav(`/groups/${groupId}/members`) }} />
             <MenuItem icon={<Pencil size={16} />} label="Edit group" onClick={() => { setMenuOpen(false); nav(`/groups/${groupId}/edit`) }} />
