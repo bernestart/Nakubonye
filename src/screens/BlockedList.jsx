@@ -82,7 +82,7 @@ export default function BlockedList() {
           <div className="grid place-items-center h-40 text-muted text-[13px]">Loading…</div>
         ) : items.length === 0 ? (
           <div className="pt-16 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-white/[0.04] grid place-items-center mx-auto mb-4">
+            <div className="w-14 h-14 rounded-full bg-white/[0.04] grid place-items-center mx-auto mb-4">
               <UserX size={22} strokeWidth={2} className="text-muted" />
             </div>
             <p className="text-cream font-semibold text-[15px] mb-1">No one blocked</p>
@@ -93,7 +93,7 @@ export default function BlockedList() {
             {items.map((item) => (
               <div
                 key={item.blockId}
-                className="flex items-center gap-3 p-3 rounded-2xl bg-surface border border-white/8"
+                className="flex items-center gap-4 px-4 py-3.5 border-b border-white/6"
               >
                 <div className="w-12 h-12 rounded-full overflow-hidden bg-elevated shrink-0">
                   {item.photo_url ? (

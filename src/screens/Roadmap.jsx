@@ -96,7 +96,7 @@ export default function Roadmap() {
           ))}
         </Section>
 
-        <div className="mt-6 p-4 rounded-2xl bg-white/[0.03] border border-white/8">
+        <div className="mt-6 px-4 py-4 border-t border-white/8">
           <p className="text-cream font-bold text-[13.5px] mb-1">Have an idea?</p>
           <p className="text-muted text-[12.5px] mb-3">
             Message us on WhatsApp — we read every suggestion.
@@ -142,7 +142,7 @@ function Row({ name, desc, badge, badgeColor, onClick, clickable }) {
   return (
     <Wrapper
       onClick={onClick}
-      className={`flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/8 text-left w-full ${clickable ? "active:scale-[0.98] transition-transform" : ""}`}
+      className={`flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left w-full ${clickable ? "active:bg-white/[0.03]" : ""}`}
     >
       <div className="flex-1 min-w-0">
         <p className="text-cream font-semibold text-[13.5px]">{name}</p>
