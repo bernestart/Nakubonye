@@ -127,7 +127,7 @@ export default function Online() {
         ) : people.length === 0 ? (
           <div className="grid place-items-center py-16 text-center px-6">
             <div>
-              <div className="w-14 h-14 rounded-2xl bg-purple-500/12 border border-purple-500/25 grid place-items-center mx-auto mb-3">
+              <div className="w-14 h-14 rounded-full bg-purple-500/12 grid place-items-center mx-auto mb-3">
                 <Users size={22} className="text-purple-300" />
               </div>
               <p className="text-cream font-bold text-[15px] mb-1">No one online</p>
@@ -140,7 +140,7 @@ export default function Online() {
               <button
                 key={u.id}
                 onClick={() => { tap("light"); nav("/profile/" + u.id) }}
-                className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/8 text-left active:scale-[0.99] transition-transform"
+                className="flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left active:bg-white/[0.03]"
               >
                 <div className="relative shrink-0">
                   <span className="w-12 h-12 rounded-full overflow-hidden bg-elevated border border-white/8 block">

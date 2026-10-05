@@ -150,7 +150,7 @@ export default function Likes() {
 
       {/* Tabs */}
       <div className="px-4 pt-1 pb-3 shrink-0">
-        <div className="flex gap-1 p-1 rounded-2xl bg-white/[0.04] border border-white/8">
+        <div className="flex px-2 border-b border-white/6">
           <TabBtn active={tab === 'received'} onClick={() => { tap('light'); setTab('received') }}>
       <BrandGlow />
             Likes you
@@ -167,7 +167,7 @@ export default function Likes() {
       </div>
 
       {error && (
-        <div className="mx-4 mb-2 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5 shrink-0">
+        <div className="mx-4 mb-2 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-2xl px-3 py-2.5 shrink-0">
           {error}
         </div>
       )}
@@ -176,7 +176,7 @@ export default function Likes() {
         {loading || premiumLoading ? (
           <div className="grid grid-cols-2 gap-3 animate-pulse">
             {[0,1,2,3].map((i) => (
-              <div key={i} className="rounded-2xl bg-white/[0.03] border border-white/8 overflow-hidden">
+              <div key={i} className="rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
                 <div className="aspect-[3/4] bg-white/[0.04]" />
                 <div className="p-3">
                   <div className="h-3 w-2/3 rounded bg-white/[0.08] mb-1.5" />
@@ -206,7 +206,7 @@ function TabBtn({ active, onClick, children }) {
   return (
     <button
       onClick={onClick}
-      className={`flex-1 h-9 rounded-xl text-[13px] font-semibold transition-colors flex items-center justify-center ${
+      className={`flex-1 h-11 text-[13.5px] font-semibold transition-colors flex items-center justify-center relative ${
         active ? 'bg-purple-600 text-white shadow-[0_4px_14px_rgba(124,58,237,0.4)]' : 'text-muted'
       }`}
     >
@@ -293,7 +293,7 @@ function LockedReceived({ count }) {
           backgroundImage: 'radial-gradient(circle at 30% 20%, rgba(255,255,255,0.2) 0%, transparent 40%)'
         }} />
         <div className="relative p-6">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 grid place-items-center mx-auto mb-4 shadow-[0_10px_30px_rgba(124,58,237,0.55)]">
+          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 grid place-items-center mx-auto mb-4">
             <Lock size={24} strokeWidth={2.4} className="text-white" />
           </div>
           <h2 className="text-cream text-[20px] font-extrabold tracking-tight mb-2">
