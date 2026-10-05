@@ -110,7 +110,7 @@ export default function AccountSecurity() {
           <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-3">
             Change password
           </p>
-          <div className="rounded-2xl bg-white/[0.04] border border-white/8 p-4 flex flex-col gap-3">
+          <div className="flex flex-col gap-3 py-4 border-b border-white/6">
             <div>
               <label className="block text-muted text-[12px] font-semibold mb-1.5">Current password</label>
               <input
@@ -159,7 +159,7 @@ export default function AccountSecurity() {
             </div>
 
             {pwErr && (
-              <div className="flex items-start gap-2 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5">
+              <div className="flex items-start gap-2 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-2xl px-3 py-2.5">
                 <AlertCircle size={14} className="shrink-0 mt-0.5" />
                 <span>{pwErr}</span>
               </div>
@@ -189,7 +189,7 @@ export default function AccountSecurity() {
           <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-3">
             Change email
           </p>
-          <div className="rounded-2xl bg-white/[0.04] border border-white/8 p-4 flex flex-col gap-3">
+          <div className="flex flex-col gap-3 py-4 border-b border-white/6">
             <div>
               <label className="block text-muted text-[12px] font-semibold mb-1.5">New email</label>
               <input
@@ -216,7 +216,7 @@ export default function AccountSecurity() {
             </div>
 
             {emailErr && (
-              <div className="flex items-start gap-2 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5">
+              <div className="flex items-start gap-2 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-2xl px-3 py-2.5">
                 <AlertCircle size={14} className="shrink-0 mt-0.5" />
                 <span>{emailErr}</span>
               </div>
@@ -253,9 +253,9 @@ export default function AccountSecurity() {
           </p>
           <button
             onClick={() => { tap('light'); setDeleteOpen(true) }}
-            className="w-full flex items-center gap-3 p-4 rounded-2xl bg-danger/8 border border-danger/25 text-left text-danger"
+            className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-danger/20 active:bg-red-500/[0.06]"
           >
-            <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0">
+            <span className="shrink-0">
               <Trash2 size={18} />
             </span>
             <span className="flex-1 font-semibold text-[14.5px]">Delete account</span>
