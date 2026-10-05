@@ -356,7 +356,7 @@ export default function Search() {
 
             {trendingTags.length > 0 && (
               <div className="mb-5">
-                <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2 px-1">Trending</p>
+                <p className="text-purple-400 text-[11px] font-black tracking-[0.16em] uppercase mb-2 mt-2 px-1">Trending</p>
                 <div className="flex flex-wrap gap-1.5">
                   {trendingTags.map((t) => (
                     <button key={t} onClick={() => setQuery(t)} className="h-8 px-3 rounded-full bg-purple-500/12 border border-purple-500/25 text-purple-200 text-[12.5px] font-bold">#{t}</button>
@@ -367,10 +367,10 @@ export default function Search() {
 
             {suggestedCommunities.length > 0 && (
               <div className="mb-5">
-                <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2 px-1">Communities to explore</p>
+                <p className="text-purple-400 text-[11px] font-black tracking-[0.16em] uppercase mb-2 mt-2 px-1">Communities to explore</p>
                 <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
                   {suggestedCommunities.slice(0, 10).map((c) => (
-                    <button key={c.id} onClick={() => { tap('light'); nav('/communities/' + (c.slug || c.id)) }} className="shrink-0 w-28 rounded-2xl bg-white/[0.03] border border-white/8 overflow-hidden text-left">
+                    <button key={c.id} onClick={() => { tap('light'); nav('/communities/' + (c.slug || c.id)) }} className="shrink-0 w-28 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden text-left">
                       <div className="h-14 grid place-items-center text-[26px]" style={{ background: c.cover_color || 'rgba(168,85,247,0.2)' }}>{c.emoji || '🌐'}</div>
                       <div className="p-2">
                         <p className="text-cream text-[11.5px] font-bold truncate">{c.name}</p>
@@ -384,7 +384,7 @@ export default function Search() {
 
             {suggestedPeople.length > 0 && (
               <div>
-                <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2 px-1">People you may know</p>
+                <p className="text-purple-400 text-[11px] font-black tracking-[0.16em] uppercase mb-2 mt-2 px-1">People you may know</p>
                 <div className="flex flex-col gap-1.5">
                   {suggestedPeople.slice(0, 6).map((u) => (
                     <button key={u.id} onClick={() => { tap('light'); nav('/profile/' + u.id) }} className="flex items-center gap-4 px-4 py-3 border-b border-white/6 text-left active:bg-white/[0.03]">
