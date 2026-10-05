@@ -57,12 +57,49 @@ function negativePenalty(item, ctx) {
   return 1
 }
 
+// Signal weights from actual user behavior (7A.4)
+// ctx.signalScores: Map<"type:id", { dwell, skip, open, share, comment, like, impression, view }>
+function behaviorBoost(item, ctx) {
+  if (!ctx?.signalScores) return 1
+  const key = (item._source || "personal") + ":" + item.id
+  const sig = ctx.signalScores.get(key)
+  if (!sig) return 1
+
+  // Author-level affinity also contributes
+  const author = item.author_id || item.user_id
+  const authorSig = ctx.authorSignals?.get(author)
+
+  let boost = 1
+
+  // Positive signals
+  if (sig.open)    boost += 0.4 * Math.min(3, sig.open)
+  if (sig.share)   boost += 0.6 * Math.min(3, sig.share)
+  if (sig.comment) boost += 0.5 * Math.min(3, sig.comment)
+  if (sig.like)    boost += 0.3 * Math.min(5, sig.like)
+
+  // Dwell time (capped)
+  if (sig.dwell > 0) boost += Math.min(0.5, sig.dwell * 0.06)
+
+  // Negative signals
+  if (sig.skip) boost -= 0.15 * Math.min(4, sig.skip)
+  if (sig.hide) boost *= 0.3
+
+  // Author-level push
+  if (authorSig) {
+    if (authorSig.dwell > 0) boost += Math.min(0.4, authorSig.dwell * 0.04)
+    if (authorSig.skip > authorSig.view) boost *= 0.7
+  }
+
+  return Math.max(0.2, Math.min(3.5, boost))
+}
+
 function scoreItem(item, ctx) {
   return (
     recencyWeight(item.created_at) *
     engagementWeight(item) *
     relationshipWeight(item, ctx) *
     contentAffinityWeight(item, ctx) *
+    behaviorBoost(item, ctx) *
     negativePenalty(item, ctx)
   )
 }

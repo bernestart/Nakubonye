@@ -7,6 +7,7 @@ import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 import { mixFeed } from "../lib/mixFeed"
+import { logImpression, logView, logDwell, logSkip } from "../lib/feedSignals"
 
 // ─── Ranking signals ──────────────────────────────────────
 // Fetch my interaction history with post authors (last 90 days)
@@ -102,6 +103,8 @@ export default function Feed() {
   const [myReactions, setMyReactions] = useState(new Set())
   const [reactionCounts, setReactionCounts] = useState(new Map())
   const [shareCounts, setShareCounts] = useState(new Map())
+  const [signalScores, setSignalScores] = useState(new Map())
+  const [authorSignals, setAuthorSignals] = useState(new Map())
   const [repostsFor, setRepostsFor] = useState(null)
   const [pickerFor, setPickerFor] = useState(null)
   const [myReactionTypes, setMyReactionTypes] = useState(new Map())
@@ -353,7 +356,7 @@ export default function Feed() {
       pageSize: 20,
       reelEvery: 10,
       seenReelIds: seenReelIds.current,
-      scoreContext: scoreContextLoad,
+      scoreContext: { ...scoreContextLoad, signalScores, authorSignals },
     })
 
     setPosts(list)
@@ -484,6 +487,36 @@ export default function Feed() {
       })
       setShareCounts(sc)
     }
+
+    // 7A.4 — Aggregate per-post + per-author signals
+    try {
+      const cutoff = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()
+      const { data: signalRows } = await supabase
+        .from("post_signals")
+        .select("post_type, post_id, author_id, signal, value")
+        .eq("user_id", myId)
+        .gt("created_at", cutoff)
+        .limit(3000)
+
+      const perPost = new Map()
+      const perAuthor = new Map()
+      ;(signalRows || []).forEach((r) => {
+        const key = r.post_type + ":" + r.post_id
+        if (!perPost.has(key)) perPost.set(key, { dwell: 0, skip: 0, view: 0, open: 0, share: 0, comment: 0, like: 0, hide: 0, impression: 0 })
+        const p = perPost.get(key)
+        if (r.signal === "dwell") p.dwell += Number(r.value) || 0
+        else if (p[r.signal] !== undefined) p[r.signal] += 1
+
+        if (r.author_id) {
+          if (!perAuthor.has(r.author_id)) perAuthor.set(r.author_id, { dwell: 0, skip: 0, view: 0, open: 0, share: 0, comment: 0, like: 0 })
+          const a = perAuthor.get(r.author_id)
+          if (r.signal === "dwell") a.dwell += Number(r.value) || 0
+          else if (a[r.signal] !== undefined) a[r.signal] += 1
+        }
+      })
+      setSignalScores(perPost)
+      setAuthorSignals(perAuthor)
+    } catch (e) { console.warn("signal aggregate failed", e) }
 
     // Reel likes — separate table, composite key
     const reelIds = list.filter((r) => r._source === "reel").map((r) => r.id)
@@ -891,6 +924,81 @@ export default function Feed() {
     return () => obs.disconnect()
   }, [loadMore])
 
+  // ---- Post view tracking: impressions, dwell, skip ----
+  useEffect(() => {
+    if (!myId) return
+    const el = scrollRef.current
+    if (!el) return
+
+    const visible = new Map()  // postKey → { post, enteredAt, viewed }
+
+    const extractKey = (article) => {
+      const key = article.dataset.postKey
+      if (!key) return null
+      return key
+    }
+
+    const findPost = (key) => posts.find((p) => (p._source + ":" + p.id) === key)
+
+    const obs = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const key = extractKey(entry.target)
+          if (!key) return
+          if (entry.isIntersecting && entry.intersectionRatio > 0.4) {
+            if (visible.has(key)) return
+            const post = findPost(key)
+            if (!post) return
+            visible.set(key, { post, enteredAt: Date.now(), viewed: false })
+            logImpression(myId, post)
+          } else if (!entry.isIntersecting) {
+            const rec = visible.get(key)
+            if (!rec) return
+            const dwellSec = (Date.now() - rec.enteredAt) / 1000
+            visible.delete(key)
+
+            if (dwellSec >= 1.5 && !rec.viewed) {
+              logView(myId, rec.post)
+              rec.viewed = true
+            }
+            if (dwellSec >= 0.4) {
+              logDwell(myId, rec.post, dwellSec)
+            }
+            if (dwellSec < 1.0) {
+              logSkip(myId, rec.post)
+            }
+          }
+        })
+      },
+      { threshold: [0, 0.4, 0.8] }
+    )
+
+    const observeAll = () => {
+      const articles = el.querySelectorAll("[data-post-key]")
+      articles.forEach((a) => obs.observe(a))
+    }
+
+    // Give DOM a tick to render
+    const t = setTimeout(observeAll, 100)
+    const mo = new MutationObserver(() => {
+      clearTimeout(t)
+      setTimeout(observeAll, 100)
+    })
+    mo.observe(el, { childList: true, subtree: true })
+
+    return () => {
+      clearTimeout(t)
+      mo.disconnect()
+      obs.disconnect()
+      // Flush any remaining dwells on unmount
+      visible.forEach((rec) => {
+        const dwellSec = (Date.now() - rec.enteredAt) / 1000
+        if (dwellSec >= 0.4) logDwell(myId, rec.post, dwellSec)
+      })
+      visible.clear()
+    }
+  }, [myId, posts])
+
   // Reel autoplay — play when 60% visible, pause when scrolled away
   useEffect(() => {
     const videos = document.querySelectorAll("[data-reel-video]")
@@ -1217,7 +1325,7 @@ export default function Feed() {
               const rName = rProf?.display_name || rProf?.username || "Someone"
               return (
                 <Fragment key={"reel-" + p.id}>
-                  <article className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
+                  <article data-post-key={"reel:" + p.id} className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
                     {/* Author header */}
                     <div className="flex items-center gap-2.5 px-3 pt-3 pb-2">
                       <button
@@ -1351,7 +1459,7 @@ export default function Feed() {
                 : null
               return (
                 <Fragment key={"listing-" + p.id}>
-                  <article className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
+                  <article data-post-key={"listing:" + p.id} className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
                     <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-white/[0.02]">
                       <span className="w-6 h-6 rounded-lg grid place-items-center text-[12px]" style={{ background: "rgba(236,72,153,0.2)" }}>🛒</span>
                       <span className="text-pink-300 text-[11.5px] font-bold tracking-wide">Marketplace</span>
@@ -1378,7 +1486,7 @@ export default function Feed() {
                 : null
               return (
                 <Fragment key={"service-" + p.id}>
-                  <article className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
+                  <article data-post-key={"service:" + p.id} className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
                     <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-white/[0.02]">
                       <span className="w-6 h-6 rounded-lg grid place-items-center text-[12px]" style={{ background: "rgba(168,85,247,0.2)" }}>🔧</span>
                       <span className="text-purple-300 text-[11.5px] font-bold tracking-wide">Service</span>
@@ -1408,8 +1516,8 @@ export default function Feed() {
             const imageUrl = p.image_path ? supabase.storage.from("community-media").getPublicUrl(p.image_path).data?.publicUrl : null
             return (
               <Fragment key={p.id}>
-              <article className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
-                {/* Source badge — community OR profile */}
+              <article data-post-key={p._source + ":" + p.id} className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
+                    {/* Source badge — community OR profile */}
                 {p._source === "community" && comm && (
                   <button
                     onClick={() => { tap("light"); nav("/communities/" + comm.id) }}
