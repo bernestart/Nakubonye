@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Tag } from "lucide-react"
+import { Tag, Share2 } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { photoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
@@ -184,6 +184,20 @@ export default function PhotoViewer({ photo, currentUserId, onClose }) {
             <Tag size={14} /> Tag people
           </button>
         )}
+        <button
+          onClick={async () => {
+            tap("light")
+            const url = photoUrl(photo?.bucket, photo?.storage_path)
+            try {
+              if (navigator.share) await navigator.share({ title: "Photo on Nakubonye", url })
+              else { await navigator.clipboard.writeText(url); alert("Link copied") }
+            } catch {}
+          }}
+          className="h-10 px-4 rounded-full bg-white/15 text-white text-[13px] font-bold flex items-center gap-1.5 active:scale-[0.98] transition-transform"
+        >
+          <Share2 size={14} /> Share
+        </button>
+
         {!isOwner && myTag && (
           <button
             onClick={removeMyTag}
