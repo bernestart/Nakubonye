@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { ArrowLeft, Send, Paperclip, X, MoreVertical, Users, Camera, Trash2, Flag, LogOut, UserPlus , Pencil , Link2 , Bell , Mic, Square , Pin , Eraser } from "lucide-react"
+import { Search, ArrowLeft, Send, Paperclip, X, MoreVertical, Users, Camera, Trash2, Flag, LogOut, UserPlus , Pencil , Link2 , Bell , Mic, Square , Pin , Eraser } from "lucide-react"
 import { motion } from "framer-motion"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
@@ -11,6 +11,7 @@ import PollMessage from "../components/PollMessage"
 import InviteLinkSheet from "../components/InviteLinkSheet"
 import ReportModal from "../components/ReportModal"
 import MessageActionsSheet from "../components/MessageActionsSheet"
+import ChatSearchSheet from "../components/ChatSearchSheet"
 import PollComposer from "../components/PollComposer"
 import ForwardPicker from "../components/ForwardPicker"
 import Linkify from "../components/chat/Linkify"
@@ -47,6 +48,7 @@ export default function GroupChat() {
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [pollComposerOpen, setPollComposerOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
   const [emojiOpen, setEmojiOpen] = useState(false)
@@ -611,6 +613,10 @@ export default function GroupChat() {
             </p>
           </div>
         </button>
+        <button onClick={() => { tap("light"); setSearchOpen(true) }} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Search in chat">
+          <Search size={19} strokeWidth={2.3} />
+        </button>
+
         <button onClick={() => setMenuOpen(true)} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Menu">
           <MoreVertical size={20} strokeWidth={2.2} />
         </button>
@@ -1015,6 +1021,14 @@ export default function GroupChat() {
       )}
 
       {/* Group menu */}
+      {searchOpen && (
+        <ChatSearchSheet
+          source="group"
+          targetId={groupId}
+          onClose={() => setSearchOpen(false)}
+        />
+      )}
+
       {menuOpen && (
         <div onClick={() => setMenuOpen(false)} className="fixed inset-0 z-[500] bg-black/60">
           <div

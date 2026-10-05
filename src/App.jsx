@@ -51,6 +51,7 @@ import AdminVerifications from './screens/AdminVerifications'
 import Likes from './screens/Likes'
 import Matches from './screens/Matches'
 import Messages from './screens/Messages'
+import MessagesSearch from './screens/MessagesSearch'
 import MessagingSettings from './screens/MessagingSettings'
 import ChatInfo from './screens/ChatInfo'
 import ArchivedMessages from './screens/ArchivedMessages'
@@ -229,6 +230,7 @@ export default function App() {
         <Route path="/matches"  element={<Guard><Matches /></Guard>} />
         <Route path="/messages" element={<Guard><Messages /></Guard>} />
         <Route path="/messages/settings" element={<Guard><MessagingSettings /></Guard>} />
+        <Route path="/messages/search" element={<Guard><MessagesSearch /></Guard>} />
         <Route path="/messages/:userId/info" element={<Guard><ChatInfo /></Guard>} />
         <Route path="/messages/archived" element={<Guard><ArchivedMessages /></Guard>} />
         <Route path="/messages/requests" element={<Guard><MessageRequests /></Guard>} />

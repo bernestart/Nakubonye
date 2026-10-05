@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Send, MessageCircle, Paperclip, X, Smile, Mic, Square, Play, Pause, MoreVertical, Trash2, Eye, Flag, Ban, Check, CheckCheck , Phone, Video, Pin, Bell, BellOff, Eraser , Camera, Image } from 'lucide-react'
+import { Search, ArrowLeft, Send, MessageCircle, Paperclip, X, Smile, Mic, Square, Play, Pause, MoreVertical, Trash2, Eye, Flag, Ban, Check, CheckCheck , Phone, Video, Pin, Bell, BellOff, Eraser , Camera, Image } from 'lucide-react'
 import VerifiedBadge from "../components/VerifiedBadge"
 import PollMessage from "../components/PollMessage"
 import { friendlyError } from '../lib/errors'
@@ -20,6 +20,7 @@ import EmojiPicker from '../components/chat/EmojiPicker'
 import PollComposer from '../components/PollComposer'
 import ImageLightbox from '../components/chat/ImageLightbox'
 import ForwardPicker from '../components/ForwardPicker'
+import ChatSearchSheet from '../components/ChatSearchSheet'
 import MessageActionsSheet from '../components/MessageActionsSheet'
 import MessagePopover from '../components/MessagePopover'
 
@@ -117,6 +118,7 @@ export default function Chat() {
   const [attachmentPreview, setAttachmentPreview] = useState('')
   const [otherTyping, setOtherTyping] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
   const [blockOpen, setBlockOpen] = useState(false)
 
@@ -814,6 +816,14 @@ export default function Chat() {
         </button>
 
         <button
+          onClick={() => { tap("light"); setSearchOpen(true) }}
+          className="w-9 h-9 rounded-full grid place-items-center text-muted"
+          aria-label="Search in chat"
+        >
+          <Search size={19} strokeWidth={2.3} />
+        </button>
+
+        <button
           onClick={() => setMenuOpen(true)}
           className="w-9 h-9 rounded-full grid place-items-center text-muted"
           aria-label="More"
@@ -1294,6 +1304,22 @@ export default function Chat() {
       </div>
 
       {/* Overflow menu */}
+      {searchOpen && (
+        <ChatSearchSheet
+          source="dm"
+          targetId={conversationId}
+          onClose={() => setSearchOpen(false)}
+          onJump={(r) => {
+            // Simple jump: scroll to the message if it's currently loaded
+            const el = document.querySelector('[data-msg-id="' + r.id + '"]')
+            if (el) {
+              el.scrollIntoView({ behavior: "smooth", block: "center" })
+            }
+            setSearchOpen(false)
+          }}
+        />
+      )}
+
       {menuOpen && (
         <div
           onClick={() => setMenuOpen(false)}

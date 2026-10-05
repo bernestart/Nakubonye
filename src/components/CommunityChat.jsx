@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Send, Sparkles, Paperclip, Camera, X , Mic, Square , Pin , MoreVertical , Eraser , Bell, BellOff , Flag } from 'lucide-react'
+import { Search, Send, Sparkles, Paperclip, Camera, X , Mic, Square , Pin , MoreVertical , Eraser , Bell, BellOff , Flag } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl } from '../lib/photo'
@@ -9,6 +9,7 @@ import Linkify from './chat/Linkify'
 import EmojiPicker from './chat/EmojiPicker'
 import ImageLightbox from './chat/ImageLightbox'
 import MessageActionsSheet from './MessageActionsSheet'
+import ChatSearchSheet from './ChatSearchSheet'
 import PollComposer from './PollComposer'
 import ForwardPicker from './ForwardPicker'
 import ReportModal from './ReportModal'
@@ -51,6 +52,7 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
   const [clearedAt, setClearedAt] = useState(null)
   const [isMuted, setIsMuted] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
   const [forwardingMsg, setForwardingMsg] = useState(null)
   const [typers, setTypers] = useState({})
@@ -562,6 +564,14 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
           })()}
         </p>
         <button
+          onClick={() => { tap("light"); setSearchOpen(true) }}
+          className="w-8 h-8 rounded-full grid place-items-center text-muted shrink-0"
+          aria-label="Search in chat"
+        >
+          <Search size={18} />
+        </button>
+
+        <button
           onClick={() => { tap("light"); setMenuOpen(true) }}
           className="w-8 h-8 rounded-full grid place-items-center text-muted shrink-0"
           aria-label="Chat menu"
@@ -569,6 +579,14 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
           <MoreVertical size={18} />
         </button>
       </div>
+
+      {searchOpen && (
+        <ChatSearchSheet
+          source="community"
+          targetId={communityId}
+          onClose={() => setSearchOpen(false)}
+        />
+      )}
 
       {menuOpen && (
         <div className="fixed inset-0 z-[500] flex items-end" onClick={() => setMenuOpen(false)}>

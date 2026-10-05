@@ -739,6 +739,19 @@ export default function Messages() {
           )}
         </div>
 
+        {searchQuery.trim().length >= 2 && (
+          <button
+            onClick={() => { tap("light"); nav("/messages/search?q=" + encodeURIComponent(searchQuery.trim())) }}
+            className="mt-2 w-full flex items-center gap-2 px-3 py-2.5 rounded-full bg-purple-500/10 border border-purple-500/25 text-left active:bg-purple-500/15"
+          >
+            <Search size={14} className="text-purple-300 shrink-0" />
+            <span className="text-purple-200 text-[12.5px] font-semibold flex-1 min-w-0 truncate">
+              Search inside all messages for "{searchQuery.trim()}"
+            </span>
+            <span className="text-purple-300 text-[14px]">→</span>
+          </button>
+        )}
+
         {/* Active filter chip — only when a filter is applied */}
         {tabFilter !== "all" && (
           <div className="flex mt-2.5">
