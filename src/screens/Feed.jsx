@@ -104,6 +104,7 @@ export default function Feed() {
   const [pickerFor, setPickerFor] = useState(null)
   const [myReactionTypes, setMyReactionTypes] = useState(new Map())
   const [reactionBreakdown, setReactionBreakdown] = useState(new Map())
+  const [topReactors, setTopReactors] = useState(new Map())  // key → [{ name, emoji }]
   const [commentCounts, setCommentCounts] = useState(new Map())
   const [commentsFor, setCommentsFor] = useState(null)
   const [actionsFor, setActionsFor] = useState(null)
@@ -500,6 +501,53 @@ export default function Feed() {
     setReactionCounts(counts)
     setCommentCounts(cc)
     setReactionBreakdown(breakdown)
+
+    // Load top 3 reactor names per post
+    try {
+      const topReactorsMap = new Map()
+
+      if (communityIds.length > 0) {
+        const { data: commLikes } = await supabase
+          .from("community_post_reactions")
+          .select("post_id, user_id, reaction, created_at")
+          .in("post_id", communityIds)
+          .order("created_at", { ascending: false })
+        const reactorIds = [...new Set((commLikes || []).map((r) => r.user_id))].slice(0, 100)
+        let profMap = new Map()
+        if (reactorIds.length > 0) {
+          const { data: profs } = await supabase.from("profiles").select("id, display_name, username").in("id", reactorIds)
+          ;(profs || []).forEach((x) => profMap.set(x.id, x))
+        }
+        ;(commLikes || []).forEach((r) => {
+          const k = "community:" + r.post_id
+          if (!topReactorsMap.has(k)) topReactorsMap.set(k, [])
+          const arr = topReactorsMap.get(k)
+          if (arr.length < 3) arr.push({ name: profMap.get(r.user_id)?.display_name || profMap.get(r.user_id)?.username || "Someone", emoji: r.reaction || "❤️" })
+        })
+      }
+
+      if (personalIds.length > 0) {
+        const { data: personalLikes } = await supabase
+          .from("user_post_likes")
+          .select("post_id, user_id, reaction, created_at")
+          .in("post_id", personalIds)
+          .order("created_at", { ascending: false })
+        const reactorIds = [...new Set((personalLikes || []).map((r) => r.user_id))].slice(0, 100)
+        let profMap = new Map()
+        if (reactorIds.length > 0) {
+          const { data: profs } = await supabase.from("profiles").select("id, display_name, username").in("id", reactorIds)
+          ;(profs || []).forEach((x) => profMap.set(x.id, x))
+        }
+        ;(personalLikes || []).forEach((r) => {
+          const k = "personal:" + r.post_id
+          if (!topReactorsMap.has(k)) topReactorsMap.set(k, [])
+          const arr = topReactorsMap.get(k)
+          if (arr.length < 3) arr.push({ name: profMap.get(r.user_id)?.display_name || profMap.get(r.user_id)?.username || "Someone", emoji: r.reaction || "❤️" })
+        })
+      }
+
+      setTopReactors(topReactorsMap)
+    } catch (e) { console.warn("top reactors load failed", e) }
     setMyReactionTypes((cur) => {
       const merged = new Map(cur)
       myReactionTypes.forEach((v, k) => merged.set(k, v))
@@ -1456,22 +1504,42 @@ export default function Feed() {
                       className="flex items-center gap-1.5 text-muted text-[12px] active:opacity-70"
                     >
                       {(() => {
-                        const bd = reactionBreakdown.get(p._source + ":" + p.id)
+                        const key = p._source + ":" + p.id
+                        const bd = reactionBreakdown.get(key)
                         const sorted = bd ? [...bd.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3) : []
-                        return sorted.length > 0
-                          ? <span className="flex items-center gap-0.5 text-[14px]">{sorted.map(([em], i) => <span key={i}>{em}</span>)}</span>
-                          : null
+                        const reactors = topReactors.get(key) || []
+                        const total = reactionCounts.get(key) || 0
+                        const mine = myReactions.has(key)
+
+                        return (
+                          <>
+                            {sorted.length > 0 && (
+                              <span className="flex -space-x-1.5">
+                                {sorted.map(([em], i) => (
+                                  <span key={i} className="rounded-full grid place-items-center text-[11px] bg-[#0B0B14] border border-white/10" style={{ width: 18, height: 18 }}>
+                                    {em}
+                                  </span>
+                                ))}
+                              </span>
+                            )}
+                            <span className="truncate">
+                              {mine ? (
+                                <>
+                                  You{reactors.length > 1 ? `, ${reactors.filter((r) => r.name).slice(0, 1).map((r) => r.name.split(" ")[0]).join(", ")}` : ""}
+                                  {total > (reactors.length > 1 ? 2 : 1) ? ` and ${total - (reactors.length > 1 ? 2 : 1)} other${total - (reactors.length > 1 ? 2 : 1) === 1 ? "" : "s"}` : ""}
+                                </>
+                              ) : reactors[0] ? (
+                                <>
+                                  {reactors[0].name.split(" ")[0]}
+                                  {total > 1 ? ` and ${total - 1} other${total - 1 === 1 ? "" : "s"}` : ""}
+                                </>
+                              ) : (
+                                <>{total} {total === 1 ? "reaction" : "reactions"}</>
+                              )}
+                            </span>
+                          </>
+                        )
                       })()}
-                      {myReactions.has(p._source + ":" + p.id) ? (
-                        <>{(() => {
-                          const total = reactionCounts.get(p._source + ":" + p.id) || 0
-                          if (total === 1) return <>You reacted</>
-                          if (total === 2) return <>You and <strong className="text-cream">1</strong> other</>
-                          return <>You and <strong className="text-cream">{total - 1}</strong> others</>
-                        })()}</>
-                      ) : (
-                        <><strong className="text-cream">{reactionCounts.get(p._source + ":" + p.id) || 0}</strong> {reactionCounts.get(p._source + ":" + p.id) === 1 ? "reaction" : "reactions"}</>
-                      )}
                     </button>
                     {(commentCounts.get(p._source + ":" + p.id) || 0) > 0 && (
                       <button

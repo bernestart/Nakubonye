@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl } from '../lib/photo'
 import { tap } from '../lib/haptic'
+import ResharedPost from './ResharedPost'
 
 export default function CommunityFeed({ communityId, isMember }) {
 
@@ -31,7 +32,7 @@ export default function CommunityFeed({ communityId, isMember }) {
 
     const { data: rows, error: pErr } = await supabase
       .from('community_posts')
-      .select('id, author_id, content, image_path, created_at, pinned_until')
+      .select('id, author_id, content, image_path, image_paths, created_at, pinned_until, reshared_from_type, reshared_from_id, reshared_from_snapshot, reshared_include_original, is_announcement, announcement_title')
       .eq('community_id', communityId)
       .order('created_at', { ascending: false })
       .limit(50)
@@ -430,6 +431,12 @@ export default function CommunityFeed({ communityId, isMember }) {
                   <p className="text-cream/92 text-[14px] leading-[1.5] break-words whitespace-pre-wrap">
                     {post.content}
                   </p>
+                )}
+
+                {post.reshared_from_type && post.reshared_include_original && post.reshared_from_snapshot && (
+                  <div className="mt-2">
+                    <ResharedPost snapshot={{ ...post.reshared_from_snapshot, id: post.reshared_from_id, type: post.reshared_from_type }} />
+                  </div>
                 )}
 
                 {post.image_url && (
