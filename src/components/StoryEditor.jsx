@@ -16,6 +16,17 @@ const FONTS = [
   { id: "display",  name: "Display",    css: "900 1em 'Impact', 'Arial Black', sans-serif" },
   { id: "italic",   name: "Italic",     css: "italic 700 1em Georgia, serif" },
 ]
+const TEMPLATES = [
+  { id: "classic",  label: "Classic",  fontId: "sans",       color: "#ffffff", size: 24, style: "plain" },
+  { id: "punch",    label: "Punch",    fontId: "sans",       color: "#ffffff", size: 26, style: "bg" },
+  { id: "outline",  label: "Outline",  fontId: "sans",       color: "#ffffff", size: 26, style: "outline" },
+  { id: "serif",    label: "Serif",    fontId: "serif",      color: "#ffffff", size: 26, style: "plain" },
+  { id: "sunset",   label: "Sunset",   fontId: "serif",      color: "#FB923C", size: 26, style: "plain" },
+  { id: "neon",     label: "Neon",     fontId: "sans",       color: "#F472B6", size: 26, style: "bg" },
+  { id: "boldpop",  label: "Bold Pop", fontId: "display",    color: "#FDE047", size: 28, style: "bg" },
+  { id: "handw",    label: "Handwrite",fontId: "hand",       color: "#ffffff", size: 26, style: "plain" },
+]
+
 const STICKER_LIB = ["❤️","😂","😍","🥰","🔥","✨","💯","👏","🙌","😎","🤩","😘","💜","💕","🌸","🌈","☀️","⭐","🎉","🎈","🍀","🌹","🦋","🍕","☕","🎶","⚡","💫","🌙","👑"]
 const FILTERS = [
   { id: "none",    name: "Original", css: "none" },
@@ -29,6 +40,8 @@ const FILTERS = [
 ]
 
 export default function StoryEditor({ src, onCancel, onSave }) {
+  const { session } = useAuth()
+  const myId = session?.user?.id
   const wrapRef = useRef(null)
   const canvasRef = useRef(null)
   const baseImgRef = useRef(null)
@@ -53,8 +66,36 @@ export default function StoryEditor({ src, onCancel, onSave }) {
   const [activeId, setActiveId] = useState(null)
   const [filterId, setFilterId] = useState("none")
   const [caption, setCaption] = useState("")
+  const [mentionResults, setMentionResults] = useState([])
+  const [mentionQuery, setMentionQuery] = useState(null)
   const [audience, setAudience] = useState("Everyone")
   const [toast, setToast] = useState("")
+  // @mention autocomplete — fetch people as the user types @query
+  useEffect(() => {
+    const text = caption || ""
+    const m = text.match(/@([a-z0-9_]{0,20})$/i)
+    if (!m) {
+      setMentionQuery(null); setMentionResults([])
+      return
+    }
+    const q = m[1].toLowerCase()
+    setMentionQuery(q)
+    const t = setTimeout(async () => {
+      try {
+        let query = supabase.from("profiles").select("id, display_name, username, is_verified").limit(8)
+        if (q.length >= 1) {
+          query = query.or(`username.ilike.${q}%,display_name.ilike.${q}%`)
+        } else {
+          query = query.order("last_seen_at", { ascending: false, nullsFirst: false })
+        }
+        if (myId) query = query.neq("id", myId)
+        const { data } = await query
+        setMentionResults(data || [])
+      } catch (e) { console.warn("mention lookup failed", e) }
+    }, 200)
+    return () => clearTimeout(t)
+  }, [caption, myId])
+
   function showToast(msg) {
     setToast(msg)
     setTimeout(() => setToast(""), 1600)
@@ -646,6 +687,32 @@ export default function StoryEditor({ src, onCancel, onSave }) {
             Swipe up for filters...
           </button>
 
+          {mentionResults.length > 0 && mentionQuery !== null && (
+            <div className="w-full max-h-40 overflow-y-auto rounded-2xl bg-black/75 backdrop-blur-md border border-white/15 shadow-2xl mb-2">
+              {mentionResults.map((u) => (
+                <button
+                  key={u.id}
+                  onClick={() => {
+                    tap("light")
+                    setCaption((c) => c.replace(/@([a-z0-9_]{0,20})$/i, "@" + (u.username || "") + " "))
+                    setMentionResults([]); setMentionQuery(null)
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-left active:bg-white/[0.06] border-b border-white/6 last:border-b-0"
+                >
+                  <span className="w-8 h-8 rounded-full bg-purple-600 grid place-items-center text-white font-black text-[11px] shrink-0">
+                    {(u.display_name || u.username || "?")[0].toUpperCase()}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white text-[12.5px] font-semibold truncate">
+                      {u.display_name || u.username}
+                    </p>
+                    {u.username && <p className="text-white/60 text-[10.5px] truncate">@{u.username}</p>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="w-full bg-black/50 backdrop-blur-md border border-white/15 rounded-full px-4 py-3 flex items-center gap-3 text-white shadow-2xl">
             <ImageIcon size={18} className="text-white/70" />
             <input
@@ -771,6 +838,27 @@ export default function StoryEditor({ src, onCancel, onSave }) {
             autoFocus
             className="h-11 rounded-full bg-white/[0.08] px-4 text-white text-[14px] placeholder:text-white/50 focus:outline-none"
           />
+          <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+            {TEMPLATES.map((tpl) => {
+              const active = texts.find((x) => x.id === activeId)
+              const isMatch = active && active.fontId === tpl.fontId && active.style === tpl.style && active.color === tpl.color
+              return (
+                <button
+                  key={tpl.id}
+                  onClick={() => setTexts((arr) => arr.map((x) => (x.id === activeId ? { ...x, fontId: tpl.fontId, color: tpl.color, size: tpl.size, style: tpl.style } : x)))}
+                  className="shrink-0 h-9 px-3 rounded-full text-white text-[12px] border"
+                  style={{
+                    borderColor: isMatch ? "#fff" : "rgba(255,255,255,0.15)",
+                    background: isMatch ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.06)",
+                  }}
+                  aria-label={"Apply template " + tpl.label}
+                >
+                  {tpl.label}
+                </button>
+              )
+            })}
+          </div>
+
           <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
             {[
               { id: "plain",   label: "Plain" },
