@@ -85,7 +85,6 @@ export default function AppHeader({ onScrollTop }) {
           className="w-8 h-8 rounded-[10px] grid place-items-center shrink-0 active:scale-95 transition-transform"
           style={{
             background: "linear-gradient(135deg, #C084FC 0%, #A855F7 50%, #EC4899 100%)",
-            boxShadow: "0 4px 14px rgba(168,85,247,0.4)",
           }}
         >
           <span className="text-white font-black text-[15px] leading-none">N</span>
@@ -96,21 +95,13 @@ export default function AppHeader({ onScrollTop }) {
           <button
             onClick={openOnline}
             aria-label={onlineCount + " people online"}
-            className="h-7 px-3 rounded-full flex items-center gap-1.5 transition-all"
-            style={{
-              background: "rgba(34,197,94,0.12)",
-              border: "1px solid rgba(34,197,94,0.35)",
-            }}
+            className="h-7 px-2.5 rounded-full flex items-center gap-1.5 transition-all"
           >
             <span
               className="w-1.5 h-1.5 rounded-full"
-              style={{
-                background: "#22C55E",
-                boxShadow: "0 0 8px rgba(34,197,94,0.9)",
-                animation: "pulse-dot 2s ease-in-out infinite",
-              }}
+              style={{ background: "#22C55E" }}
             />
-            <span className="text-[11.5px] font-bold tracking-tight" style={{ color: "#4ADE80" }}>
+            <span className="text-[11.5px] font-semibold tracking-tight" style={{ color: "#4ADE80" }}>
               {onlineCount} online
             </span>
           </button>
@@ -122,12 +113,8 @@ export default function AppHeader({ onScrollTop }) {
             onClick={() => { tap("light"); nav("/create") }}
             aria-label="Create"
             className="w-9 h-9 rounded-full grid place-items-center active:scale-95 transition-transform"
-            style={{
-              background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)",
-              boxShadow: "0 4px 12px rgba(236,72,153,0.4)",
-            }}
           >
-            <Plus size={20} color="#fff" strokeWidth={2.6} />
+            <Plus size={22} color="#EC4899" strokeWidth={2.6} />
           </button>
 
           <button
