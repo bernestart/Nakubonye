@@ -7,7 +7,7 @@ import { tap } from "../lib/haptic"
 import VerifiedBadge from "./VerifiedBadge"
 import ResharedPost from "./ResharedPost"
 
-export default function ProfilePostCard({ post, authorProfile, authorPhoto, isMe, onOpenMenu, reactionCount = 0, liked = false, reactionEmoji = "❤️", commentCount = 0, onToggleLike, topReactors = [] }) {
+export default function ProfilePostCard({ post, authorProfile, authorPhoto, isMe, onOpenMenu, reactionCount = 0, liked = false, reactionEmoji = "❤️", commentCount = 0, shareCount = 0, onToggleLike, onOpenReposts, topReactors = [] }) {
   const nav = useNavigate()
   const imageUrl = post.image_path
     ? supabase.storage.from("community-media").getPublicUrl(post.image_path).data?.publicUrl
@@ -87,7 +87,7 @@ export default function ProfilePostCard({ post, authorProfile, authorPhoto, isMe
       )}
 
       {/* Engagement summary */}
-      {(reactionCount > 0 || commentCount > 0) && (
+      {(reactionCount > 0 || commentCount > 0 || shareCount > 0) && (
         <div className="flex items-center justify-between px-4 py-2 border-t border-white/5">
           {reactionCount > 0 ? (
             <span className="text-muted text-[12px] flex items-center gap-2">
@@ -117,14 +117,24 @@ export default function ProfilePostCard({ post, authorProfile, authorPhoto, isMe
               </span>
             </span>
           ) : <span />}
-          {commentCount > 0 && (
-            <button
-              onClick={() => { tap("light"); nav("/post/" + post._source + "/" + post.id) }}
-              className="text-muted text-[12px] active:opacity-70"
-            >
-              {commentCount} comment{commentCount === 1 ? "" : "s"}
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {commentCount > 0 && (
+              <button
+                onClick={() => { tap("light"); nav("/post/" + post._source + "/" + post.id) }}
+                className="text-muted text-[12px] active:opacity-70"
+              >
+                {commentCount} comment{commentCount === 1 ? "" : "s"}
+              </button>
+            )}
+            {shareCount > 0 && (
+              <button
+                onClick={() => { tap("light"); onOpenReposts?.(post) }}
+                className="text-muted text-[12px] active:opacity-70"
+              >
+                {shareCount} share{shareCount === 1 ? "" : "s"}
+              </button>
+            )}
+          </div>
         </div>
       )}
 

@@ -16,6 +16,7 @@ import ProfilePersonalDetails from '../components/ProfilePersonalDetails'
 import ProfileMenuSheet from '../components/ProfileMenuSheet'
 import ResharedPost from '../components/ResharedPost'
 import ProfilePostCard from '../components/ProfilePostCard'
+import RepostsSheet from '../components/RepostsSheet'
 import MutualConnections from '../components/MutualConnections'
 import PhotoViewer from '../components/PhotoViewer'
 import ReelViewer from '../components/ReelViewer'
@@ -44,6 +45,8 @@ export default function ProfileView() {
   const [profileMyReactionTypes, setProfileMyReactionTypes] = useState(new Map())
   const [profileCommentCounts, setProfileCommentCounts] = useState(new Map())
   const [profileTopReactors, setProfileTopReactors] = useState(new Map())  // key → [{name, emoji}]
+  const [profileShareCounts, setProfileShareCounts] = useState(new Map())
+  const [repostsFor, setRepostsFor] = useState(null)
   const [reels, setReels] = useState([])
   const [followersCount, setFollowersCount] = useState(0)
   const [followedBy, setFollowedBy] = useState({ people: [], more: 0 })
@@ -757,6 +760,8 @@ export default function ProfileView() {
                           reactionEmoji={profileMyReactionTypes.get(p._source + ":" + p.id) || "❤️"}
                           commentCount={profileCommentCounts.get(p._source + ":" + p.id) || 0}
                           topReactors={profileTopReactors.get(p._source + ":" + p.id) || []}
+                          shareCount={profileShareCounts.get(p._source + ":" + p.id) || 0}
+                          onOpenReposts={(post) => setRepostsFor({ id: post.id, source: post._source })}
                           onToggleLike={async () => {
                             const key = p._source + ":" + p.id
                             const isLiked = profileMyReactions.has(key)
@@ -899,6 +904,14 @@ export default function ProfileView() {
           reel={playingReel}
           currentUserId={myId}
           onClose={() => setPlayingReel(null)}
+        />
+      )}
+
+      {repostsFor && (
+        <RepostsSheet
+          postId={repostsFor.id}
+          postType={repostsFor.source}
+          onClose={() => setRepostsFor(null)}
         />
       )}
 

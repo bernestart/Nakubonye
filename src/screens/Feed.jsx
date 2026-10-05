@@ -81,6 +81,7 @@ import MatchModal from "../components/MatchModal"
 import PostCommentsSheet from "../components/PostCommentsSheet"
 import PostActionsSheet from "../components/PostActionsSheet"
 import ShareSheet from "../components/ShareSheet"
+import RepostsSheet from "../components/RepostsSheet"
 import ReactionPicker from "../components/ReactionPicker"
 import FollowButton from "../components/FollowButton"
 import PostComposer from "../components/PostComposer"
@@ -101,6 +102,7 @@ export default function Feed() {
   const [myReactions, setMyReactions] = useState(new Set())
   const [reactionCounts, setReactionCounts] = useState(new Map())
   const [shareCounts, setShareCounts] = useState(new Map())
+  const [repostsFor, setRepostsFor] = useState(null)
   const [pickerFor, setPickerFor] = useState(null)
   const [myReactionTypes, setMyReactionTypes] = useState(new Map())
   const [reactionBreakdown, setReactionBreakdown] = useState(new Map())
@@ -1551,9 +1553,13 @@ export default function Feed() {
                       </button>
                     )}
                     {(shareCounts.get(p._source + ":" + p.id) || 0) > 0 && (
-                      <span className="text-muted text-[12px]">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); tap("light"); setRepostsFor({ id: p.id, source: p._source }) }}
+                        className="text-muted text-[12px] active:opacity-70"
+                      >
                         {shareCounts.get(p._source + ":" + p.id)} {shareCounts.get(p._source + ":" + p.id) === 1 ? "share" : "shares"}
-                      </span>
+                      </button>
                     )}
                   </div>
                 )}
@@ -1762,6 +1768,14 @@ export default function Feed() {
           onClose={() => setActionsFor(null)}
           onDeleted={(id) => setPosts((arr) => arr.filter((x) => x.id !== id || x._source !== actionsFor._source))}
           onUpdated={(next) => setPosts((arr) => arr.map((x) => (x.id === next.id && x._source === actionsFor._source) ? { ...x, ...next } : x))}
+        />
+      )}
+
+      {repostsFor && (
+        <RepostsSheet
+          postId={repostsFor.id}
+          postType={repostsFor.source}
+          onClose={() => setRepostsFor(null)}
         />
       )}
 
