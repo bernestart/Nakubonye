@@ -43,6 +43,8 @@ export default function GroupChat() {
   const [photos, setPhotos] = useState(new Map())
   const [messages, setMessages] = useState([])
   const [text, setText] = useState("")
+  const [mentionResults, setMentionResults] = useState([])
+  const [mentionQuery, setMentionQuery] = useState(null)
   const [attachment, setAttachment] = useState(null)
   const [attachmentPreview, setAttachmentPreview] = useState("")
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
@@ -141,6 +143,25 @@ export default function GroupChat() {
   }, [groupId, myId])
 
   useEffect(() => { boot() }, [boot])
+
+  // @mention autocomplete
+  useEffect(() => {
+    const t = text || ""
+    const m = t.match(/@([a-z0-9_]{0,20})$/i)
+    if (!m) { setMentionQuery(null); setMentionResults([]); return }
+    const q = m[1].toLowerCase()
+    setMentionQuery(q)
+    const timer = setTimeout(async () => {
+      try {
+        let query = supabase.from("profiles").select("id, display_name, username, is_verified").limit(8)
+        if (q.length >= 1) query = query.or(`username.ilike.${q}%,display_name.ilike.${q}%`)
+        if (myId) query = query.neq("id", myId)
+        const { data } = await query
+        setMentionResults(data || [])
+      } catch (e) { console.warn("mention lookup failed", e) }
+    }, 200)
+    return () => clearTimeout(timer)
+  }, [text, myId])
 
   // Mark this group as read for me
   useEffect(() => {
@@ -904,6 +925,30 @@ export default function GroupChat() {
           <span className="text-cream text-[14px] font-semibold flex-1">
             Recording · {String(Math.floor(voice.seconds / 60)).padStart(2, "0")}:{String(voice.seconds % 60).padStart(2, "0")}
           </span>
+        </div>
+      )}
+
+      {mentionResults.length > 0 && mentionQuery !== null && (
+        <div className="shrink-0 mx-3 mb-2 max-h-40 overflow-y-auto rounded-2xl bg-elevated border border-white/10 z-20">
+          {mentionResults.map((u) => (
+            <button
+              key={u.id}
+              onClick={() => {
+                tap("light")
+                setText((c) => c.replace(/@([a-z0-9_]{0,20})$/i, "@" + (u.username || "") + " "))
+                setMentionResults([]); setMentionQuery(null)
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-left active:bg-white/[0.04] border-b border-white/6 last:border-b-0"
+            >
+              <span className="w-8 h-8 rounded-full bg-purple-600 grid place-items-center text-white font-black text-[11px] shrink-0">
+                {(u.display_name || u.username || "?")[0].toUpperCase()}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-cream text-[13px] font-semibold truncate">{u.display_name || u.username}</p>
+                {u.username && <p className="text-muted text-[11px] truncate">@{u.username}</p>}
+              </div>
+            </button>
+          ))}
         </div>
       )}
 
