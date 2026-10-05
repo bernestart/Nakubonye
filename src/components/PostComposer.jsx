@@ -19,6 +19,8 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
   const fileRef = useRef(null)
   const handedOffRef = useRef(false)
   const [content, setContent] = useState("")
+  const [mentionResults, setMentionResults] = useState([])
+  const [mentionQuery, setMentionQuery] = useState(null)
   const [imageFiles, setImageFiles] = useState([])
   const [imagePreviews, setImagePreviews] = useState([])
   const [audience, setAudience] = useState("public")
@@ -70,6 +72,25 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
       }
     } catch {}
   }, [])
+
+  // @mention autocomplete
+  useEffect(() => {
+    const text = content || ""
+    const m = text.match(/@([a-z0-9_]{0,20})$/i)
+    if (!m) { setMentionQuery(null); setMentionResults([]); return }
+    const q = m[1].toLowerCase()
+    setMentionQuery(q)
+    const t = setTimeout(async () => {
+      try {
+        let query = supabase.from("profiles").select("id, display_name, username, is_verified").limit(8)
+        if (q.length >= 1) query = query.or(`username.ilike.${q}%,display_name.ilike.${q}%`)
+        if (myId) query = query.neq("id", myId)
+        const { data } = await query
+        setMentionResults(data || [])
+      } catch (e) { console.warn("mention lookup failed", e) }
+    }, 200)
+    return () => clearTimeout(t)
+  }, [content, myId])
 
   useEffect(() => {
     if (!resumeDraftId) return
@@ -410,6 +431,30 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
                 className="mt-2 rounded-xl max-h-48 w-full object-cover"
               />
             )}
+          </div>
+        )}
+
+        {mentionResults.length > 0 && mentionQuery !== null && (
+          <div className="mb-3 max-h-40 overflow-y-auto rounded-2xl bg-elevated border border-white/10">
+            {mentionResults.map((u) => (
+              <button
+                key={u.id}
+                onClick={() => {
+                  tap("light")
+                  setContent((c) => c.replace(/@([a-z0-9_]{0,20})$/i, "@" + (u.username || "") + " "))
+                  setMentionResults([]); setMentionQuery(null)
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-left active:bg-white/[0.04] border-b border-white/6 last:border-b-0"
+              >
+                <span className="w-8 h-8 rounded-full bg-purple-600 grid place-items-center text-white font-black text-[11px] shrink-0">
+                  {(u.display_name || u.username || "?")[0].toUpperCase()}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-cream text-[13px] font-semibold truncate">{u.display_name || u.username}</p>
+                  {u.username && <p className="text-muted text-[11px] truncate">@{u.username}</p>}
+                </div>
+              </button>
+            ))}
           </div>
         )}
 
