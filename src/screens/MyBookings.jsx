@@ -147,12 +147,12 @@ export default function MyBookings() {
         {loading ? (
           <div className="flex flex-col gap-3">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="rounded-2xl bg-white/[0.03] animate-pulse" style={{ height: 140 }} />
+              <div key={i} className="border-b border-white/6 bg-white/[0.02] animate-pulse" style={{ height: 140 }} />
             ))}
           </div>
         ) : displayed.length === 0 ? (
           <div className="text-center py-16 px-6">
-            <div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/8 grid place-items-center mx-auto mb-4">
+            <div className="w-16 h-16 rounded-full bg-white/[0.04] grid place-items-center mx-auto mb-4">
               {tab === 'requests' ? <Inbox size={26} className="text-muted" /> : <Calendar size={26} className="text-muted" />}
             </div>
             <p className="text-cream font-bold text-[15px] mb-1">
@@ -249,7 +249,7 @@ function BookingCard({ booking, myId, peopleMap, servicesMap, busy, onOpen, onOp
       {/* Notes */}
       {booking.notes && (
         <div className="px-3 pb-3">
-          <p className="text-[12px] text-muted italic bg-white/[0.03] border border-white/8 rounded-xl px-3 py-2">
+          <p className="text-[12px] text-muted italic border-l-2 border-white/15 pl-3">
             "{booking.notes}"
           </p>
         </div>
