@@ -494,10 +494,10 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
                 </button>
                 <button
                   onClick={() => sendReaction("❤️")}
-                  className="w-11 h-11 rounded-full grid place-items-center shrink-0 bg-white/10 border border-white/20 backdrop-blur-md"
+                  className="w-10 h-10 rounded-full grid place-items-center shrink-0 bg-black/35 backdrop-blur-sm border border-white/15"
                   aria-label="Like story"
                 >
-                  <Heart size={20} fill="#EC4899" color="#EC4899" />
+                  <Heart size={19} fill="#EC4899" color="#EC4899" />
                 </button>
               </>
             )}
@@ -507,7 +507,7 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
 
       {/* Reaction picker */}
       {reactionOpen && !isMine && (
-        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30 flex gap-1 p-2 rounded-full bg-elevated border border-white/15 backdrop-blur-md shadow-2xl"
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30 flex gap-0.5 p-1.5 rounded-full bg-black/70 backdrop-blur-md border border-white/12 shadow-2xl"
              onClick={(e) => e.stopPropagation()}>
           {REACTIONS.map((e) => (
             <button
