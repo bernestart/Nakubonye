@@ -523,7 +523,7 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
   if (!isMember) {
     return (
       <div className="text-center py-12">
-        <div className="w-14 h-14 rounded-2xl bg-white/[0.04] border border-white/8 grid place-items-center mx-auto mb-4">
+        <div className="w-14 h-14 rounded-full bg-white/[0.04] border border-white/8 grid place-items-center mx-auto mb-4">
           <Send size={22} strokeWidth={1.8} className="text-muted" />
         </div>
         <p className="text-cream font-semibold text-[14.5px] mb-1">Join to chat</p>
@@ -581,21 +581,21 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             <button
               onClick={() => { setMenuOpen(false); toggleMute() }}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]"
             >
               {isMuted ? <Bell size={18} /> : <BellOff size={18} />}
               <span className="font-semibold text-[14px]">{isMuted ? "Unmute notifications" : "Mute notifications"}</span>
             </button>
             <button
               onClick={() => { setMenuOpen(false); clearChat() }}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]"
             >
               <Eraser size={18} />
               <span className="font-semibold text-[14px]">Clear chat</span>
             </button>
             <button
               onClick={() => { setMenuOpen(false); setReportOpen(true) }}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]"
             >
               <Flag size={18} />
               <span className="font-semibold text-[14px]">Report</span>
@@ -964,20 +964,20 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             <button
               onClick={() => { setAttachMenuOpen(false); setTimeout(() => cameraInputRef.current?.click(), 100) }}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]"
             >
               <Camera size={18} className="text-purple-300" />
               <span className="font-semibold text-[14px]">Take photo</span>
             </button>
             <button
               onClick={() => { setAttachMenuOpen(false); setTimeout(() => fileInputRef.current?.click(), 100) }}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]"
             >
               <Paperclip size={18} className="text-purple-300" />
               <span className="font-semibold text-[14px]">Choose from gallery</span>
             </button>
             <button onClick={() => { setAttachMenuOpen(false); setTimeout(() => setPollComposerOpen(true), 120) }}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream">
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]">
               <span className="text-purple-300 text-[18px]">📊</span>
               <span className="font-semibold text-[14px]">Create a poll</span>
             </button>
