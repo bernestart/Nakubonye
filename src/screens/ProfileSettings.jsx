@@ -110,73 +110,73 @@ export default function ProfileSettings() {
         <div className="flex flex-col gap-1.5 mb-4">
           <button
             onClick={() => { tap('light'); setComposerOpen(true) }}
-            className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-surface border border-white/8 text-left text-cream"
+            className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
           >
-            <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0">
+            <span className="shrink-0 text-cream">
               <Plus size={18} />
             </span>
-            <span className="flex-1 font-semibold text-[14.5px]">Add to your story</span>
-            <ChevronRight size={18} className="text-subtle" />
+            <span className="flex-1 text-cream text-[15px] font-medium">Add to your story</span>
+            <ChevronRight size={18} className="text-muted shrink-0" />
           </button>
           <button
             onClick={() => { tap('light'); nav('/invite') }}
-            className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-surface border border-white/8 text-left text-cream"
+            className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
           >
-            <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0">
+            <span className="shrink-0 text-cream">
               <Gift size={18} />
             </span>
-            <span className="flex-1 font-semibold text-[14.5px]">Invite friends</span>
-            <ChevronRight size={18} className="text-subtle" />
+            <span className="flex-1 text-cream text-[15px] font-medium">Invite friends</span>
+            <ChevronRight size={18} className="text-muted shrink-0" />
           </button>
           <button
             onClick={() => { tap('light'); nav('/saved') }}
-            className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-surface border border-white/8 text-left text-cream"
+            className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
           >
-            <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0">
+            <span className="shrink-0 text-cream">
               <Bookmark size={18} />
             </span>
-            <span className="flex-1 font-semibold text-[14.5px]">Saved</span>
-            <ChevronRight size={18} className="text-subtle" />
+            <span className="flex-1 text-cream text-[15px] font-medium">Saved</span>
+            <ChevronRight size={18} className="text-muted shrink-0" />
           </button>
           <button
             onClick={() => { tap('light'); nav('/story-archive') }}
-            className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-surface border border-white/8 text-left text-cream"
+            className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
           >
-            <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0">
+            <span className="shrink-0 text-cream">
               <Clock size={18} />
             </span>
-            <span className="flex-1 font-semibold text-[14.5px]">Story archive</span>
-            <ChevronRight size={18} className="text-subtle" />
+            <span className="flex-1 text-cream text-[15px] font-medium">Story archive</span>
+            <ChevronRight size={18} className="text-muted shrink-0" />
           </button>
           <button
             onClick={() => { tap('light'); nav('/memories') }}
-            className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-surface border border-white/8 text-left text-cream"
+            className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
           >
-            <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0">
+            <span className="shrink-0 text-cream">
               <Camera size={18} />
             </span>
-            <span className="flex-1 font-semibold text-[14.5px]">Memories</span>
-            <ChevronRight size={18} className="text-subtle" />
+            <span className="flex-1 text-cream text-[15px] font-medium">Memories</span>
+            <ChevronRight size={18} className="text-muted shrink-0" />
           </button>
           <button
             onClick={() => { tap('light'); nav('/drafts') }}
-            className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-surface border border-white/8 text-left text-cream"
+            className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
           >
-            <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0">
+            <span className="shrink-0 text-cream">
               <FileText size={18} />
             </span>
-            <span className="flex-1 font-semibold text-[14.5px]">Drafts</span>
-            <ChevronRight size={18} className="text-subtle" />
+            <span className="flex-1 text-cream text-[15px] font-medium">Drafts</span>
+            <ChevronRight size={18} className="text-muted shrink-0" />
           </button>
           <button
             onClick={() => { tap('light'); nav('/offline-reels') }}
-            className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-surface border border-white/8 text-left text-cream"
+            className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
           >
-            <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0">
+            <span className="shrink-0 text-cream">
               <WifiOff size={18} />
             </span>
-            <span className="flex-1 font-semibold text-[14.5px]">Offline reels</span>
-            <ChevronRight size={18} className="text-subtle" />
+            <span className="flex-1 text-cream text-[15px] font-medium">Offline reels</span>
+            <ChevronRight size={18} className="text-muted shrink-0" />
           </button>
         </div>
 
@@ -252,11 +252,11 @@ export default function ProfileSettings() {
             }}
             className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-surface border border-white/8 text-left text-danger"
           >
-            <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0">
+            <span className="shrink-0 text-cream">
               <LogOut size={18} />
             </span>
-            <span className="flex-1 font-semibold text-[14.5px]">Log out</span>
-            <ChevronRight size={18} className="text-subtle" />
+            <span className="flex-1 text-cream text-[15px] font-medium">Log out</span>
+            <ChevronRight size={18} className="text-muted shrink-0" />
           </button>
         </div>
 
@@ -278,13 +278,13 @@ function Collapsible({ icon, label, open, onToggle, children }) {
     <div className="mb-2">
       <button
         onClick={onToggle}
-        className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-surface border border-white/8 text-left text-cream"
+        className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
       >
-        <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0">
+        <span className="shrink-0 text-cream">
           {icon}
         </span>
-        <span className="flex-1 font-semibold text-[14.5px]">{label}</span>
-        {open ? <ChevronDown size={18} className="text-subtle" /> : <ChevronRight size={18} className="text-subtle" />}
+        <span className="flex-1 text-cream text-[15px] font-medium">{label}</span>
+        {open ? <ChevronDown size={18} className="text-subtle" /> : <ChevronRight size={18} className="text-muted shrink-0" />}
       </button>
       {open && (
         <div className="flex flex-col gap-1.5 mt-1.5 pl-3">
@@ -325,13 +325,13 @@ function MenuRow({ icon, label, to, nav }) {
   return (
     <button
       onClick={() => { tap('light'); nav(to) }}
-      className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-surface border border-white/8 text-left text-cream"
+      className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
     >
-      <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0">
+      <span className="shrink-0 text-cream">
         {icon}
       </span>
-      <span className="flex-1 font-semibold text-[14.5px]">{label}</span>
-      <ChevronRight size={18} className="text-subtle" />
+      <span className="flex-1 text-cream text-[15px] font-medium">{label}</span>
+      <ChevronRight size={18} className="text-muted shrink-0" />
     </button>
   )
 }
