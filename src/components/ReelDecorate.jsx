@@ -14,13 +14,31 @@ const FILTERS = [
   { id: "noir",    name: "Noir",     css: "grayscale(1) contrast(1.3) brightness(0.95)" },
 ]
 
+const REEL_TEXT_TEMPLATES = [
+  { id: "classic",  label: "Classic",  fontId: "sans",    color: "#ffffff", size: 28, style: "plain" },
+  { id: "punch",    label: "Punch",    fontId: "sans",    color: "#ffffff", size: 30, style: "bg" },
+  { id: "outline",  label: "Outline",  fontId: "sans",    color: "#ffffff", size: 30, style: "outline" },
+  { id: "serif",    label: "Serif",    fontId: "serif",   color: "#ffffff", size: 30, style: "plain" },
+  { id: "sunset",   label: "Sunset",   fontId: "serif",   color: "#FB923C", size: 30, style: "plain" },
+  { id: "neon",     label: "Neon",     fontId: "sans",    color: "#F472B6", size: 30, style: "bg" },
+  { id: "boldpop",  label: "Bold Pop", fontId: "display", color: "#FDE047", size: 32, style: "bg" },
+]
+
+const FONTS_BY_ID = {
+  sans:      "system-ui, -apple-system, sans-serif",
+  serif:     "Georgia, serif",
+  hand:      "'Brush Script MT', cursive",
+  mono:      "'Courier New', monospace",
+  display:   "'Impact', 'Arial Black', sans-serif",
+}
+
 export default function ReelDecorate({ clips, onBack, onNext, initialOverlays }) {
   const videoRef = useRef(null)
   const [clipIdx, setClipIdx] = useState(0)
   const [textOverlays, setTextOverlays] = useState(initialOverlays || [])
   const [activeTextId, setActiveTextId] = useState(null)
   const [textSheetOpen, setTextSheetOpen] = useState(false)
-  const [textDraft, setTextDraft] = useState({ text: "", color: "#ffffff", size: 28 })
+  const [textDraft, setTextDraft] = useState({ text: "", color: "#ffffff", size: 28, fontId: "sans", style: "plain" })
   const [dragging, setDragging] = useState(null)
   const [toast, setToast] = useState("")
   const [stickerOverlays, setStickerOverlays] = useState([])
@@ -164,7 +182,7 @@ export default function ReelDecorate({ clips, onBack, onNext, initialOverlays })
       <div className="absolute right-4 top-20 z-30 flex flex-col items-end gap-4">
         {[
           { label: "Audio",    icon: <Music size={18} />,      onClick: () => showToast("Audio coming soon") },
-          { label: "Text",     icon: <Type size={18} />,       onClick: () => { setActiveTextId(null); setTextDraft({ text: "", color: "#ffffff", size: 28 }); setTextSheetOpen(true) } },
+          { label: "Text",     icon: <Type size={18} />,       onClick: () => { setActiveTextId(null); setTextDraft({ text: "", color: "#ffffff", size: 28, fontId: "sans", style: "plain" }); setTextSheetOpen(true) } },
           { label: "Effects",  icon: <Sparkles size={18} />,   onClick: () => setFilterCarouselOpen(true) },
           { label: "Stickers", icon: <Smile size={18} />,      onClick: () => setStickerSheetOpen(true) },
           { label: "Save",     icon: <Download size={18} />,   onClick: saveAsDraft },
@@ -225,25 +243,34 @@ export default function ReelDecorate({ clips, onBack, onNext, initialOverlays })
               onClick={(e) => {
                 e.stopPropagation()
                 setActiveTextId(t.id)
-                setTextDraft({ text: t.text, color: t.color, size: t.size })
+                setTextDraft({ text: t.text, color: t.color, size: t.size, fontId: t.fontId || "sans", style: t.style || "plain" })
                 setTextSheetOpen(true)
               }}
-              style={{
-                position: "absolute",
-                left: t.x * 100 + "%",
-                top: t.y * 100 + "%",
-                transform: "translate(-50%, -50%)",
-                color: t.color,
-                fontWeight: 900,
-                fontSize: t.size,
-                textShadow: "0 2px 12px rgba(0,0,0,0.85)",
-                WebkitTextStroke: "0.5px rgba(0,0,0,0.5)",
-                whiteSpace: "nowrap",
-                zIndex: 5,
-                padding: 4,
-                border: activeTextId === t.id ? "1px dashed rgba(255,255,255,0.7)" : "none",
-                touchAction: "none",
-              }}
+              style={(() => {
+                const fontFamily = FONTS_BY_ID[t.fontId] || FONTS_BY_ID.sans
+                const base = {
+                  position: "absolute",
+                  left: t.x * 100 + "%",
+                  top: t.y * 100 + "%",
+                  transform: "translate(-50%, -50%)",
+                  color: t.color,
+                  fontWeight: 900,
+                  fontFamily,
+                  fontSize: t.size,
+                  whiteSpace: "nowrap",
+                  zIndex: 5,
+                  padding: 4,
+                  border: activeTextId === t.id ? "1px dashed rgba(255,255,255,0.7)" : "none",
+                  touchAction: "none",
+                }
+                if (t.style === "bg") {
+                  return { ...base, background: t.color === "#ffffff" ? "rgba(0,0,0,0.65)" : t.color, color: t.color === "#ffffff" ? "#ffffff" : "#0B0B14", padding: "6px 12px", borderRadius: 10, textShadow: "none" }
+                }
+                if (t.style === "outline") {
+                  return { ...base, WebkitTextStroke: "1.5px rgba(0,0,0,0.95)", textShadow: "0 2px 12px rgba(0,0,0,0.6)" }
+                }
+                return { ...base, textShadow: "0 2px 12px rgba(0,0,0,0.85)", WebkitTextStroke: "0.5px rgba(0,0,0,0.5)" }
+              })()}
             >
               {t.text || "Tap to type"}
             </button>
@@ -288,6 +315,25 @@ export default function ReelDecorate({ clips, onBack, onNext, initialOverlays })
               autoFocus
               className="h-12 rounded-full bg-white/[0.06] border border-white/10 px-5 text-cream text-[15px] placeholder:text-subtle focus:outline-none focus:border-purple-500"
             />
+            <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+              {REEL_TEXT_TEMPLATES.map((tpl) => {
+                const active = textDraft.fontId === tpl.fontId && textDraft.style === tpl.style && textDraft.color === tpl.color
+                return (
+                  <button
+                    key={tpl.id}
+                    onClick={() => setTextDraft((d) => ({ ...d, fontId: tpl.fontId, color: tpl.color, size: tpl.size, style: tpl.style }))}
+                    className="shrink-0 h-9 px-3 rounded-full text-white text-[12px] font-bold border"
+                    style={{
+                      borderColor: active ? "#fff" : "rgba(255,255,255,0.15)",
+                      background: active ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.06)",
+                    }}
+                  >
+                    {tpl.label}
+                  </button>
+                )
+              })}
+            </div>
+
             <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
               {["#ffffff","#000000","#EC4899","#A855F7","#F59E0B","#22C55E","#3B82F6","#EF4444"].map((c) => (
                 <button key={c} onClick={() => setTextDraft((d) => ({ ...d, color: c }))}
