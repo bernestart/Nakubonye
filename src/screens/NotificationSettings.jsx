@@ -84,18 +84,18 @@ export default function NotificationSettings() {
 
         {loading ? (
           <div className="p-4 flex flex-col gap-2">
-            {[0, 1, 2, 3].map((i) => <div key={i} className="h-14 rounded-2xl bg-white/[0.03] shimmer" />)}
+            {[0, 1, 2, 3].map((i) => <div key={i} className="h-14 border-b border-white/6 bg-white/[0.03] shimmer" />)}
           </div>
         ) : (
-          <div className="p-4 flex flex-col gap-1">
+          <div className="flex flex-col">
             {TOGGLES.map((t) => (
               <div
                 key={t.key}
-                className="flex items-center gap-3 p-3.5 rounded-2xl bg-white/[0.03] border border-white/8"
+                className="flex items-center gap-4 px-4 py-3.5 border-b border-white/6"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-cream font-semibold text-[14px]">{t.label}</p>
-                  <p className="text-muted text-[12px] leading-snug">{t.sub}</p>
+                  <p className="text-cream text-[15px] font-medium">{t.label}</p>
+                  <p className="text-muted text-[12px] leading-snug mt-0.5">{t.sub}</p>
                 </div>
                 <Toggle value={settings[t.key] !== false} onChange={(v) => update(t.key, v)} />
               </div>
