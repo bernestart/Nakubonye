@@ -22,6 +22,7 @@ export default function Admin() {
   const [reports, setReports] = useState([])
   const [reelReports, setReelReports] = useState([])
   const [postReports, setPostReports] = useState([])
+  const [feedbackList, setFeedbackList] = useState([])
   const [maintenanceOn, setMaintenanceOn] = useState(false)
   const [maintenanceBusy, setMaintenanceBusy] = useState(false)
   const [search, setSearch] = useState('')
@@ -285,6 +286,33 @@ export default function Admin() {
             )}
 
             {/* Reported reels */}
+            {/* Recent feedback */}
+            {feedbackList.length > 0 && (
+              <div className="mb-5">
+                <p className="text-amber-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">
+                  Recent feedback · {feedbackList.length}
+                </p>
+                <div className="flex flex-col">
+                  {feedbackList.slice(0, 15).map((f) => (
+                    <div key={f.id} className="px-3 py-2.5 border-b border-white/6">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="flex gap-0.5">
+                          {[1,2,3,4,5].map((n) => (
+                            <span key={n} className="text-[12px]" style={{ color: n <= f.rating ? "#F59E0B" : "#444" }}>★</span>
+                          ))}
+                        </span>
+                        <span className="text-cream text-[11.5px] font-bold">{f.rating}/5</span>
+                        <span className="text-subtle text-[10.5px] ml-auto">
+                          {new Date(f.created_at).toLocaleDateString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </div>
+                      {f.comment && <p className="text-cream/85 text-[12.5px] leading-snug">{f.comment}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {reelReports.length > 0 && (
               <div className="mb-5">
                 <p className="text-red-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">
