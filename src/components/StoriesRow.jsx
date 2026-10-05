@@ -7,8 +7,8 @@ import { tap } from "../lib/haptic"
 import StoryComposer from "./StoryComposer"
 import StoryViewer from "./StoryViewer"
 
-const TILE_W = 105
-const TILE_H = 170
+const TILE_W = 112
+const TILE_H = 190
 
 async function filterStoriesByVisibility(stories, myId) {
   const ownerIds = [...new Set(stories.map((r) => r.user_id).filter((id) => id !== myId))]
@@ -402,27 +402,36 @@ export default function StoriesRow() {
               className="shrink-0 relative overflow-hidden"
               style={{
                 width: TILE_W, height: TILE_H,
-                borderRadius: 14,
-                border: seen ? "2px solid rgba(255,255,255,0.15)" : "2px solid transparent",
+                borderRadius: 12,
+                border: seen ? "1.5px solid rgba(255,255,255,0.12)" : "2px solid transparent",
                 background: (() => {
-                  if (seen) return "rgba(255,255,255,0.03)"
+                  if (seen) return "rgba(255,255,255,0.02)"
                   const first = g.stories[0]
                   const aud = first?.audience
-                  // Inner Circle — green ring
                   if (aud === "inner_circle" || aud === "close") {
                     return "linear-gradient(#0B0B14,#0B0B14) padding-box, linear-gradient(135deg,#10B981,#34D399) border-box"
                   }
-                  // Matches — pink/purple (default)
                   return "linear-gradient(#0B0B14,#0B0B14) padding-box, linear-gradient(135deg,#C084FC,#EC4899) border-box"
                 })(),
               }}
             >
               {tileBody(g)}
-              <div className="absolute inset-x-0 bottom-0 px-2 pb-2 pt-6"
-                style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.75))" }}>
-                <span className="text-white text-[11px] font-bold truncate block text-left">
+              <div className="absolute inset-x-0 bottom-0 px-2 pb-2 pt-8"
+                style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.80) 60%)" }}>
+                <span className="text-white text-[11.5px] font-bold truncate block text-left leading-tight">
                   {g.display_name.split(" ")[0]}
                 </span>
+                {g.stories[0]?.created_at && (
+                  <span className="text-white/70 text-[9.5px] font-medium truncate block text-left">
+                    {(() => {
+                      const diff = Date.now() - new Date(g.stories[0].created_at).getTime()
+                      const mins = Math.floor(diff / 60000)
+                      if (mins < 60) return `${mins}m`
+                      const hrs = Math.floor(mins / 60)
+                      return `${hrs}h`
+                    })()}
+                  </span>
+                )}
               </div>
               {(() => {
                 const first = g.stories[0]
