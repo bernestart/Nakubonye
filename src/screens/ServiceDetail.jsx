@@ -260,9 +260,9 @@ export default function ServiceDetail() {
               <>
                 <button
                   onClick={() => { setMenuOpen(false); nav(`/services/${service.id}/edit`) }}
-                  className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left"
+                  className="flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left active:bg-white/[0.03]"
                 >
-                  <span className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
+                  <span className="shrink-0">
                     <Edit3 size={17} className="text-purple-300" />
                   </span>
                   <span className="text-cream font-semibold text-[14.5px]">Edit service</span>
@@ -270,9 +270,9 @@ export default function ServiceDetail() {
                 <button
                   onClick={deactivateService}
                   disabled={busy}
-                  className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left disabled:opacity-50"
+                  className="flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left disabled:opacity-50 active:bg-white/[0.03]"
                 >
-                  <span className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
+                  <span className="shrink-0">
                     <Tag size={17} className="text-purple-300" />
                   </span>
                   <span className="text-cream font-semibold text-[14.5px]">
@@ -282,9 +282,9 @@ export default function ServiceDetail() {
                 <button
                   onClick={deleteService}
                   disabled={busy}
-                  className="flex items-center gap-3 p-4 rounded-2xl bg-red-500/8 border border-red-500/25 text-left disabled:opacity-50"
+                  className="flex items-center gap-4 px-4 py-3.5 border-b border-danger/20 text-left disabled:opacity-50 active:bg-red-500/[0.06]"
                 >
-                  <span className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 grid place-items-center">
+                  <span className="shrink-0">
                     <Trash2 size={17} color="#F87171" />
                   </span>
                   <span className="text-cream font-semibold text-[14.5px]">Delete service</span>
@@ -294,18 +294,18 @@ export default function ServiceDetail() {
               <>
                 <button
                   onClick={copyLink}
-                  className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left"
+                  className="flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left active:bg-white/[0.03]"
                 >
-                  <span className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
+                  <span className="shrink-0">
                     <Share2 size={17} className="text-purple-300" />
                   </span>
                   <span className="text-cream font-semibold text-[14.5px]">Copy link</span>
                 </button>
                 <button
                   onClick={reportService}
-                  className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left"
+                  className="flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left active:bg-white/[0.03]"
                 >
-                  <span className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 grid place-items-center">
+                  <span className="shrink-0">
                     <Tag size={17} color="#F87171" />
                   </span>
                   <span className="text-cream font-semibold text-[14.5px]">Report service</span>
