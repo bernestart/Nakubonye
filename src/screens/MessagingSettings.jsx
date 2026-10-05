@@ -159,9 +159,9 @@ function Row({ icon, label, value, badge, onClick }) {
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-surface border border-white/8 text-left text-cream mb-1.5"
+      className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
     >
-      <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0">{icon}</span>
+      <span className="shrink-0 text-cream">{icon}</span>
       <span className="flex-1 font-semibold text-[14px] min-w-0 truncate">{label}</span>
       {value && (
         <span className={`text-[13px] shrink-0 ${badge ? "font-black text-white px-2 py-0.5 rounded-full" : "text-muted"}`}
