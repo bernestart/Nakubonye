@@ -370,19 +370,19 @@ export default function Notifications() {
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             <button
               onClick={() => markRead(actionFor.ids)}
-              className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left"
+              className="flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
             >
-              <span className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 grid place-items-center text-emerald-300 text-[15px]">✓</span>
-              <span className="text-cream font-semibold text-[14.5px]">Mark as read</span>
+              <span className="shrink-0 text-emerald-300 text-[18px]">✓</span>
+              <span className="text-cream text-[15px] font-medium">Mark as read</span>
             </button>
             <button
               onClick={() => deleteNotif(actionFor.ids)}
-              className="flex items-center gap-3 p-4 rounded-2xl bg-red-500/8 border border-red-500/25 text-left"
+              className="flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-red-500/[0.06]"
             >
-              <span className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 grid place-items-center">
-                <Trash2 size={17} color="#F87171" />
+              <span className="shrink-0">
+                <Trash2 size={18} color="#F87171" />
               </span>
-              <span className="text-cream font-semibold text-[14.5px]">Delete {actionFor.ids.length > 1 ? "notifications" : "notification"}</span>
+              <span className="text-cream text-[15px] font-medium">Delete {actionFor.ids.length > 1 ? "notifications" : "notification"}</span>
             </button>
             <button
               onClick={() => setActionFor(null)}
