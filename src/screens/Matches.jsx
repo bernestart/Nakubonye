@@ -187,7 +187,7 @@ export default function Matches() {
         </h1>
 
         {/* Tab switcher */}
-        <div className="flex bg-white/[0.04] rounded-2xl p-1 gap-1">
+        <div className="flex px-2 border-b border-white/6">
           {[
             { id: 'matches', label: 'Matches', count: matches.length },
             { id: 'likes',   label: 'Likes',   count: likes.length },
@@ -198,7 +198,7 @@ export default function Matches() {
               <button
                 key={t.id}
                 onClick={() => { tap('light'); setActiveTab(t.id) }}
-                className="flex-1 h-9 rounded-xl flex items-center justify-center gap-1.5 text-[12.5px] font-bold transition-all"
+                className="flex-1 h-11 flex items-center justify-center gap-1.5 text-[13px] font-semibold transition-all relative"
                 style={{
                   background: on
                     ? 'linear-gradient(135deg, rgba(236,72,153,0.22) 0%, rgba(168,85,247,0.22) 100%)'
@@ -226,7 +226,7 @@ export default function Matches() {
       </div>
 
       {error && (
-        <div className="mx-4 mb-2 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5 shrink-0">
+        <div className="mx-4 mb-2 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-2xl px-3 py-2.5 shrink-0">
           {error}
         </div>
       )}
@@ -235,7 +235,7 @@ export default function Matches() {
         {loading ? (
           <div className="grid grid-cols-2 gap-3 animate-pulse">
             {[0,1,2,3].map((i) => (
-              <div key={i} className="rounded-2xl bg-white/[0.03] border border-white/8 overflow-hidden">
+              <div key={i} className="rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
                 <div className="aspect-[3/4] bg-white/[0.04]" />
                 <div className="p-3">
                   <div className="h-3 w-2/3 rounded bg-white/[0.08] mb-1.5" />
