@@ -695,10 +695,10 @@ function ToggleRow({ label, sub, on, onToggle }) {
   return (
     <button
       onClick={onToggle}
-      className="w-full flex items-center justify-between p-3 rounded-xl bg-white/[0.04] border border-white/8 text-left"
+      className="w-full flex items-center justify-between px-4 py-3.5 border-b border-white/6 text-left active:bg-white/[0.03]"
     >
       <div className="flex-1 min-w-0 pr-3">
-        <p className="text-cream font-semibold text-[13.5px]">{label}</p>
+        <p className="text-cream text-[14.5px] font-medium">{label}</p>
         <p className="text-muted text-[11.5px] truncate">{sub}</p>
       </div>
       <span
