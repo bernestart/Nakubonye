@@ -116,7 +116,7 @@ export default function Admin() {
 
       <div className="flex-1 overflow-y-auto px-4 py-4 pb-10">
         {error && (
-          <div className="mb-4 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5">
+          <div className="mb-4 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-2xl px-3 py-2.5">
             {error}
           </div>
         )}
@@ -129,7 +129,7 @@ export default function Admin() {
             <button
               onClick={toggleMaintenance}
               disabled={maintenanceBusy}
-              className="w-full mb-4 p-4 rounded-2xl border flex items-center justify-between disabled:opacity-60"
+              className="w-full mb-4 px-4 py-3.5 border border-white/8 flex items-center justify-between disabled:opacity-60"
               style={{
                 background: maintenanceOn
                   ? "linear-gradient(135deg, rgba(245,158,11,0.18) 0%, rgba(236,72,153,0.10) 100%)"
@@ -344,7 +344,7 @@ export default function Admin() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search by email, username, or name"
-                className="w-full bg-elevated border border-white/8 rounded-2xl pl-11 pr-4 py-3 text-cream text-[14px] placeholder:text-subtle focus:outline-none focus:border-purple-500"
+                className="w-full bg-white/[0.05] border border-white/8 rounded-full pl-11 pr-4 py-3 text-cream text-[14px] placeholder:text-subtle focus:outline-none focus:border-purple-500"
               />
             </div>
 
@@ -357,7 +357,7 @@ export default function Admin() {
                 <button
                   key={u.id}
                   onClick={() => { tap('light'); setSelected(u); loadUserTx(u.id) }}
-                  className={`flex items-center gap-3 p-3 rounded-2xl border text-left ${
+                  className={`flex items-center gap-3 px-4 py-3 border-b border-white/6 text-left ${
                     u.is_banned ? 'bg-red-500/8 border-red-500/25' :
                     u.is_admin ? 'bg-purple-500/8 border-purple-500/25' :
                     'bg-white/[0.03] border-white/8'
@@ -440,7 +440,7 @@ export default function Admin() {
               ) : (
                 <div className="flex flex-col gap-1.5">
                   {userTx.slice(0, 10).map((t) => (
-                    <div key={t.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/8">
+                    <div key={t.id} className="flex items-center justify-between gap-2 px-4 py-3 border-b border-white/6">
                       <div className="flex-1 min-w-0">
                         <p className="text-cream text-[12.5px] font-semibold truncate">{t.description || t.transaction_type}</p>
                         <p className="text-subtle text-[10.5px]">{new Date(t.created_at).toLocaleDateString()} · {t.transaction_type}</p>
@@ -571,7 +571,7 @@ function Stat({ label, value, accent, warn }) {
 
 function Info({ label, value, warn }) {
   return (
-    <div className="rounded-xl bg-white/[0.03] border border-white/6 px-3 py-2">
+    <div className="rounded-lg bg-white/[0.03] border border-white/6 px-3 py-2">
       <p className="text-subtle text-[10px] font-bold uppercase tracking-wide mb-0.5">{label}</p>
       <p className={`text-[13px] font-semibold ${warn ? 'text-red-400' : 'text-cream'}`}>{value}</p>
     </div>
