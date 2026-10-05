@@ -127,7 +127,7 @@ export default function AdminVerifications() {
 
       <div className="flex-1 overflow-y-auto px-4 py-4 pb-8">
         {error && (
-          <div className="mb-3 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5">
+          <div className="mb-3 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-2xl px-3 py-2.5">
             {error}
           </div>
         )}
@@ -147,7 +147,7 @@ export default function AdminVerifications() {
             {items.map((item) => (
               <div
                 key={item.id}
-                className="rounded-2xl bg-surface border border-white/8 overflow-hidden"
+                className="border-b border-white/6 pb-3 mb-1"
               >
                 {/* Selfie */}
                 <div className="relative bg-black" style={{ aspectRatio: '1 / 1' }}>
@@ -236,7 +236,7 @@ export default function AdminVerifications() {
                   key={r}
                   type="button"
                   onClick={() => setRejectReason(r)}
-                  className={`text-left px-3.5 py-2.5 rounded-xl text-[13px] font-medium transition-colors border ${
+                  className={`text-left px-4 py-2.5 rounded-full text-[13px] font-medium transition-colors border ${
                     rejectReason === r
                       ? 'bg-purple-600/25 border-purple-500 text-cream'
                       : 'bg-white/[0.03] border-white/8 text-muted'
@@ -253,7 +253,7 @@ export default function AdminVerifications() {
               maxLength={200}
               rows={2}
               placeholder="Or write a custom reason…"
-              className="w-full bg-elevated border border-white/8 rounded-2xl px-4 py-3 text-cream text-[13.5px] placeholder:text-subtle focus:outline-none focus:border-purple-500 resize-none mb-4"
+              className="w-full bg-white/[0.05] border border-white/8 rounded-2xl px-4 py-3 text-cream text-[13.5px] placeholder:text-subtle focus:outline-none focus:border-purple-500 resize-none mb-4"
             />
 
             <button
