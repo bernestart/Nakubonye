@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { X, Send, Trash2, Heart, Pencil, CornerDownRight } from "lucide-react"
+import { X, Send, Trash2, Heart, Pencil, CornerDownRight, Pin } from "lucide-react"
 import VerifiedBadge from "./VerifiedBadge"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
@@ -13,6 +13,7 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
   const reactTable = source === "personal" ? "user_comment_reactions" : "community_comment_reactions"
 
   const [comments, setComments] = useState([])
+  const [postAuthorId, setPostAuthorId] = useState(null)
   const [profiles, setProfiles] = useState(new Map())
   const [photos, setPhotos] = useState(new Map())
   const [reactions, setReactions] = useState(new Map()) // commentId → Map(userId → emoji)
@@ -30,16 +31,30 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
 
   useEffect(() => { onCountChangeRef.current = onCountChange }, [onCountChange])
 
+  useEffect(() => {
+    if (!postId) return
+    ;(async () => {
+      const table = source === "personal" ? "user_posts" : "community_posts"
+      const col = source === "personal" ? "user_id" : "author_id"
+      const { data } = await supabase.from(table).select(col).eq("id", postId).maybeSingle()
+      setPostAuthorId(data?.[col] || null)
+    })()
+  }, [postId, source])
+
   const load = useCallback(async () => {
     setLoading(true)
     const { data: rows } = await supabase
       .from(table)
-      .select("id, user_id, content, created_at, reply_to_id, edited_at, deleted_at")
+      .select("id, user_id, content, created_at, reply_to_id, edited_at, deleted_at, pinned_at")
       .eq("post_id", postId)
       .order("created_at", { ascending: true })
       .limit(300)
 
-    const list = rows || []
+    const list = (rows || []).slice().sort((a, b) => {
+      if (a.pinned_at && !b.pinned_at) return -1
+      if (b.pinned_at && !a.pinned_at) return 1
+      return new Date(a.created_at) - new Date(b.created_at)
+    })
     setComments(list)
     onCountChangeRef.current?.(list.filter((c) => !c.deleted_at).length)
 
@@ -134,6 +149,33 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
     if (error) return
     setComments((cur) => cur.map((c) => c.id === id ? { ...c, content: body.slice(0, 800), edited_at: nowIso } : c))
     setEditingId(null); setEditText("")
+  }
+
+  async function togglePin(comment) {
+    if (!postAuthorId || postAuthorId !== myId) return
+    const next = comment.pinned_at ? null : new Date().toISOString()
+    tap("light")
+    // Only one pinned comment per post — unpin others first
+    if (next) {
+      const others = comments.filter((c) => c.id !== comment.id && c.pinned_at)
+      for (const o of others) {
+        await supabase.from(table).update({ pinned_at: null }).eq("id", o.id)
+      }
+    }
+    await supabase.from(table).update({ pinned_at: next }).eq("id", comment.id)
+    setComments((cur) => {
+      const updated = cur.map((c) => {
+        if (c.id === comment.id) return { ...c, pinned_at: next }
+        if (next && c.pinned_at) return { ...c, pinned_at: null }
+        return c
+      })
+      // Re-sort pinned to top
+      return updated.slice().sort((a, b) => {
+        if (a.pinned_at && !b.pinned_at) return -1
+        if (b.pinned_at && !a.pinned_at) return 1
+        return new Date(a.created_at) - new Date(b.created_at)
+      })
+    })
   }
 
   async function remove(id) {
@@ -283,6 +325,9 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
   )
 
   function renderComment(c, prof, photoPath, name, mine, isReply) {
+    const isPostOwner = postAuthorId && postAuthorId === myId
+    const isPinned = !!c.pinned_at
+    const showPin = isPostOwner && !isReply
     const reacts = reactions.get(c.id) || new Map()
     const myReaction = reacts.get(myId)
     const reactCount = reacts.size
@@ -303,6 +348,11 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
             </span>
             <span className="text-subtle text-[10.5px]">{new Date(c.created_at).toLocaleDateString()}</span>
             {c.edited_at && <span className="text-subtle text-[10.5px] italic">(edited)</span>}
+            {isPinned && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-black tracking-wider uppercase text-amber-200 bg-amber-500/15 border border-amber-500/30">
+                <Pin size={9} fill="currentColor" /> Pinned
+              </span>
+            )}
           </div>
 
           {isEditing ? (
@@ -342,6 +392,14 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
               )}
               {mine && !c.deleted_at && (
                 <>
+                  {showPin && (
+                    <button
+                      onClick={() => togglePin(c)}
+                      className={`text-[11.5px] font-semibold inline-flex items-center gap-1 ${isPinned ? "text-amber-300" : "text-muted"}`}
+                    >
+                      <Pin size={11} fill={isPinned ? "currentColor" : "none"} /> {isPinned ? "Unpin" : "Pin"}
+                    </button>
+                  )}
                   <button
                     onClick={() => { setEditingId(c.id); setEditText(c.content) }}
                     className="text-muted text-[11.5px] font-semibold inline-flex items-center gap-1"
