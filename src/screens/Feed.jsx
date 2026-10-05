@@ -1713,7 +1713,7 @@ export default function Feed() {
 
             <button
               onClick={() => { tap("light"); setComposerChooserOpen(false); setPostComposerOpen(true) }}
-              className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left active:scale-[0.99] transition-transform"
+              className="flex items-center gap-4 px-4 py-4 border-b border-white/6 text-left active:bg-white/[0.03]"
             >
               <span className="w-11 h-11 rounded-2xl grid place-items-center" style={{ background: "linear-gradient(135deg, #C084FC 0%, #EC4899 100%)" }}>
                 <PenSquare size={20} color="#fff" />
@@ -1726,7 +1726,7 @@ export default function Feed() {
 
             <button
               onClick={() => { tap("light"); setComposerChooserOpen(false); nav("/reels") }}
-              className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left active:scale-[0.99] transition-transform"
+              className="flex items-center gap-4 px-4 py-4 border-b border-white/6 text-left active:bg-white/[0.03]"
             >
               <span className="w-11 h-11 rounded-2xl grid place-items-center" style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}>
                 <Video size={20} color="#fff" />
