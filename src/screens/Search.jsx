@@ -387,7 +387,7 @@ export default function Search() {
                 <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2 px-1">People you may know</p>
                 <div className="flex flex-col gap-1.5">
                   {suggestedPeople.slice(0, 6).map((u) => (
-                    <button key={u.id} onClick={() => { tap('light'); nav('/profile/' + u.id) }} className="flex items-center gap-3 p-2.5 rounded-2xl bg-white/[0.03] border border-white/8 text-left">
+                    <button key={u.id} onClick={() => { tap('light'); nav('/profile/' + u.id) }} className="flex items-center gap-4 px-4 py-3 border-b border-white/6 text-left active:bg-white/[0.03]">
                       <span className="w-10 h-10 rounded-full overflow-hidden bg-purple-600 grid place-items-center text-white font-black text-[14px] shrink-0">
                         {u._photo ? <img src={u._photo} alt="" className="w-full h-full object-cover" /> : (u.display_name || u.username || '?')[0].toUpperCase()}
                       </span>
@@ -429,7 +429,7 @@ export default function Search() {
                 <button
                   key={u.id}
                   onClick={() => openUser(u)}
-                  className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/8 text-left"
+                  className="flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left active:bg-white/[0.03]"
                 >
                   <span className="w-11 h-11 rounded-full overflow-hidden bg-elevated border border-white/8 shrink-0">
                     {u.photo_url ? (
@@ -465,7 +465,7 @@ export default function Search() {
                   <button
                     key={p._source + "-" + p.id}
                     onClick={() => openPost(p)}
-                    className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/8 text-left"
+                    className="flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left active:bg-white/[0.03]"
                   >
                     <span className="w-14 h-14 rounded-xl overflow-hidden bg-black/40 shrink-0">
                       {img && <img src={img} alt="" className="w-full h-full object-cover" />}
@@ -519,7 +519,7 @@ export default function Search() {
                 <button
                   key={c.id}
                   onClick={() => openCommunity(c)}
-                  className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/8 text-left"
+                  className="flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left active:bg-white/[0.03]"
                 >
                   <span
                     className="w-11 h-11 rounded-2xl grid place-items-center shrink-0 text-lg font-black"
@@ -586,7 +586,7 @@ export default function Search() {
                   <button
                     key={s.id}
                     onClick={() => openService(s)}
-                    className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/8 text-left"
+                    className="flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left active:bg-white/[0.03]"
                   >
                     <span className="w-14 h-14 rounded-xl overflow-hidden bg-black/40 shrink-0">
                       {img && <img src={img} alt="" className="w-full h-full object-cover" />}
