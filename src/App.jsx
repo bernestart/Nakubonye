@@ -2,6 +2,8 @@ import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { AuthProvider, useAuth } from './lib/auth'
 import { SettingsProvider } from './lib/settings.jsx'
+import RatePrompt from './components/RatePrompt'
+import { recordSession, shouldPrompt } from './lib/ratePrompt'
 import { usePresence } from './lib/usePresence'
 import MaintenanceScreen from './components/MaintenanceScreen'
 import GlobalMatchCelebration from './components/GlobalMatchCelebration'
@@ -156,6 +158,27 @@ function PublicOnly({ children }) {
 }
 
 
+function RatePromptGate({ children }) {
+  const [show, setShow] = useState(false)
+
+  useEffect(() => {
+    // Count this session (once per boot)
+    recordSession()
+    // Small delay so app finishes loading first
+    const t = setTimeout(() => {
+      if (shouldPrompt()) setShow(true)
+    }, 4000)
+    return () => clearTimeout(t)
+  }, [])
+
+  return (
+    <>
+      {children}
+      {show && <RatePrompt onClose={() => setShow(false)} />}
+    </>
+  )
+}
+
 function MaintenanceGate({ children }) {
   const { profile, loading: authLoading } = useAuth()
   const [state, setState] = useState({ loading: true, on: false, message: "" })
@@ -201,6 +224,7 @@ export default function App() {
       <GlobalMatchCelebration />
       <GlobalEventPopup />
       <VoiceCallProvider>
+      <RatePromptGate>
       <MaintenanceGate>
       <Routes>
         <Route path="/" element={<PublicOnly><Welcome /></PublicOnly>} />
@@ -290,6 +314,7 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       </MaintenanceGate>
+      </RatePromptGate>
       <CallOverlay />
       </VoiceCallProvider>
       </NotificationsProvider>
