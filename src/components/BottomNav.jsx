@@ -51,11 +51,10 @@ export default function BottomNav() {
         transform: 'translateX(-50%)',
         width: '100%',
         maxWidth: 480,
-        background: 'linear-gradient(180deg, rgba(11,11,20,0.78) 0%, rgba(11,11,20,0.92) 100%)',
-        backdropFilter: 'blur(28px) saturate(160%)',
-        WebkitBackdropFilter: 'blur(28px) saturate(160%)',
+        background: 'rgba(11,11,20,0.92)',
+        backdropFilter: 'blur(20px) saturate(140%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(140%)',
         borderTop: '1px solid rgba(255,255,255,0.06)',
-        boxShadow: '0 -8px 32px rgba(0,0,0,0.4)',
         zIndex: 40,
       }}
     >
@@ -78,21 +77,14 @@ export default function BottomNav() {
                   style={{
                     width: 46,
                     height: 28,
-                    borderRadius: 999,
-                    background: isActive
-                      ? 'linear-gradient(135deg, rgba(168,85,247,0.22) 0%, rgba(236,72,153,0.18) 100%)'
-                      : 'transparent',
-                    boxShadow: isActive
-                      ? '0 0 20px rgba(168,85,247,0.5), inset 0 0 0 1px rgba(196,181,253,0.4)'
-                      : 'none',
-                    transition: 'all 240ms cubic-bezier(0.22, 1, 0.36, 1)',
+                    transition: 'opacity 160ms',
                   }}
                 >
                   <Icon
                     size={22}
-                    strokeWidth={isActive ? 2.4 : 1.9}
+                    strokeWidth={isActive ? 2.4 : 1.8}
                     fill={isActive ? 'currentColor' : 'none'}
-                    color={isActive ? '#DDD6FE' : '#7A7A8C'}
+                    color={isActive ? '#EC4899' : '#7A7A8C'}
                   />
                   {to === '/messages' && chatsUnread > 0 && (
                     <span
@@ -104,13 +96,12 @@ export default function BottomNav() {
                         height: 18,
                         padding: '0 5px',
                         borderRadius: 999,
-                        background: 'linear-gradient(135deg, #EC4899 0%, #EF4444 100%)',
+                        background: '#EC4899',
                         color: '#fff',
                         fontSize: 10,
                         fontWeight: 800,
                         lineHeight: '18px',
                         textAlign: 'center',
-                        boxShadow: '0 0 10px rgba(239,68,68,0.7)',
                         border: '1.5px solid #0B0B14',
                       }}
                     >
@@ -127,13 +118,12 @@ export default function BottomNav() {
                         height: 18,
                         padding: '0 5px',
                         borderRadius: 999,
-                        background: 'linear-gradient(135deg, #EC4899 0%, #EF4444 100%)',
+                        background: '#EC4899',
                         color: '#fff',
                         fontSize: 10,
                         fontWeight: 800,
                         lineHeight: '18px',
                         textAlign: 'center',
-                        boxShadow: '0 0 10px rgba(239,68,68,0.7)',
                         border: '1.5px solid #0B0B14',
                       }}
                     >
