@@ -55,7 +55,7 @@ export default function PrivacySettings() {
         {loading ? (
           <div className="flex flex-col gap-3">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="rounded-2xl bg-white/[0.03] animate-pulse" style={{ height: 56 }} />
+              <div key={i} className="bg-white/[0.03] animate-pulse border-b border-white/6" style={{ height: 56 }} />
             ))}
           </div>
         ) : (
@@ -237,7 +237,7 @@ export default function PrivacySettings() {
 
 function SectionLabel({ children, icon }) {
   return (
-    <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2 mt-5 flex items-center gap-1.5">
+    <p className="text-purple-400 text-[11px] font-black tracking-[0.16em] uppercase mb-2 mt-6 px-1 flex items-center gap-1.5">
       {icon}{children}
     </p>
   )
@@ -247,12 +247,12 @@ function SelectorRow({ icon, label, value, onClick }) {
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-surface border border-white/8 text-left text-cream mb-1.5"
+      className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
     >
-      <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0">{icon}</span>
-      <span className="flex-1 font-semibold text-[14px] min-w-0 truncate">{label}</span>
-      <span className="text-muted text-[13px] shrink-0 max-w-[110px] truncate">{value}</span>
-      <ChevronRight size={16} className="text-subtle shrink-0" />
+      <span className="shrink-0 text-cream">{icon}</span>
+      <span className="flex-1 text-cream text-[15px] font-medium min-w-0 truncate">{label}</span>
+      <span className="text-muted text-[13px] shrink-0 max-w-[120px] truncate">{value}</span>
+      <ChevronRight size={18} className="text-muted shrink-0" />
     </button>
   )
 }
@@ -261,12 +261,12 @@ function ToggleRow({ icon, label, sub, value, onChange }) {
   return (
     <button
       onClick={() => { tap('light'); onChange(!value) }}
-      className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-surface border border-white/8 text-left mb-1.5"
+      className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
     >
-      <span className="w-9 h-9 rounded-xl bg-white/[0.05] grid place-items-center shrink-0 text-cream">{icon}</span>
+      <span className="shrink-0 text-cream">{icon}</span>
       <div className="flex-1 min-w-0 pr-2">
-        <p className="text-cream font-semibold text-[14px]">{label}</p>
-        {sub && <p className="text-muted text-[11.5px] mt-0.5 truncate">{sub}</p>}
+        <p className="text-cream text-[15px] font-medium">{label}</p>
+        {sub && <p className="text-muted text-[12px] mt-0.5 truncate leading-snug">{sub}</p>}
       </div>
       <span
         className="w-11 h-6 rounded-full relative shrink-0 transition-colors"
