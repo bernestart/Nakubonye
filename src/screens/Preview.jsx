@@ -36,6 +36,10 @@ export default function Preview() {
   const [followingCount, setFollowingCount] = useState(0)
   const [matchesCount, setMatchesCount] = useState(0)
   const [activeTab, setActiveTab] = useState("all")
+  const [reactionCounts, setReactionCounts] = useState(new Map())
+  const [myReactions, setMyReactions] = useState(new Set())
+  const [myReactionTypes, setMyReactionTypes] = useState(new Map())
+  const [commentCounts, setCommentCounts] = useState(new Map())
   const [menuOpen, setMenuOpen] = useState(false)
   const [playingReel, setPlayingReel] = useState(null)
   const [viewingPhoto, setViewingPhoto] = useState(null)
@@ -96,6 +100,51 @@ export default function Preview() {
     const personal = (personalRes.data || []).map((p) => ({ ...p, _source: 'personal' }))
     const community = (communityRes.data || []).map((p) => ({ ...p, _source: 'community' }))
     setMyPosts([...personal, ...community].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
+
+    // Load reactions + comments
+    try {
+      const personalIds = personal.map((p) => p.id)
+      const communityIds = community.map((p) => p.id)
+      const counts = new Map()
+      const mine = new Set()
+      const mineTypes = new Map()
+      const cmtCounts = new Map()
+
+      if (personalIds.length > 0) {
+        const [likesRes, cmtsRes] = await Promise.all([
+          supabase.from("user_post_likes").select("post_id, user_id, reaction").in("post_id", personalIds),
+          supabase.from("user_post_comments").select("post_id").in("post_id", personalIds).is("deleted_at", null),
+        ])
+        ;(likesRes.data || []).forEach((r) => {
+          const k = "personal:" + r.post_id
+          counts.set(k, (counts.get(k) || 0) + 1)
+          if (r.user_id === myId) { mine.add(k); mineTypes.set(k, r.reaction || "❤️") }
+        })
+        ;(cmtsRes.data || []).forEach((c) => {
+          const k = "personal:" + c.post_id
+          cmtCounts.set(k, (cmtCounts.get(k) || 0) + 1)
+        })
+      }
+      if (communityIds.length > 0) {
+        const [likesRes, cmtsRes] = await Promise.all([
+          supabase.from("community_post_reactions").select("post_id, user_id, reaction").in("post_id", communityIds),
+          supabase.from("community_post_comments").select("post_id").in("post_id", communityIds).is("deleted_at", null),
+        ])
+        ;(likesRes.data || []).forEach((r) => {
+          const k = "community:" + r.post_id
+          counts.set(k, (counts.get(k) || 0) + 1)
+          if (r.user_id === myId) { mine.add(k); mineTypes.set(k, r.reaction || "❤️") }
+        })
+        ;(cmtsRes.data || []).forEach((c) => {
+          const k = "community:" + c.post_id
+          cmtCounts.set(k, (cmtCounts.get(k) || 0) + 1)
+        })
+      }
+      setReactionCounts(counts)
+      setMyReactions(mine)
+      setMyReactionTypes(mineTypes)
+      setCommentCounts(cmtCounts)
+    } catch (e) { console.warn("preview reactions load failed", e) }
   }, [myId])
 
   useEffect(() => { load() }, [load])
@@ -315,6 +364,29 @@ export default function Preview() {
                         authorPhoto={photos[0]}
                         isMe={true}
                         onOpenMenu={() => {}}
+                        reactionCount={reactionCounts.get(p._source + ":" + p.id) || 0}
+                        liked={myReactions.has(p._source + ":" + p.id)}
+                        reactionEmoji={myReactionTypes.get(p._source + ":" + p.id) || "❤️"}
+                        commentCount={commentCounts.get(p._source + ":" + p.id) || 0}
+                        onToggleLike={async () => {
+                          const key = p._source + ":" + p.id
+                          const isLiked = myReactions.has(key)
+                          const nextMine = new Set(myReactions)
+                          const nextCounts = new Map(reactionCounts)
+                          const nextTypes = new Map(myReactionTypes)
+                          const table = p._source === "personal" ? "user_post_likes" : "community_post_reactions"
+                          if (isLiked) {
+                            nextMine.delete(key); nextTypes.delete(key)
+                            nextCounts.set(key, Math.max(0, (nextCounts.get(key) || 1) - 1))
+                            setMyReactions(nextMine); setMyReactionTypes(nextTypes); setReactionCounts(nextCounts)
+                            await supabase.from(table).delete().eq("post_id", p.id).eq("user_id", myId)
+                          } else {
+                            nextMine.add(key); nextTypes.set(key, "❤️")
+                            nextCounts.set(key, (nextCounts.get(key) || 0) + 1)
+                            setMyReactions(nextMine); setMyReactionTypes(nextTypes); setReactionCounts(nextCounts)
+                            await supabase.from(table).insert({ post_id: p.id, user_id: myId, reaction: "❤️" })
+                          }
+                        }}
                       />
                     ))}
                   </div>
