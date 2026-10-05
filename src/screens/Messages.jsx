@@ -724,7 +724,7 @@ export default function Messages() {
         </div>
       )}
       <div className="px-4 pb-3 shrink-0">
-        <div className="flex items-center gap-2 rounded-2xl bg-surface border border-white/8 px-3.5 h-10">
+        <div className="flex items-center gap-2 rounded-full bg-white/[0.05] border border-white/8 px-3.5 h-10">
           <Search size={15} className="text-muted shrink-0" />
           <input
             value={searchQuery}
@@ -872,7 +872,7 @@ export default function Messages() {
         {loading ? (
           <div className="flex flex-col gap-1 pt-2">
             {[0,1,2,3,4,5].map((i) => (
-              <div key={i} className="flex items-center gap-3 p-3 rounded-2xl">
+              <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-white/6">
                 <div className="w-12 h-12 rounded-full shimmer shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="h-3 w-1/3 shimmer-sm mb-2" />
@@ -939,7 +939,7 @@ export default function Messages() {
                   }
                 }}
                 onContextMenu={(e) => { e.preventDefault(); setRowMenuFor(item) }}
-                className="flex items-center gap-3 p-3 rounded-2xl hover:bg-white/[0.03] transition-colors text-left active:opacity-90 cursor-pointer"
+                className="flex items-center gap-3 px-4 py-3 border-b border-white/6 text-left active:bg-white/[0.03] cursor-pointer"
               >
                 <div className="relative shrink-0">
                   {(() => {
@@ -975,7 +975,7 @@ export default function Messages() {
                     )
                   })()}
                   {!item.isGroup && item.last_seen_at && isOnline(item.last_seen_at, 3) && (
-                    <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-[#0B0B14]" style={{ boxShadow: "0 0 8px rgba(52,211,153,0.9)" }} />
+                    <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-[#0B0B14]" />
                   )}
                 </div>
 
@@ -1056,7 +1056,7 @@ export default function Messages() {
 
             <button
               onClick={() => rowMenuFor.unread ? markRowRead(rowMenuFor) : markRowUnread(rowMenuFor)}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]"
             >
               <CheckCheck size={18} />
               <span className="font-semibold text-[14px]">
@@ -1066,7 +1066,7 @@ export default function Messages() {
 
             <button
               onClick={() => toggleRowMute(rowMenuFor)}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]"
             >
               {rowMenuFor.muted ? <Bell size={18} /> : <BellOff size={18} />}
               <span className="font-semibold text-[14px]">
@@ -1076,7 +1076,7 @@ export default function Messages() {
 
             <button
               onClick={() => toggleRowArchive(rowMenuFor)}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left text-cream"
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]"
             >
               <Archive size={18} />
               <span className="font-semibold text-[14px]">Archive</span>
@@ -1084,7 +1084,7 @@ export default function Messages() {
 
             <button
               onClick={() => deleteRow(rowMenuFor)}
-              className="w-full flex items-center gap-3 p-4 rounded-2xl bg-danger/10 border border-danger/30 text-left text-danger"
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-danger/20 text-left text-danger active:bg-red-500/[0.06]"
             >
               <Trash2 size={18} />
               <span className="font-semibold text-[14px]">
