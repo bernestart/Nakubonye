@@ -115,6 +115,25 @@ export default function ProfileView() {
     }
 
 
+    // Viewer context for audience enforcement
+    let myContext = { myId, matchIds: new Set(), myCircleIds: new Set(), myCommunityIds: new Set() }
+    try {
+      const [matchRes, circleRes, communityRes2] = await Promise.all([
+        supabase.from('matches').select('user_one_id, user_two_id').or('user_one_id.eq.' + myId + ',user_two_id.eq.' + myId),
+        supabase.from('circle_members').select('circle_id').eq('user_id', myId),
+        supabase.from('community_memberships').select('community_id').eq('user_id', myId),
+      ])
+      const matchIds = (matchRes.data || []).map((m) => m.user_one_id === myId ? m.user_two_id : m.user_one_id)
+      const circleIds = (circleRes.data || []).map((r) => r.circle_id)
+      const commIds = (communityRes2.data || []).map((r) => r.community_id)
+      myContext = {
+        myId,
+        matchIds: new Set(matchIds),
+        myCircleIds: new Set(circleIds),
+        myCommunityIds: new Set(commIds),
+      }
+    } catch (e) { console.warn('profile context load failed', e) }
+
     const [photoRes, promptRes, linksRes, reelRes, personalRes, communityRes, f1, f2] = await Promise.all([
       supabase.from('profile_photos').select('storage_path, is_primary, display_order').eq('user_id', userId)
         .order('is_primary', { ascending: false }).order('display_order', { ascending: true }),
@@ -123,10 +142,10 @@ export default function ProfileView() {
       supabase.from('profile_interests').select('interest_id').eq('profile_id', userId),
       supabase.from('reels').select('id, user_id, video_url, thumbnail_url, caption, created_at, allow_comments, clips, trim_start, trim_end, mirrored, filter_id, text_overlays, sticker_overlays, view_count, location')
         .eq('user_id', userId).eq('is_active', true).order('created_at', { ascending: false }).limit(30),
-      supabase.from('user_posts').select('id, content, image_path, created_at')
-        .eq('user_id', userId).eq('is_active', true).eq('audience', 'public').order('created_at', { ascending: false }).limit(30),
-      supabase.from('community_posts').select('id, content, image_path, created_at, pinned_until')
-        .eq('author_id', userId).order('created_at', { ascending: false }).limit(30),
+      supabase.from('user_posts').select('id, content, image_path, created_at, audience, user_id')
+        .eq('user_id', userId).eq('is_active', true).order('created_at', { ascending: false }).limit(60),
+      supabase.from('community_posts').select('id, content, image_path, created_at, pinned_until, community_id, author_id')
+        .eq('author_id', userId).order('created_at', { ascending: false }).limit(60),
       supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', userId),
       supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', userId),
     ])
@@ -180,8 +199,29 @@ export default function ProfileView() {
       setCommunities((cmRows || []).map((r) => r.communities).filter(Boolean))
     } catch { setCommunities([]) }
 
-    const personal = (personalRes.data || []).map((p) => ({ ...p, _source: 'personal' }))
-    const community = (communityRes.data || []).map((p) => ({ ...p, _source: 'community' }))
+    const isOwn = userId === myId
+    const personal = (personalRes.data || [])
+      .filter((p) => {
+        if (isOwn) return true
+        const aud = p.audience || 'public'
+        if (aud === 'public' || aud === 'everyone') return true
+        if (aud === 'private') return false
+        if (aud === 'matches') return myContext.matchIds.has(userId)
+        if (typeof aud === 'string' && aud.startsWith('circle:')) {
+          return myContext.myCircleIds.has(aud.slice(7))
+        }
+        return false
+      })
+      .map((p) => ({ ...p, _source: 'personal' }))
+
+    const community = (communityRes.data || [])
+      .filter((p) => {
+        // Community posts are visible only to community members (or on your own profile)
+        if (isOwn) return true
+        if (!p.community_id) return false
+        return myContext.myCommunityIds.has(p.community_id)
+      })
+      .map((p) => ({ ...p, _source: 'community' }))
     setMyPosts([...personal, ...community].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
 
     // Load reactions + comments for these posts

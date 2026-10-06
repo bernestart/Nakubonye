@@ -27,6 +27,12 @@ export default function CommunityFeed({ communityId, isMember }) {
   const [pickerFor, setPickerFor] = useState(null)
 
   const load = useCallback(async () => {
+    // Members-only: don't fetch post data for non-members (UI already hides them)
+    if (!isMember) {
+      setPosts([])
+      setLoading(false)
+      return
+    }
     if (!session?.user?.id || !communityId) return
     setLoading(true); setError('')
 
@@ -107,7 +113,7 @@ export default function CommunityFeed({ communityId, isMember }) {
     setPosts(enriched)
 
     setLoading(false)
-  }, [session?.user?.id, communityId])
+  }, [session?.user?.id, communityId, isMember])
 
   useEffect(() => { load() }, [load])
 
