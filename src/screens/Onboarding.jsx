@@ -49,6 +49,7 @@ export default function Onboarding() {
   const nav = useNavigate()
   const { session, profile, setProfile } = useAuth()
   const [step, setStep] = useState(1)
+  const SKIPPABLE_STEPS = [3, 4, 5, 6]
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -80,6 +81,54 @@ export default function Onboarding() {
   // Photo
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState('')
+
+  const OB_KEY = 'nakubonye_onboarding_v1'
+
+  // Load any saved progress once
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(OB_KEY)
+      if (!raw) return
+      const d = JSON.parse(raw)
+      if (d.step) setStep(d.step)
+      if (d.displayName) setDisplayName(d.displayName)
+      if (d.username) setUsername(d.username)
+      if (d.dob) setDob(d.dob)
+      if (d.gender) setGender(d.gender)
+      if (d.preferredGender) setPreferredGender(d.preferredGender)
+      if (typeof d.minAge === "number") setMinAge(d.minAge)
+      if (typeof d.maxAge === "number") setMaxAge(d.maxAge)
+      if (d.lookingFor) setLookingFor(d.lookingFor)
+      if (d.city) setCity(d.city)
+      if (d.country) setCountry(d.country)
+      if (d.bio) setBio(d.bio)
+      if (Array.isArray(d.selectedInterests)) setSelectedInterests(d.selectedInterests)
+      // Note: photoFile cannot be restored (File is ephemeral)
+    } catch (e) { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Persist progress whenever a tracked field changes
+  useEffect(() => {
+    try {
+      const d = {
+        step,
+        displayName, username, dob, gender,
+        preferredGender, minAge, maxAge, lookingFor,
+        city, country, bio,
+        selectedInterests,
+      }
+      localStorage.setItem(OB_KEY, JSON.stringify(d))
+    } catch (e) { /* ignore */ }
+  }, [
+    step, displayName, username, dob, gender,
+    preferredGender, minAge, maxAge, lookingFor,
+    city, country, bio, selectedInterests,
+  ])
+
+  function clearSavedProgress() {
+    try { localStorage.removeItem(OB_KEY) } catch {}
+  }
 
   // Load existing profile state
   useEffect(() => {
@@ -165,6 +214,13 @@ export default function Onboarding() {
       }
     }
     return true
+  }
+
+  function skip() {
+    setError('')
+    if (!SKIPPABLE_STEPS.includes(step)) return
+    if (step === STEPS.length) return finish()
+    setStep((s) => s + 1)
   }
 
   function next() {
@@ -527,18 +583,30 @@ export default function Onboarding() {
         )}
       </main>
 
-      <footer className="px-7 pb-8 pt-4 flex gap-3">
-        <button
-          type="button"
-          onClick={back}
-          disabled={busy}
-          className="px-6 rounded-full bg-elevated border border-line text-muted font-semibold text-[15px] disabled:opacity-50"
-        >
-          Back
-        </button>
-        <Button onClick={next} disabled={busy} className="flex-1">
-          {busy ? 'Saving…' : step === STEPS.length ? 'Finish & start discovering' : 'Continue'}
-        </Button>
+      <footer className="px-7 pb-8 pt-4 flex flex-col gap-3">
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={back}
+            disabled={busy}
+            className="px-6 rounded-full bg-elevated border border-line text-muted font-semibold text-[15px] disabled:opacity-50"
+          >
+            Back
+          </button>
+          <Button onClick={next} disabled={busy} className="flex-1">
+            {busy ? 'Saving…' : step === STEPS.length ? 'Finish & start discovering' : 'Continue'}
+          </Button>
+        </div>
+        {SKIPPABLE_STEPS.includes(step) && (
+          <button
+            type="button"
+            onClick={skip}
+            disabled={busy}
+            className="text-muted font-semibold text-[13.5px] py-1.5 active:opacity-70 disabled:opacity-50"
+          >
+            Skip for now
+          </button>
+        )}
       </footer>
     </div>
   )
