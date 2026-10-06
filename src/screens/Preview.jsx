@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { Search, Pencil, MoreVertical, MapPin, Edit, Share2, ArrowLeft } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
+import { useNotifications } from '../lib/notifications'
 import { publicPhotoUrl, calcAge } from '../lib/photo'
 import { tap } from '../lib/haptic'
 import AppHeader from '../components/AppHeader'
@@ -23,6 +24,7 @@ import ReelViewer from '../components/ReelViewer'
 import ProfileAbout from '../components/ProfileAbout'
 
 export default function Preview() {
+  const { unreadCount } = useNotifications()
   const nav = useNavigate()
   const { session, profile } = useAuth()
   const myId = session?.user?.id
@@ -180,13 +182,31 @@ export default function Preview() {
       <AppHeader />
 
         {/* Top bar — name + edit + search + ⋯ */}
-        <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-white/6 bg-[#0B0B14]">
+        <div className="shrink-0 flex items-center gap-1 px-3 py-2 border-b border-white/6 bg-[#0B0B14]">
           <button onClick={() => nav(-1)} className="w-9 h-9 rounded-full grid place-items-center text-muted shrink-0" aria-label="Back">
             <ArrowLeft size={20} strokeWidth={2.3} />
           </button>
-          <span className="text-cream font-extrabold text-[17px] truncate flex-1 min-w-0">
-            {profile?.display_name || profile?.username || "Your profile"}
-          </span>
+
+          <button
+            onClick={() => { tap('light'); setMenuOpen(true) }}
+            className="flex items-center gap-1.5 min-w-0 active:opacity-80"
+            aria-label="Profile switcher"
+          >
+            <span className="text-cream font-extrabold text-[17px] truncate">
+              {profile?.display_name || profile?.username || "Your profile"}
+            </span>
+            {unreadCount > 0 && (
+              <span className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[11px] font-black grid place-items-center">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="#aaa" className="shrink-0">
+              <path d="M12 16l-6-6h12z" />
+            </svg>
+          </button>
+
+          <span className="flex-1" />
+
           <button
             onClick={() => { tap('light'); nav('/me/edit') }}
             className="w-9 h-9 rounded-full grid place-items-center text-muted shrink-0"
