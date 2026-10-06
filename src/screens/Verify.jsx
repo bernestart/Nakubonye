@@ -13,13 +13,13 @@ const MOBILE_NUMBER = '65394084'
 const FORM_FEE_USD = 8
 
 const SERVICES = [
-  { id: 'lumicash',       label: 'Lumicash (Lumitel)' },
-  { id: 'bancobu_enoti',  label: 'Bancobu Enoti' },
-  { id: 'ccm',            label: 'CCM' },
-  { id: 'ingodo',         label: 'Ingodo yanje' },
-  { id: 'coopec',         label: 'COOPEC e-Wallet' },
-  { id: 'cashtel',        label: 'Cashtel' },
-  { id: 'other',          label: 'Other service' },
+  { id: 'lumicash',      label: 'Lumicash (Lumitel)' },
+  { id: 'bancobu_enoti', label: 'Bancobu Enoti' },
+  { id: 'ccm',           label: 'CCM' },
+  { id: 'ingodo',        label: 'Ingodo yanje' },
+  { id: 'coopec',        label: 'COOPEC e-Wallet' },
+  { id: 'cashtel',       label: 'Cashtel' },
+  { id: 'other',         label: 'Other service' },
 ]
 
 const CATEGORIES = [
@@ -293,7 +293,7 @@ function MobileMoneyFlow({ copied, onCopy, onBack, onSubmitted }) {
         <div className="flex items-center justify-between mb-3">
           <div>
             <p className="text-cream font-mono font-bold text-[20px] tracking-wider">{MOBILE_NUMBER}</p>
-            <p className="text-muted text-[11.5px] mt-0.5">Nakubonye verification</p>
+            <p className="text-muted text-[11.5px] mt-0.5">Niyobuhungiro Ernest</p>
           </div>
           <button onClick={onCopy}
             className="w-11 h-11 rounded-xl grid place-items-center border border-white/10 bg-white/[0.05]"

@@ -62,33 +62,12 @@ export default function Admin() {
     const { data: rr } = await supabase.rpc("admin_list_reel_reports", { p_status: "pending" })
     setReelReports(rr || [])
 
-    // Badge requests (pending)
-    const { data: br } = await supabase
-      .from('badge_requests')
-      .select('id, user_id, method, proof_text, proof_url, status, created_at, admin_note')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: true })
-      .limit(50)
-    if (br) {
-      // Enrich with profile data
-      const ids = [...new Set(br.map((x) => x.user_id))]
-      if (ids.length > 0) {
-        const { data: profs } = await supabase
-          .from('profiles')
-          .select('id, display_name, username, primary_photo')
-          .in('id', ids)
-        const pmap = new Map((profs || []).map((p) => [p.id, p]))
-        br.forEach((r) => {
-          const pf = pmap.get(r.user_id) || {}
-          r.display_name = pf.display_name
-          r.username = pf.username
-          r.photo_url = publicPhotoUrl(pf.primary_photo)
-        })
-      }
-      setBadgeRequests(br)
-    } else {
-      setBadgeRequests([])
-    }
+    // Badge requests (pending) — via RPC so admin bypasses RLS
+    const { data: br } = await supabase.rpc('admin_list_badge_requests', { p_status: 'pending' })
+    setBadgeRequests((br || []).map((x) => ({
+      ...x,
+      photo_url: publicPhotoUrl(x.primary_photo),
+    })))
 
     setUsers((u.data || []).map((x) => ({ ...x, photo_url: publicPhotoUrl(x.primary_photo) })))
     setLoading(false)
