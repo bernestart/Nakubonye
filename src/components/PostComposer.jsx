@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { X, ImagePlus, Send, BarChart2, Trash2, Plus } from "lucide-react"
 import { supabase } from "../lib/supabase"
+import { loadBlockedIds } from "../lib/blocks"
 import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
 import { autosaveDraft, deleteDraftsByKind } from "../lib/drafts"
@@ -85,8 +86,10 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
         let query = supabase.from("profiles").select("id, display_name, username, is_verified").limit(8)
         if (q.length >= 1) query = query.or(`username.ilike.${q}%,display_name.ilike.${q}%`)
         if (myId) query = query.neq("id", myId)
+        query = query.limit(16)
         const { data } = await query
-        setMentionResults(data || [])
+        const blocked = await loadBlockedIds(myId)
+        setMentionResults((data || []).filter((u) => !blocked.has(u.id)).slice(0, 8))
       } catch (e) { console.warn("mention lookup failed", e) }
     }, 200)
     return () => clearTimeout(t)
