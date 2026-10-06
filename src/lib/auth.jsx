@@ -17,13 +17,39 @@ export function AuthProvider({ children }) {
       if (!data.session) setLoading(false)
     })
 
+    // Track which session creation timestamps we've already logged (avoid dupes)
+    const loggedSessions = new Set()
+
+    function logLoginEvent(userId, sessionCreatedAt, method) {
+      if (!userId) return
+      const key = String(sessionCreatedAt || "") + ":" + userId
+      if (loggedSessions.has(key)) return
+      loggedSessions.add(key)
+      try {
+        const ua = typeof navigator !== "undefined" ? navigator.userAgent : ""
+        const hint = (ua || "").slice(0, 120)
+        supabase.from("login_events").insert({
+          user_id: userId,
+          user_agent: ua,
+          device_hint: hint,
+          method: method || "password",
+        }).then(() => {}, () => {})
+      } catch {}
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_e, newSession) => {
+      (event, newSession) => {
         if (!mounted) return
         setSession(newSession)
         if (!newSession) {
           setProfile(null)
           setLoading(false)
+          return
+        }
+        // Log sign-in events (initial + token refresh aren't new sign-ins)
+        if (event === "SIGNED_IN") {
+          const ca = newSession?.user?.last_sign_in_at || newSession?.user?.updated_at || Date.now()
+          logLoginEvent(newSession.user.id, ca, "password")
         }
       }
     )
