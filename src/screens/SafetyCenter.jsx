@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, ShieldCheck, AlertTriangle, Lock, Users } from 'lucide-react'
+import { ArrowLeft, ShieldCheck, AlertTriangle, Lock, Users, Check, ChevronRight } from 'lucide-react'
 import BrandGlow from '../components/BrandGlow'
 
 export default function SafetyCenter() {
@@ -36,6 +36,22 @@ export default function SafetyCenter() {
             stay safe, and how we help.
           </p>
         </div>
+
+        <button
+          onClick={() => nav('/verify-identity')}
+          className="w-full rounded-2xl bg-white/[0.04] border border-sky-500/25 p-4 flex items-center gap-3 text-left active:bg-white/[0.06] mb-7"
+        >
+          <div className="w-11 h-11 rounded-xl bg-sky-500/15 border border-sky-500/30 grid place-items-center shrink-0">
+            <Check size={20} strokeWidth={2.6} className="text-sky-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-cream font-bold text-[14.5px] mb-0.5">Verify your identity</p>
+            <p className="text-muted text-[12px] leading-snug">
+              Prove you're a real person with a quick face check. Look around on camera — takes 20 seconds.
+            </p>
+          </div>
+          <ChevronRight size={18} className="text-muted shrink-0" strokeWidth={2.4} />
+        </button>
 
         <Section icon={<AlertTriangle size={18} />} title="Meet safely">
           <Bullet>Meet in a public place the first few times — a café, a market, a busy street.</Bullet>

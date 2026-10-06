@@ -28,6 +28,7 @@ import Terms from './screens/Terms'
 import About from './screens/About'
 import Privacy from './screens/Privacy'
 import Verify from './screens/Verify'
+import VerifyIdentity from './screens/VerifyIdentity'
 import Roadmap from './screens/Roadmap'
 import Feed from './screens/Feed'
 import PostDetail from './screens/PostDetail'
@@ -254,6 +255,7 @@ export default function App() {
         <Route path="/about" element={<About />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/verify" element={<Guard><Verify /></Guard>} />
+        <Route path="/verify-identity" element={<Guard><VerifyIdentity /></Guard>} />
         <Route path="/admin/verifications" element={<Guard><AdminVerifications /></Guard>} />
         <Route path="/likes"    element={<Guard><Likes /></Guard>} />
         <Route path="/matches"  element={<Guard><Matches /></Guard>} />
