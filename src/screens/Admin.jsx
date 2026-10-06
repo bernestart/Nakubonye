@@ -31,6 +31,8 @@ export default function Admin() {
   const [busy, setBusy] = useState(false)
   const [badgeRequests, setBadgeRequests] = useState([])
   const [badgeBusy, setBadgeBusy] = useState(null)
+  const [verifRequests, setVerifRequests] = useState([])
+  const [verifBusy, setVerifBusy] = useState(null)
 
   const loadUserTx = useCallback(async (userId) => {
     setUserTx([])
@@ -69,11 +71,48 @@ export default function Admin() {
       photo_url: publicPhotoUrl(x.primary_photo),
     })))
 
+    // Verification requests (pending) + signed selfie URLs
+    const { data: vr } = await supabase.rpc('admin_list_verification_requests', { p_status: 'pending' })
+    if (vr && vr.length > 0) {
+      const enriched = await Promise.all(vr.map(async (row) => {
+        let selfieSignedUrl = null
+        try {
+          const { data: signed } = await supabase.storage
+            .from('verification-selfies')
+            .createSignedUrl(row.selfie_path, 3600)
+          selfieSignedUrl = signed?.signedUrl || null
+        } catch {}
+        return {
+          ...row,
+          photo_url: publicPhotoUrl(row.primary_photo),
+          selfieSignedUrl,
+        }
+      }))
+      setVerifRequests(enriched)
+    } else {
+      setVerifRequests([])
+    }
+
     setUsers((u.data || []).map((x) => ({ ...x, photo_url: publicPhotoUrl(x.primary_photo) })))
     setLoading(false)
   }, [isAdmin, search])
 
   useEffect(() => { load() }, [load])
+
+  async function reviewVerification(requestId, decision, note) {
+    if (verifBusy) return
+    setVerifBusy(requestId)
+    const { data, error: err } = await supabase.rpc('admin_review_verification_request', {
+      p_request_id: requestId,
+      p_decision: decision,
+      p_note: note || null,
+    })
+    setVerifBusy(null)
+    if (err) { setError(err.message); return }
+    if (!data?.ok) { setError(data?.error || 'Failed'); return }
+    tap(decision === 'approved' ? 'match' : 'light')
+    load()
+  }
 
   async function reviewBadge(requestId, decision, note) {
     if (badgeBusy) return
@@ -400,6 +439,67 @@ export default function Admin() {
                 className="w-full bg-white/[0.05] border border-white/8 rounded-full pl-11 pr-4 py-3 text-cream text-[14px] placeholder:text-subtle focus:outline-none focus:border-purple-500"
               />
             </div>
+
+            {/* Verification requests queue */}
+            {verifRequests.length > 0 && (
+              <div className="mb-6">
+                <p className="text-emerald-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">
+                  Identity checks · {verifRequests.length}
+                </p>
+                <div className="flex flex-col gap-2">
+                  {verifRequests.map((r) => {
+                    const busy = verifBusy === r.request_id
+                    return (
+                      <div key={r.request_id} className="rounded-2xl bg-white/[0.03] border border-emerald-500/25 p-3">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-10 h-10 rounded-full overflow-hidden bg-elevated border border-white/8 shrink-0">
+                            {r.photo_url ? (
+                              <img src={r.photo_url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full grid place-items-center text-sm font-black text-emerald-400">
+                                {(r.display_name || '?')[0]}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-cream font-semibold text-[13px] truncate">
+                              {r.display_name || r.username || r.user_id.slice(0, 8)}
+                            </p>
+                            <p className="text-muted text-[11.5px]">
+                              Submitted {new Date(r.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+
+                        {r.selfieSignedUrl && (
+                          <div className="rounded-xl overflow-hidden border border-white/8 mb-3 max-w-[200px] mx-auto"
+                            style={{ aspectRatio: '1 / 1' }}>
+                            <img src={r.selfieSignedUrl} alt="Selfie" className="w-full h-full object-cover" />
+                          </div>
+                        )}
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => reviewVerification(r.request_id, 'rejected', prompt('Reason (optional):') || null)}
+                            disabled={busy}
+                            className="flex-1 h-9 rounded-full text-red-300 bg-red-500/15 border border-red-500/40 font-bold text-[12.5px] disabled:opacity-50"
+                          >
+                            Reject
+                          </button>
+                          <button
+                            onClick={() => reviewVerification(r.request_id, 'approved', null)}
+                            disabled={busy}
+                            className="flex-1 h-9 rounded-full text-emerald-300 bg-emerald-500/15 border border-emerald-500/40 font-bold text-[12.5px] disabled:opacity-50"
+                          >
+                            {busy ? '…' : 'Approve'}
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Badge requests queue */}
             {badgeRequests.length > 0 && (
