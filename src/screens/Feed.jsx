@@ -88,6 +88,23 @@ import FollowButton from "../components/FollowButton"
 import PostComposer from "../components/PostComposer"
 import BrandGlow from "../components/BrandGlow"
 
+// Audience enforcement — mirrors Facebook/IG rules.
+// public: everyone. matches: only my matches. circle: only members. private: only author.
+function canSeePost(post, ctx) {
+  const aud = post.audience || "public"
+  if (aud === "public" || aud === "everyone") return true
+  const authorId = post.author_id || post.user_id
+  if (aud === "private") return authorId === ctx.myId
+  if (aud === "matches") return authorId === ctx.myId || ctx.matchIds.has(authorId)
+  if (typeof aud === "string" && aud.startsWith("circle:")) {
+    if (authorId === ctx.myId) return true
+    const cid = aud.slice(7)
+    return ctx.myCircleIds.has(cid)
+  }
+  // Unknown audience → fail closed (hide)
+  return false
+}
+
 export default function Feed() {
   const nav = useNavigate()
   const { session, profile } = useAuth()
@@ -195,12 +212,7 @@ export default function Feed() {
       .order("created_at", { ascending: false })
       .limit(20)
     const personalPosts = (personalRows || [])
-      .filter((r) => {
-        const aud = r.audience || "public"
-        if (!aud.startsWith("circle:")) return true
-        const cid = aud.slice(7)
-        return myCircleIds.has(cid)
-      })
+      .filter((r) => canSeePost(r, { myId, matchIds: new Set(matchIds), myCircleIds }))
       .map((r) => ({
         ...r,
         author_id: r.user_id,
@@ -632,11 +644,13 @@ export default function Feed() {
       .lt("created_at", cursor)
       .order("created_at", { ascending: false })
       .limit(20)
-    const personalPosts = (personalRows || []).map((r) => ({
-      ...r,
-      author_id: r.user_id,
-      _source: "personal",
-    }))
+    const personalPosts = (personalRows || [])
+      .filter((r) => canSeePost(r, { myId, matchIds: new Set(matchIds), myCircleIds: myCircleIds2 }))
+      .map((r) => ({
+        ...r,
+        author_id: r.user_id,
+        _source: "personal",
+      }))
 
     // --- Reels older than cursor ---
     const { data: reelRows } = await supabase
