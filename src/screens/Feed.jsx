@@ -194,12 +194,19 @@ export default function Feed() {
     }
 
     // 3b. Personal posts (from me + matches + people I follow)
-    const [matchRes, followRes, myCirclesRes] = await Promise.all([
+    const [matchRes, followRes, myCirclesRes, blockedRes] = await Promise.all([
       supabase.from("matches").select("user_one_id, user_two_id").or("user_one_id.eq." + myId + ",user_two_id.eq." + myId),
       supabase.from("follows").select("following_id").eq("follower_id", myId),
       supabase.from("circle_members").select("circle_id").eq("user_id", myId).limit(100),
+      supabase.from("blocks").select("blocker_id, blocked_id").or("blocker_id.eq." + myId + ",blocked_id.eq." + myId),
+          supabase.from("blocks").select("blocker_id, blocked_id").or("blocker_id.eq." + myId + ",blocked_id.eq." + myId),
     ])
     const myCircleIds = new Set((myCirclesRes.data || []).map((r) => r.circle_id))
+    const blockedIds = new Set()
+    ;(blockedRes?.data || []).forEach((b) => {
+      if (b.blocker_id === myId) blockedIds.add(b.blocked_id)
+      if (b.blocked_id === myId) blockedIds.add(b.blocker_id)
+    })
     const matchIds = (matchRes.data || []).map((m) => m.user_one_id === myId ? m.user_two_id : m.user_one_id)
     const followIds = (followRes.data || []).map((f) => f.following_id)
     const allowedUserIds = [...new Set([myId, ...matchIds, ...followIds])]
@@ -212,7 +219,7 @@ export default function Feed() {
       .order("created_at", { ascending: false })
       .limit(20)
     const personalPosts = (personalRows || [])
-      .filter((r) => canSeePost(r, { myId, matchIds: new Set(matchIds), myCircleIds }))
+      .filter((r) => !blockedIds.has(r.user_id) && canSeePost(r, { myId, matchIds: new Set(matchIds), myCircleIds }))
       .map((r) => ({
         ...r,
         author_id: r.user_id,
@@ -626,12 +633,17 @@ export default function Feed() {
     }
 
     // --- Personal posts from me + matches + follows ---
-    const [matchRes, followRes, myCirclesRes2] = await Promise.all([
+    const [matchRes, followRes, myCirclesRes2, blockedRes2] = await Promise.all([
       supabase.from("matches").select("user_one_id, user_two_id").or("user_one_id.eq." + myId + ",user_two_id.eq." + myId),
       supabase.from("follows").select("following_id").eq("follower_id", myId),
       supabase.from("circle_members").select("circle_id").eq("user_id", myId).limit(100),
     ])
     const myCircleIds2 = new Set((myCirclesRes2.data || []).map((r) => r.circle_id))
+    const blockedIds2 = new Set()
+    ;(blockedRes2?.data || []).forEach((b) => {
+      if (b.blocker_id === myId) blockedIds2.add(b.blocked_id)
+      if (b.blocked_id === myId) blockedIds2.add(b.blocker_id)
+    })
     const matchIds = (matchRes.data || []).map((m) => m.user_one_id === myId ? m.user_two_id : m.user_one_id)
     const followIds = (followRes.data || []).map((f) => f.following_id)
     const allowedUserIds = [...new Set([myId, ...matchIds, ...followIds])]
@@ -645,7 +657,7 @@ export default function Feed() {
       .order("created_at", { ascending: false })
       .limit(20)
     const personalPosts = (personalRows || [])
-      .filter((r) => canSeePost(r, { myId, matchIds: new Set(matchIds), myCircleIds: myCircleIds2 }))
+      .filter((r) => !blockedIds2.has(r.user_id) && canSeePost(r, { myId, matchIds: new Set(matchIds), myCircleIds: myCircleIds2 }))
       .map((r) => ({
         ...r,
         author_id: r.user_id,
