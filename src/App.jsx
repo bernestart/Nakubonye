@@ -20,6 +20,7 @@ import SignUp from './screens/SignUp'
 import SignIn from './screens/SignIn'
 import ResetPassword from './screens/ResetPassword'
 import Onboarding from './screens/Onboarding'
+import OnboardingSuggestions from './screens/OnboardingSuggestions'
 import Discover from './screens/Discover'
 import Stories from './screens/Stories'
 import Filters from './screens/Filters'
@@ -232,6 +233,7 @@ export default function App() {
         <Route path="/signin" element={<PublicOnly><SignIn /></PublicOnly>} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/onboarding" element={<Guard><Onboarding /></Guard>} />
+        <Route path="/onboarding/suggestions" element={<Guard><OnboardingSuggestions /></Guard>} />
         <Route path="/feed" element={<Guard><Feed /></Guard>} />
         <Route path="/post/:source/:id" element={<Guard><PostDetail /></Guard>} />
         <Route path="/reels" element={<Guard><Reels /></Guard>} />

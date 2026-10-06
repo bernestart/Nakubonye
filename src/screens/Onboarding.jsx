@@ -336,7 +336,7 @@ export default function Onboarding() {
     try { await supabase.rpc('claim_profile_complete_bonus') } catch {}
 
     setBusy(false)
-    nav('/feed', { replace: true })
+    nav('/onboarding/suggestions', { replace: true })
   }
 
   return (
