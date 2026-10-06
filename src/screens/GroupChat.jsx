@@ -37,6 +37,8 @@ function isWithinUnsendWindow(createdAt) {
 }
 
 export default function GroupChat() {
+  const [sending, setSending] = useState(false)
+  const [recording, setRecording] = useState(false)
   const nav = useNavigate()
   const { id: groupId } = useParams()
   const { session } = useAuth()

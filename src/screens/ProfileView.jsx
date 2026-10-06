@@ -29,6 +29,8 @@ import ReportModal from '../components/ReportModal'
 import BlockConfirm from '../components/BlockConfirm'
 
 export default function ProfileView() {
+  const [connections, setConnections] = useState([])
+  const [connLoading, setConnLoading] = useState(false)
   const nav = useNavigate()
   const { userId } = useParams()
   const { session } = useAuth()

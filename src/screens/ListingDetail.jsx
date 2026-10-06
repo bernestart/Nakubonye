@@ -6,6 +6,7 @@ import { useAuth } from '../lib/auth'
 import { tap } from '../lib/haptic'
 import { publicPhotoUrl } from '../lib/photo'
 import BrandGlow from '../components/BrandGlow'
+import VerifiedBadge from "../components/VerifiedBadge"
 
 export default function ListingDetail() {
   const nav = useNavigate()

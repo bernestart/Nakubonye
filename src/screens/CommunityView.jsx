@@ -25,7 +25,6 @@ export default function CommunityView() {
   const [memberActionFor, setMemberActionFor] = useState(null)
   const [busyMember, setBusyMember] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [isPremium, setIsPremium] = useState(false)
   const [tab, setTab] = useState('feed')
   const [menuOpen, setMenuOpen] = useState(false)
   const [inviteCode, setInviteCode] = useState(null)
@@ -153,11 +152,6 @@ export default function CommunityView() {
   }, [session?.user?.id, id])
 
   useEffect(() => { load() }, [load])
-
-  useEffect(() => {
-    if (!session?.user?.id) { setIsPremium(false); return }
-    supabase.rpc('is_premium').then(({ data }) => setIsPremium(!!data))
-  }, [session?.user?.id])
 
   async function toggle() {
     if (busy || !community) return
@@ -468,7 +462,7 @@ export default function CommunityView() {
             {tab === 'feed' ? (
               <FeedErrorBoundary><CommunityFeed communityId={community.id} isMember={joined} /></FeedErrorBoundary>
             ) : tab === 'chat' ? (
-              <CommunityChat communityId={community.id} isMember={joined} isPremium={isPremium} communityName={community.name} />
+              <CommunityChat communityId={community.id} isMember={joined} communityName={community.name} />
             ) : tab === 'events' ? (
               <CommunityEvents communityId={community.id} isMember={joined} />
             ) : (

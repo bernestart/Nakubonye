@@ -3,6 +3,7 @@ import { createPortal } from "react-dom"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "../lib/auth"
 import { supabase } from "../lib/supabase"
+import { tap } from "../lib/haptic"
 import { publicPhotoUrl } from "../lib/photo"
 import { X, Send, Heart, MoreVertical, Eye, Volume2, VolumeX, Trash2, Star } from "lucide-react"
 
@@ -268,7 +269,7 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
     const body = reply.trim()
     if (!body || !group?.user_id) return
     const ok = await canReply()
-    if (!ok) { setToast?.("This user isn't accepting story replies") || alert("This user isn't accepting story replies"); return }
+    if (!ok) { alert("This user isn't accepting story replies"); return }
     nav("/messages/" + group.user_id, {
       state: {
         prefill: body,

@@ -33,7 +33,7 @@ function isWithinUnsendWindow(createdAt) {
   return Date.now() - new Date(createdAt).getTime() < UNSEND_WINDOW_MS
 }
 
-export default function CommunityChat({ communityId, isMember, isPremium, communityName }) {
+export default function CommunityChat({ communityId, isMember, communityName }) {
   const nav = useNavigate()
   const { session } = useAuth()
 

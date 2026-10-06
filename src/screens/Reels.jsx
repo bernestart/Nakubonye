@@ -291,7 +291,7 @@ export default function Reels() {
       const pref = authorReelsVis.get(r.user_id) || "everyone"
       if (pref === "nobody") return false
       if (pref === "matches" && !matchSet.has(r.user_id)) return false
-      if (pref === "following" && !followSet.has(r.user_id)) return false
+      if (pref === "following" && !followingIds.has(r.user_id)) return false
 
       const aud = r.audience || "public"
       if (aud === "public") return true

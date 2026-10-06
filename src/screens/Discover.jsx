@@ -1,17 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion, useMotionValue, useTransform } from 'framer-motion'
-import { X, Heart, MapPin, Check, Undo2, MessageCircle, Zap, SlidersHorizontal, Lock } from 'lucide-react'
+import { X, Heart, MapPin, Check, Undo2, MessageCircle, SlidersHorizontal } from 'lucide-react'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { isOnline } from '../lib/usePresence'
 import { publicPhotoUrl, calcAge } from '../lib/photo'
 import { tap } from '../lib/haptic'
-import { useWallet } from '../lib/wallet'
 import BottomNav from '../components/BottomNav'
 import AppHeader from '../components/AppHeader'
-import SuperRequestModal from '../components/SuperRequestModal'
 import MatchModal from '../components/MatchModal'
 import BrandGlow from '../components/BrandGlow'
 import NotificationBell from '../components/NotificationBell'
@@ -106,9 +104,6 @@ export default function Discover() {
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [matchModal, setMatchModal] = useState(null)
-  const [superTarget, setSuperTarget] = useState(null)
-  const [isPremium, setIsPremium] = useState(false)
-  const { balance, refresh: refreshWallet } = useWallet()
   const [undoStack, setUndoStack] = useState([])
 
   // Read filter state from storage on mount
@@ -173,15 +168,6 @@ export default function Discover() {
   }, [session?.user?.id, sameCity, sharedInterests, sameCountry, verifiedOnly, onlineOnly, communityId])
 
   useEffect(() => { load() }, [load])
-
-  useEffect(() => {
-    if (!session?.user?.id) { setIsPremium(false); return }
-    let cancelled = false
-    supabase.rpc('is_premium').then(({ data }) => {
-      if (!cancelled) setIsPremium(!!data)
-    })
-    return () => { cancelled = true }
-  }, [session?.user?.id])
 
   // Realtime: celebrate any new match involving me — swipe, DM-reply, or anything else.
   const celebratedRef = useRef(new Set())
@@ -259,11 +245,6 @@ export default function Discover() {
   }
 
   async function handleUndo() {
-    // PREMIUM GATE
-    if (!isPremium) {
-      setError('Undo is a Premium feature.')
-      return
-    }
     if (busy) return
     const top = undoStack[undoStack.length - 1]
     if (!top) return
@@ -325,11 +306,6 @@ export default function Discover() {
               onPass={handlePass}
               onLike={handleLike}
               onWatchStory={() => { tap('light'); nav('/stories') }}
-              onSuper={() => {
-                if (!cards[0]) return
-                tap('medium')
-                setSuperTarget(cards[0])
-              }}
               disabled={busy}
             />
           ) : (
@@ -343,18 +319,8 @@ export default function Discover() {
           style={{ position: 'absolute', bottom: 84, left: 0, right: 0, zIndex: 30 }}
           className="flex items-center justify-center gap-3.5"
         >
-          <ActionBtn onClick={handleUndo} disabled={busy || !canUndo} label="Undo" size={48} variant="undo" iconColor={isPremium ? 'text-amber-400' : 'text-white/80'}>
-            <span className="relative inline-flex items-center justify-center">
-              <Undo2 size={20} strokeWidth={2.4} />
-              {!isPremium && (
-                <span
-                  className="absolute -top-1 -right-1.5 grid place-items-center rounded-full bg-amber-400"
-                  style={{ width: 13, height: 13, boxShadow: '0 0 4px 8px rgba(245,158,11,0.6)' }}
-                >
-                  <Lock size={8} strokeWidth={3} color="#0B0B14" />
-                </span>
-              )}
-            </span>
+          <ActionBtn onClick={handleUndo} disabled={busy || !canUndo} label="Undo" size={48} variant="undo" iconColor="text-white/80">
+            <Undo2 size={20} strokeWidth={2.4} />
           </ActionBtn>
           <ActionBtn onClick={handlePass} disabled={busy} label="Pass" size={54} variant="pass" iconColor="text-red-400">
             <X size={26} strokeWidth={2.8} />
@@ -376,20 +342,6 @@ export default function Discover() {
           <ActionBtn onClick={handleLike} disabled={busy} label="Like" size={54} variant="like" iconColor="text-pink-400">
             <Heart size={26} strokeWidth={2.6} />
           </ActionBtn>
-          <ActionBtn
-            onClick={() => {
-              if (!cards[0]) return
-              tap('light')
-              setSuperTarget(cards[0])
-            }}
-            disabled={busy || !cards[0]}
-            label="Super"
-            size={54}
-            variant="super"
-            iconColor="text-amber-300"
-          >
-            <Zap size={24} strokeWidth={2.5} />
-          </ActionBtn>
         </div>
       )}
 
@@ -404,28 +356,16 @@ export default function Discover() {
           onMessage={() => { setMatchModal(null); nav('/messages/' + matchModal.id) }}
         />
       )}
-
-      <SuperRequestModal
-        open={!!superTarget}
-        onClose={() => setSuperTarget(null)}
-        target={superTarget}
-        onSuccess={() => {
-          const id = superTarget?.id
-          setSuperTarget(null)
-          if (id) setCards((c) => c.filter((x) => x.id !== id))
-        }}
-      />
     </div>
   )
 }
 
-function SwipeCard({ card, onPass, onLike, onSuper, onWatchStory, disabled }) {
+function SwipeCard({ card, onPass, onLike, onWatchStory, disabled }) {
   const x = useMotionValue(0)
   const y = useMotionValue(0)
   const rotate = useTransform(x, [-250, 250], [-9, 9])
   const likeOpacity = useTransform(x, [40, 140], [0, 1])
   const nopeOpacity = useTransform(x, [-140, -40], [1, 0])
-  const superOpacity = useTransform(y, [-120, -30], [1, 0])
 
   function onDragEnd(_, info) {
     if (disabled) return
@@ -437,16 +377,6 @@ function SwipeCard({ card, onPass, onLike, onSuper, onWatchStory, disabled }) {
 
     const absX = Math.abs(xOffset)
     const absY = Math.abs(yOffset)
-
-    // SUPER: only when drag is predominantly vertical AND genuinely upward.
-    // Must travel 140px up AND be 30% more vertical than horizontal.
-    if (
-      yOffset < -140 &&
-      absY > absX * 1.3
-    ) {
-      onSuper?.()
-      return
-    }
 
     // PASS / LIKE: only when horizontal is the dominant axis.
     // Either 130px distance OR 800+ velocity (fast flick).
@@ -535,14 +465,6 @@ function SwipeCard({ card, onPass, onLike, onSuper, onWatchStory, disabled }) {
         className="absolute top-6 right-5 px-3.5 py-1.5 rounded-xl border-[3px] border-danger text-danger font-black text-xl tracking-[0.18em] rotate-12 pointer-events-none bg-obsidian/50 backdrop-blur z-10"
       >
         NOPE
-      </motion.div>
-
-      {/* SUPER stamp — appears as you drag up */}
-      <motion.div
-        style={{ opacity: superOpacity }}
-        className="absolute top-6 left-1/2 -translate-x-1/2 px-3.5 py-1.5 rounded-xl border-[3px] border-amber-400 text-amber-400 font-black text-xl tracking-[0.18em] pointer-events-none bg-obsidian/55 backdrop-blur z-10"
-      >
-        SUPER
       </motion.div>
 
       {/* Name + age + verified check, Jaumo style: name then blue badge inline */}

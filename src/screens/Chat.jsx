@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Search, ArrowLeft, Send, MessageCircle, Paperclip, X, Smile, Mic, Square, Play, Pause, MoreVertical, Trash2, Eye, Flag, Ban, Check, CheckCheck , Phone, Video, Pin, Bell, BellOff, Eraser , Camera, Image } from 'lucide-react'
+import { Search, ArrowLeft, Send, MessageCircle, Paperclip, X, Smile, Mic, Square, Play, Pause, MoreVertical, Trash2, Eye, Flag, Ban, Check, CheckCheck, Phone, Video, Pin, Bell, BellOff, Eraser, Camera, Image, Timer } from 'lucide-react'
 import VerifiedBadge from "../components/VerifiedBadge"
 import PollMessage from "../components/PollMessage"
 import { friendlyError } from '../lib/errors'
@@ -121,6 +121,7 @@ export default function Chat() {
   const [reactionPickerFor, setReactionPickerFor] = useState(null)
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [actionsForMsg, setActionsForMsg] = useState(null)
+  const longPressTimer = useRef(null)
   const [forwardingMsg, setForwardingMsg] = useState(null)
   const [pinnedMsg, setPinnedMsg] = useState(null)
   const [lightboxUrl, setLightboxUrl] = useState(null)

@@ -1,11 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { tap } from '../lib/haptic'
-import {
-  ArrowLeft, ChevronRight, ChevronDown, LogOut, Bell, Gift, Crown,
-  Wallet as WalletIcon, UserX, Shield, ShieldCheck, Info, FileText,
-  Eye, Zap, Key, Users, Plus, Bookmark, LayoutGrid, Play, Heart,
-  Store, Briefcase, Calendar, Clock, Camera, Star, Layers, WifiOff
-} from 'lucide-react'
+import { ArrowLeft, ChevronRight, ChevronDown, LogOut, Bell, Gift, Crown, Wallet as WalletIcon, UserX, Shield, ShieldCheck, Info, FileText, Eye, Zap, Key, Users, User, Plus, Bookmark, LayoutGrid, Play, Heart, Store, Briefcase, Calendar, Clock, Camera, Star, Layers, WifiOff, Coins, UserCircle, MessageCircle, Globe, Activity, Ban, Download } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -187,11 +182,8 @@ export default function ProfileSettings() {
           <FeatureTile icon={<Play size={20} />} label="Reels" to="/reels" nav={nav} />
           <FeatureTile icon={<Heart size={20} />} label="Matches" to="/matches" nav={nav} />
           <FeatureTile icon={<Users size={20} />} label="Communities" to="/communities" nav={nav} />
-          <FeatureTile icon={<Eye size={20} />} label="Profile views" to="/profile-views" nav={nav} />
-          <FeatureTile icon={<Crown size={20} />} label="Premium" to="/premium" nav={nav} />
-          <FeatureTile icon={<WalletIcon size={20} />} label="Wallet" to="/wallet" nav={nav} />
-          <FeatureTile icon={<Zap size={20} />} label="Boost profile" to="/boost" nav={nav} />
           <FeatureTile icon={<ShieldCheck size={20} />} label="Get verified" to="/verify" nav={nav} />
+          <FeatureTile icon={<Coins size={20} />} label="Monetization" to="/monetization" nav={nav} />
           <FeatureTile icon={<Store size={20} />} label="Marketplace" to="/marketplace" nav={nav} />
           <FeatureTile icon={<Briefcase size={20} />} label="Services" to="/services" nav={nav} />
         </div>

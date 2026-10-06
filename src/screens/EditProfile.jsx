@@ -21,7 +21,6 @@ export default function EditProfile() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [extraSlots, setExtraSlots] = useState(0)
-  const [isPremium, setIsPremium] = useState(false)
   const [buyBusy, setBuyBusy] = useState(false)
   const [error, setError] = useState('')
   const [savedMsg, setSavedMsg] = useState('')
@@ -74,8 +73,8 @@ export default function EditProfile() {
   const fileInputRef = useRef(null)
 
   const myId = session?.user?.id
-  const effectiveMax = isPremium ? 9 : 6 + extraSlots
-  const canBuySlot = !isPremium && extraSlots < 3
+  const effectiveMax = 6 + extraSlots
+  const canBuySlot = extraSlots < 3
 
   const load = useCallback(async () => {
     if (!myId) return
@@ -419,7 +418,6 @@ export default function EditProfile() {
     setBuyBusy(false)
     if (err) {
       if (/insufficient/i.test(err.message)) setError('Not enough coins. Get more in Wallet.')
-      else if (/premium/i.test(err.message)) setError('Premium already includes 9 slots.')
       else if (/maximum/i.test(err.message)) setError('You already have all 3 extra slots.')
       else setError(err.message)
       return

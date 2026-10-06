@@ -26,7 +26,9 @@ import ProfileAbout from '../components/ProfileAbout'
 export default function Preview() {
   const { unreadCount } = useNotifications()
   const nav = useNavigate()
-  const { session, profile } = useAuth()
+  const { session, profile: authProfile } = useAuth()
+  const [profileLocal, setProfile] = useState(null)
+  const profile = profileLocal ?? authProfile
   const myId = session?.user?.id
 
   const [photos, setPhotos] = useState([])

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { supabase } from "../lib/supabase"
 import { ChevronLeft, ChevronRight, Music, Type, Sparkles, Smile, Download } from "lucide-react"
 import { saveReelDraft } from "../lib/draftStore"
 

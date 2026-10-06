@@ -106,6 +106,7 @@ function canSeePost(post, ctx) {
 }
 
 export default function Feed() {
+  const realtimeDebounceRef = useRef(null)
   const nav = useNavigate()
   const { session, profile } = useAuth()
   const myId = session?.user?.id
@@ -2008,26 +2009,6 @@ function EmptyFeed({ nav, suggested, myId }) {
         </section>
       )}
 
-      {trending.length > 0 && (
-        <section className="mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-cream font-bold text-[15px]">🔥 {trendingLabel}</p>
-            <button onClick={() => nav("/reels")} className="text-purple-300 text-[12.5px] font-bold">See all</button>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {trending.slice(0, 4).map((r) => (
-              <button key={r.id} onClick={() => { tap("light"); nav("/reels") }}
-                className="relative rounded-xl overflow-hidden aspect-[9/16] active:opacity-90">
-                {r.thumbnail_url && <img src={r.thumbnail_url} alt="" className="w-full h-full object-cover" />}
-                <div className="absolute inset-x-0 bottom-0 px-2 pb-2 pt-6"
-                     style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.8))" }}>
-                  <p className="text-white text-[11px] font-bold line-clamp-2 text-left">{r.caption || "Reel"}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
 
       {listings.length > 0 && (
         <section className="mb-6">

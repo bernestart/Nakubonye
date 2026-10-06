@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Search, Plus, MapPin, Store, Heart, Trash2, MoreVertical, Eye, Edit3, Tag } from 'lucide-react'
+import { ArrowLeft, Search, Plus, MapPin, Store, Heart, Trash2, MoreVertical, Eye, Edit3, Tag, Filter } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { tap } from '../lib/haptic'
@@ -85,6 +85,9 @@ function BrowseTab({ nav, myId }) {
   const [loading, setLoading] = useState(true)
   const [listings, setListings] = useState([])
   const [category, setCategory] = useState('all')
+  const [sort, setSort] = useState('newest')
+  const [condition, setCondition] = useState('all')
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [search, setSearch] = useState('')
 
   const load = useCallback(async () => {

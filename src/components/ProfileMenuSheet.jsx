@@ -1,7 +1,8 @@
+import { useState, useEffect } from 'react'
 import { useNavigate } from "react-router-dom"
 import {
   Megaphone, Smile, Archive, ScrollText, MessageSquare, Star,
-  Eye, Search, Sparkles, UserPlus, Link2, Phone, Video,
+  Eye, EyeOff, Search, Sparkles, UserPlus, Link2, Phone, Video,
   Users, UserCheck, Flag, Heart, Ban,
 } from "lucide-react"
 import { tap } from "../lib/haptic"

@@ -15,6 +15,13 @@ export default function Admin() {
   const { session, profile } = useAuth()
   const isAdmin = profile?.is_admin === true
 
+  async function loadUserTx(userId) {
+    // TODO: fetch user transactions if needed
+    try {
+      await supabase.from("coin_transactions").select("*").eq("user_id", userId).limit(50)
+    } catch {}
+  }
+
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [stats, setStats] = useState(null)

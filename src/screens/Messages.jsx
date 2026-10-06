@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { MessageCircle, RefreshCw, PenSquare, BellOff, Search, X , Users , MoreVertical , Archive, Inbox, CheckCheck , Flag, Ban , Pin , Trash2 , Settings , Check } from 'lucide-react'
+import { MessageCircle, RefreshCw, PenSquare, BellOff, Search, X, Users, MoreVertical, Archive, Inbox, CheckCheck, Flag, Ban, Pin, Trash2, Settings, Check, Bell } from 'lucide-react'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -10,6 +10,7 @@ import { isOnline } from '../lib/usePresence'
 import { tap } from '../lib/haptic'
 import BottomNav from '../components/BottomNav'
 import AppHeader from '../components/AppHeader'
+import ReportModal from "../components/ReportModal"
 import NewMessageSheet from '../components/NewMessageSheet'
 import StoryComposer from '../components/StoryComposer'
 import StoryViewer from '../components/StoryViewer'
@@ -17,6 +18,7 @@ import NotificationBell from '../components/NotificationBell'
 import BrandGlow from '../components/BrandGlow'
 
 export default function Messages() {
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
   const nav = useNavigate()
   const { session } = useAuth()
   const [items, setItems] = useState([])

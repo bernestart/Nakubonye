@@ -25,7 +25,7 @@ export default function ServiceDetail() {
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
-    if (!id) return
+  if (!id) return
     setLoading(true)
     const { data, error: sErr } = await supabase
       .from('services')
@@ -33,7 +33,7 @@ export default function ServiceDetail() {
       .eq('id', id)
       .maybeSingle()
     if (sErr || !data) { setError(sErr?.message || 'Service not found'); setLoading(false); return }
-    setService(data)
+  setService(data)
 
     const { data: prof } = await supabase
       .from('profiles')
@@ -55,7 +55,7 @@ export default function ServiceDetail() {
   useEffect(() => { load() }, [load])
 
   function messageProvider() {
-    if (!provider || !myId) return
+  if (!provider || !myId) return
     if (provider.id === myId) return
     tap('light')
     nav(`/messages/${provider.id}`)
@@ -65,44 +65,44 @@ export default function ServiceDetail() {
     tap('light')
     const url = window.location.origin + `/services/${id}`
     const text = `${service?.title} — ${service?.price?.toLocaleString() || 0} ${service?.currency || 'BIF'} on Nakubonye`
-    try {
+  try {
       if (navigator.share) await navigator.share({ title: service?.title, text, url })
       else { await navigator.clipboard.writeText(url); alert('Link copied!') }
     } catch {}
   }
 
-  if (loading) {
-    async function deactivateService() {
-    if (!service || !myId || busy) return
-    setBusy(true)
-    const next = service.status === "inactive" ? "active" : "inactive"
-    await supabase.from("services").update({ status: next, updated_at: new Date().toISOString() }).eq("id", service.id)
-    setService((cur) => ({ ...cur, status: next }))
-    setBusy(false)
-    setMenuOpen(false)
+  async function deactivateService() {
+  if (!service || !myId || busy) return
+  setBusy(true)
+  const next = service.status === "inactive" ? "active" : "inactive"
+  await supabase.from("services").update({ status: next, updated_at: new Date().toISOString() }).eq("id", service.id)
+  setService((cur) => ({ ...cur, status: next }))
+  setBusy(false)
+  setMenuOpen(false)
   }
 
   async function deleteService() {
-    if (!service || !myId || busy) return
-    if (!confirm("Delete this service permanently?")) return
-    setBusy(true)
-    await supabase.from("services").delete().eq("id", service.id)
-    setBusy(false)
-    setMenuOpen(false)
-    nav(-1)
+  if (!service || !myId || busy) return
+  if (!confirm("Delete this service permanently?")) return
+  setBusy(true)
+  await supabase.from("services").delete().eq("id", service.id)
+  setBusy(false)
+  setMenuOpen(false)
+  nav(-1)
   }
 
   async function copyLink() {
-    try { await navigator.clipboard.writeText(window.location.href); alert("Link copied") } catch {}
-    setMenuOpen(false)
+  try { await navigator.clipboard.writeText(window.location.href); alert("Link copied") } catch {}
+  setMenuOpen(false)
   }
 
   async function reportService() {
-    setMenuOpen(false)
-    alert("Report submitted.")
+  setMenuOpen(false)
+  alert("Report submitted.")
   }
 
-  return (
+  if (loading) {
+    return (
       <div style={{ position: 'fixed', inset: 0, margin: '0 auto', maxWidth: 480, background: '#0B0B14', display: 'flex' }}>
         <div className="flex-1 grid place-items-center">
           <span className="w-8 h-8 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />

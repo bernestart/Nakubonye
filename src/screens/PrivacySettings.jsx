@@ -1,9 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  ArrowLeft, ChevronRight, MessageCircle, Users, MessageSquare, Image,
-  AtSign, Eye, MapPin, Activity, Check, EyeOff, Bell, Shield, Lock,
-} from 'lucide-react'
+import { ArrowLeft, ChevronRight, MessageCircle, Users, MessageSquare, Image, AtSign, Eye, MapPin, Activity, Check, EyeOff, Bell, Shield, Lock, Cake, Heart, Info, Mail, Phone, Search, UserCheck } from 'lucide-react'
 import { tap } from '../lib/haptic'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'

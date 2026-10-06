@@ -73,6 +73,7 @@ export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
   const voiceoverStreamRef = useRef(null)
   const voiceoverChunksRef = useRef([])
   const voiceoverRef = useRef(null)
+  const voiceoverStartRef = useRef(0)
 
   const activeClip = clips[activeClipIdx]
   const activeDuration = activeClip ? (durations[activeClip.id] || 0) : 0

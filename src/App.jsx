@@ -49,7 +49,6 @@ import FollowList from './screens/FollowList'
 import Create from './screens/Create'
 import Search from './screens/Search'
 import Online from './screens/Online'
-import Boost from './screens/Boost'
 import AdminVerifications from './screens/AdminVerifications'
 import Likes from './screens/Likes'
 import Matches from './screens/Matches'
@@ -66,6 +65,7 @@ import ProfileView from './screens/ProfileView'
 import EditProfile from './screens/EditProfile'
 import Preview from './screens/Preview'
 import ProfileSettings from './screens/ProfileSettings'
+import Monetization from './screens/Monetization'
 import PrivacySettings from './screens/PrivacySettings'
 import YourData from './screens/settings/YourData'
 import BlockingMuted from './screens/settings/BlockingMuted'
@@ -92,12 +92,9 @@ import MyListings from './screens/MyListings'
 import EditListing from './screens/EditListing'
 import ListingDetail from './screens/ListingDetail'
 import ComingSoon from './screens/_ComingSoon'
-import ProfileViewers from './screens/ProfileViewers'
 import Admin from './screens/Admin'
 import FacebookReward from './screens/FacebookReward'
 import AccountSecurity from './screens/AccountSecurity'
-import Wallet from './screens/Wallet'
-import Premium from './screens/Premium'
 import Invite from './screens/Invite'
 import Communities from './screens/Communities'
 import CreateCommunity from './screens/CreateCommunity'
@@ -257,7 +254,6 @@ export default function App() {
         <Route path="/about" element={<About />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/verify" element={<Guard><Verify /></Guard>} />
-        <Route path="/boost" element={<Guard><Boost /></Guard>} />
         <Route path="/admin/verifications" element={<Guard><AdminVerifications /></Guard>} />
         <Route path="/likes"    element={<Guard><Likes /></Guard>} />
         <Route path="/matches"  element={<Guard><Matches /></Guard>} />
@@ -269,6 +265,7 @@ export default function App() {
         <Route path="/messages/requests" element={<Guard><MessageRequests /></Guard>} />
         <Route path="/messages/:userId" element={<Guard><Chat /></Guard>} />
         <Route path="/me"         element={<Guard><ProfileSettings /></Guard>} />
+        <Route path="/monetization" element={<Guard><Monetization /></Guard>} />
         <Route path="/saved" element={<Guard><Saved /></Guard>} />
         <Route path="/story-archive" element={<Guard><StoryArchive /></Guard>} />
         <Route path="/memories" element={<Guard><Memories /></Guard>} />
@@ -299,7 +296,6 @@ export default function App() {
         <Route path="/services/:id/book" element={<Guard><BookService /></Guard>} />
         <Route path="/me/bookings" element={<Guard><MyBookings /></Guard>} />
         <Route path="/me/preview"  element={<Guard><Preview /></Guard>} />
-        <Route path="/profile-views" element={<Guard><ProfileViewers /></Guard>} />
         <Route path="/admin" element={<Guard><Admin /></Guard>} />
         <Route path="/facebook-reward" element={<Guard><FacebookReward /></Guard>} />
         <Route path="/settings/security" element={<Guard><AccountSecurity /></Guard>} />
@@ -317,8 +313,6 @@ export default function App() {
         <Route path="/profile/:userId" element={<Guard><ProfileView /></Guard>} />
         <Route path="/me/edit" element={<Guard><EditProfile /></Guard>} />
         <Route path="/me/preview" element={<Guard><Preview /></Guard>} />
-        <Route path="/wallet" element={<Guard><Wallet /></Guard>} />
-        <Route path="/premium" element={<Guard><Premium /></Guard>} />
         <Route path="/invite" element={<Guard><Invite /></Guard>} />
         <Route path="/communities" element={<Guard><Communities /></Guard>} />
         <Route path="/communities/new" element={<Guard><CreateCommunity /></Guard>} />

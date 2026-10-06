@@ -3,6 +3,7 @@ import { X, ImagePlus, RefreshCw, Send, Pencil } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { deleteDraftsByKind } from "../lib/drafts"
 import { useAuth } from "../lib/auth"
+import { tap } from "../lib/haptic"
 import StoryEditor from "./StoryEditor"
 import { createPortal } from "react-dom"
 

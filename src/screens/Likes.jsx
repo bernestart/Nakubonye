@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Heart, RefreshCw, MapPin, Check, Lock, Sparkles } from 'lucide-react'
+import { Heart, RefreshCw, MapPin, Check } from 'lucide-react'
 import BrandGlow from '../components/BrandGlow'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
@@ -20,8 +20,6 @@ export default function Likes() {
   const [sent, setSent] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [isPremium, setIsPremium] = useState(false)
-  const [premiumLoading, setPremiumLoading] = useState(true)
 
   const loadReceived = useCallback(async () => {
     const { data, error: rpcErr } = await supabase.rpc('get_likes_received', { p_limit: 30 })
@@ -108,18 +106,6 @@ export default function Likes() {
 
   useEffect(() => { load() }, [load])
 
-  useEffect(() => {
-    if (!session?.user?.id) { setPremiumLoading(false); return }
-    let cancelled = false
-    ;(async () => {
-      const { data, error: err } = await supabase.rpc('is_premium')
-      if (cancelled) return
-      setIsPremium(!!data)
-      setPremiumLoading(false)
-    })()
-    return () => { cancelled = true }
-  }, [session?.user?.id])
-
   const list = tab === 'received' ? received : sent
 
   return (
@@ -173,7 +159,7 @@ export default function Likes() {
       )}
 
       <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
-        {loading || premiumLoading ? (
+        {loading ? (
           <div className="grid grid-cols-2 gap-3 animate-pulse">
             {[0,1,2,3].map((i) => (
               <div key={i} className="rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
@@ -278,60 +264,6 @@ function Empty({ tab, onGo }) {
       >
         Discover people
       </button>
-    </div>
-  )
-}
-
-
-function LockedReceived({ count }) {
-  return (
-    <div className="pt-6 text-center px-2">
-      <div className="relative rounded-3xl overflow-hidden border border-purple-500/30 mb-5"
-        style={{ background: 'linear-gradient(160deg, rgba(124,58,237,0.25) 0%, rgba(236,72,153,0.15) 100%)' }}
-      >
-        <div className="absolute inset-0 opacity-40" style={{
-          backgroundImage: 'radial-gradient(circle at 30% 20%, rgba(255,255,255,0.2) 0%, transparent 40%)'
-        }} />
-        <div className="relative p-6">
-          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 grid place-items-center mx-auto mb-4">
-            <Lock size={24} strokeWidth={2.4} className="text-white" />
-          </div>
-          <h2 className="text-cream text-[20px] font-extrabold tracking-tight mb-2">
-            {count > 0
-              ? `${count} ${count === 1 ? 'person likes' : 'people like'} you`
-              : 'See who likes you'}
-          </h2>
-          <p className="text-muted text-[13.5px] leading-relaxed mb-5 px-3">
-            Premium shows you everyone who liked you — so you can decide who to match with, instead of waiting to be discovered.
-          </p>
-
-          {/* Blurred preview grid */}
-          <div className="grid grid-cols-3 gap-2 mb-5 opacity-60">
-            {[0,1,2,3,4,5].map((i) => (
-              <div
-                key={i}
-                className="aspect-[3/4] rounded-xl overflow-hidden border border-white/10"
-                style={{
-                  background: 'linear-gradient(135deg, rgba(124,58,237,0.4), rgba(236,72,153,0.35))',
-                  filter: 'blur(6px)',
-                }}
-              />
-            ))}
-          </div>
-
-          <Link
-            to="/premium"
-            className="inline-flex items-center gap-2 h-11 px-6 rounded-full bg-gradient-to-r from-purple-600 via-purple-500 to-pink-500 text-white font-bold text-[14px] shadow-[0_10px_28px_rgba(124,58,237,0.5)]"
-          >
-            <Sparkles size={16} strokeWidth={2.4} />
-            See who likes you
-          </Link>
-        </div>
-      </div>
-
-      <p className="text-subtle text-[11.5px] leading-relaxed">
-        You can still match for free — when someone you like likes you back, you'll see it in Matches.
-      </p>
     </div>
   )
 }

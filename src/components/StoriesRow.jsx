@@ -13,7 +13,7 @@ const TILE_H = 190
 async function filterStoriesByVisibility(stories, myId) {
   const ownerIds = [...new Set(stories.map((r) => r.user_id).filter((id) => id !== myId))]
   if (ownerIds.length === 0) return stories
-  const [settingsRes, blocksRes, matchesRes, followsRes, innerCircleRes] = await Promise.all([
+  const [settingsRes, blocksRes, matchesRes, followsRes, storyHidesRes, innerCircleRes] = await Promise.all([
     supabase.from('user_settings').select('user_id, who_can_see_story').in('user_id', ownerIds),
     supabase.from('blocks').select('blocker_id, blocked_id').or(`blocker_id.eq.${myId},blocked_id.eq.${myId}`),
     supabase.from('matches').select('user_one_id, user_two_id').or(`user_one_id.eq.${myId},user_two_id.eq.${myId}`),
