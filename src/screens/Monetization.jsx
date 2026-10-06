@@ -19,6 +19,7 @@ export default function Monetization() {
   const [tasks, setTasks] = useState(null)
   const [badges, setBadges] = useState(null)
   const [claimingTask, setClaimingTask] = useState(null)
+  const [taskHint, setTaskHint] = useState(null)
   const [withdrawOpen, setWithdrawOpen] = useState(false)
   const [unlockBusy, setUnlockBusy] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -66,7 +67,15 @@ export default function Monetization() {
     setClaimingTask(null)
     if (err) { setError(err.message); return }
     if (!data?.ok) {
-      setError(data?.error === 'already_claimed' ? 'Already claimed.' : (data?.error || 'Could not claim.'))
+      if (data?.error === 'not_verified' && data?.hint) {
+        setTaskHint({ key, message: data.hint })
+        setTimeout(() => setTaskHint(null), 5000)
+      } else if (data?.error === 'already_claimed') {
+        setTaskHint({ key, message: 'Already claimed.' })
+        setTimeout(() => setTaskHint(null), 3000)
+      } else {
+        setError(data?.error || 'Could not claim.')
+      }
       return
     }
     tap('match')
@@ -148,6 +157,8 @@ export default function Monetization() {
                 tasks={tasks.tasks}
                 claiming={claimingTask}
                 onClaim={claimTask}
+                onNavigate={(target) => { tap('light'); nav(target) }}
+                hint={taskHint}
               />
             )}
 
@@ -525,10 +536,8 @@ function fmt(n) {
 // TasksCard — current tier's task list
 // ------------------------------------------------------------
 const TASK_ICONS = {
-  facebook: Globe,
-  instagram: AtSign,
-  tiktok: Share2,
-  share: Share2,
+  globe: Globe,
+  shield: ShieldCheck,
   user: UserIcon,
   camera: Camera,
   video: Video,
@@ -539,7 +548,7 @@ const TASK_ICONS = {
   'trending-up': TrendingUp,
 }
 
-function TasksCard({ tier, tasks, claiming, onClaim }) {
+function TasksCard({ tier, tasks, claiming, onClaim, onNavigate, hint }) {
   const doneCount = tasks.filter((t) => t.done).length
   return (
     <div className="mb-5">
@@ -555,32 +564,52 @@ function TasksCard({ tier, tasks, claiming, onClaim }) {
         {tasks.map((t) => {
           const Icon = TASK_ICONS[t.icon] || Coins
           const busy = claiming === t.key
+          const showHint = hint && hint.key === t.key
+          const isNav = t.action === 'navigate'
           return (
-            <div key={t.key} className="flex items-center gap-3 p-4">
-              <div className="w-9 h-9 rounded-xl bg-purple-500/15 border border-purple-500/25 grid place-items-center shrink-0">
-                <Icon size={16} strokeWidth={2.2} className="text-purple-300" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={`text-[13.5px] font-semibold ${t.done ? 'text-muted line-through' : 'text-cream'}`}>
-                  {t.label}
-                </p>
-                <p className="text-amber-300 text-[11.5px] font-bold mt-0.5">
-                  +{t.reward} coins
-                </p>
-              </div>
-              {t.done ? (
-                <div className="w-7 h-7 rounded-full bg-emerald-500/20 border border-emerald-500/40 grid place-items-center shrink-0">
-                  <Check size={14} strokeWidth={3} className="text-emerald-400" />
+            <div key={t.key}>
+              <div className="flex items-center gap-3 p-4">
+                <div className="w-9 h-9 rounded-xl bg-purple-500/15 border border-purple-500/25 grid place-items-center shrink-0">
+                  <Icon size={16} strokeWidth={2.2} className="text-purple-300" />
                 </div>
-              ) : (
-                <button
-                  onClick={() => onClaim(t.key)}
-                  disabled={busy}
-                  className="px-3 h-8 rounded-full text-white text-[12px] font-bold disabled:opacity-50 shrink-0"
-                  style={{ background: 'linear-gradient(135deg, #A855F7 0%, #EC4899 100%)' }}
-                >
-                  {busy ? '…' : 'Claim'}
-                </button>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-[13.5px] font-semibold ${t.done ? 'text-muted line-through' : 'text-cream'}`}>
+                    {t.label}
+                  </p>
+                  <p className="text-amber-300 text-[11.5px] font-bold mt-0.5">
+                    +{t.reward} coins
+                  </p>
+                  {!t.done && t.hint && !isNav && (
+                    <p className="text-subtle text-[11px] mt-1 leading-snug">{t.hint}</p>
+                  )}
+                </div>
+                {t.done ? (
+                  <div className="w-7 h-7 rounded-full bg-emerald-500/20 border border-emerald-500/40 grid place-items-center shrink-0">
+                    <Check size={14} strokeWidth={3} className="text-emerald-400" />
+                  </div>
+                ) : isNav ? (
+                  <button
+                    onClick={() => onNavigate(t.target)}
+                    className="px-3 h-8 rounded-full text-white text-[12px] font-bold shrink-0 flex items-center gap-1"
+                    style={{ background: 'linear-gradient(135deg, #A855F7 0%, #EC4899 100%)' }}
+                  >
+                    Go <ChevronRight size={12} strokeWidth={2.6} />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => onClaim(t.key)}
+                    disabled={busy}
+                    className="px-3 h-8 rounded-full text-white text-[12px] font-bold disabled:opacity-50 shrink-0"
+                    style={{ background: 'linear-gradient(135deg, #A855F7 0%, #EC4899 100%)' }}
+                  >
+                    {busy ? '…' : 'Claim'}
+                  </button>
+                )}
+              </div>
+              {showHint && (
+                <div className="mx-4 mb-3 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                  <p className="text-amber-200 text-[11.5px] leading-snug">{hint.message}</p>
+                </div>
               )}
             </div>
           )

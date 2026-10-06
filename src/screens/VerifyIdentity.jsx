@@ -1,37 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Camera, Check, X, AlertCircle, ShieldCheck, RotateCcw } from 'lucide-react'
+import {
+  ArrowLeft, Camera, Check, X, AlertCircle, ShieldCheck, RotateCcw, Clock,
+} from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { tap } from '../lib/haptic'
 
-// The standard verification flow used by Tinder, Bumble, Hinge
-const STEPS = [
-  { key: 'center', label: 'Look straight at the camera', icon: '😐', show: true },
-  { key: 'left',   label: 'Slowly turn your head to the LEFT', icon: '⬅️' },
-  { key: 'right',  label: 'Slowly turn your head to the RIGHT', icon: '➡️' },
-  { key: 'up',     label: 'Slowly look UP', icon: '⬆️' },
-  { key: 'down',   label: 'Slowly look DOWN', icon: '⬇️' },
-]
-
-export default function Verify() {
+export default function VerifyIdentity() {
   const nav = useNavigate()
   const { session, refreshProfile } = useAuth()
   const [loading, setLoading] = useState(true)
-  const [status, setStatus] = useState(null)
+  const [status, setStatus] = useState('none') // none | camera | preview | pending | approved | rejected
   const [reason, setReason] = useState('')
-  const [isVerified, setIsVerified] = useState(false)
+  const [error, setError] = useState('')
 
   const [cameraActive, setCameraActive] = useState(false)
-  const [cameraError, setCameraError] = useState('')
-  const [stepIndex, setStepIndex] = useState(0)
-  const [captures, setCaptures] = useState([])         // array of Blob
-  const [previews, setPreviews] = useState([])         // object URLs
-  const [composed, setComposed] = useState(null)       // Blob (final grid)
-  const [composedPreview, setComposedPreview] = useState('')
+  const [capture, setCapture] = useState(null)         // Blob
+  const [preview, setPreview] = useState('')           // objectURL
   const [uploading, setUploading] = useState(false)
-  const [error, setError] = useState('')
-  const [submitted, setSubmitted] = useState(false)
   const [countdown, setCountdown] = useState(0)
 
   const videoRef = useRef(null)
@@ -40,29 +27,21 @@ export default function Verify() {
   const load = useCallback(async () => {
     if (!session?.user?.id) return
     setLoading(true); setError('')
-
     const { data, error: err } = await supabase.rpc('get_my_verification_status')
     if (err) { setError(err.message); setLoading(false); return }
-
     const row = Array.isArray(data) ? data[0] : data
-    setIsVerified(!!row?.is_verified)
-
     if (row?.is_verified) setStatus('approved')
     else if (row?.pending) setStatus('pending')
     else if (row?.last_status === 'rejected') { setStatus('rejected'); setReason(row.last_reason || '') }
     else setStatus('none')
-
     setLoading(false)
   }, [session?.user?.id])
 
   useEffect(() => { load() }, [load])
 
-  // Refresh auth profile when verification completes (so badge appears live)
   useEffect(() => {
-    if (isVerified && refreshProfile) {
-      refreshProfile().catch(() => {})
-    }
-  }, [isVerified, refreshProfile])
+    if (status === 'approved' && refreshProfile) refreshProfile().catch(() => {})
+  }, [status, refreshProfile])
 
   function stopCamera() {
     if (streamRef.current) {
@@ -75,7 +54,7 @@ export default function Verify() {
   useEffect(() => () => stopCamera(), [])
 
   async function startCamera() {
-    setCameraError(''); setError('')
+    setError(''); setCapture(null); setPreview('')
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 720 } },
@@ -83,173 +62,74 @@ export default function Verify() {
       })
       streamRef.current = stream
       setCameraActive(true)
+      setStatus('camera')
+      // attach stream to video after render
       setTimeout(() => {
         if (videoRef.current) {
           videoRef.current.srcObject = stream
           videoRef.current.play().catch(() => {})
         }
       }, 50)
-    } catch (err) {
-      setCameraError('Allow camera access to continue. ' + (err?.message || ''))
+    } catch (e) {
+      setError(e?.message || 'Could not access camera. Check permissions.')
     }
   }
 
-  function captureFrame() {
+  async function takePhoto() {
+    if (!videoRef.current) return
+    // 3-2-1 countdown
+    for (let i = 3; i > 0; i--) {
+      setCountdown(i)
+      tap('light')
+      await new Promise((r) => setTimeout(r, 700))
+    }
+    setCountdown(0)
+    tap('medium')
+
     const video = videoRef.current
-    if (!video) return null
+    const size = Math.min(video.videoWidth, video.videoHeight)
     const canvas = document.createElement('canvas')
-    canvas.width = 480
-    canvas.height = 480
-    const size = Math.min(video.videoWidth || 480, video.videoHeight || 480)
+    canvas.width = size; canvas.height = size
+    const ctx = canvas.getContext('2d')
     const sx = (video.videoWidth - size) / 2
     const sy = (video.videoHeight - size) / 2
-    const ctx = canvas.getContext('2d')
-    ctx.drawImage(video, sx, sy, size, size, 0, 0, 480, 480)
-    return new Promise((resolve) => {
-      canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.85)
-    })
-  }
+    ctx.drawImage(video, sx, sy, size, size, 0, 0, size, size)
 
-  async function doCapture() {
-    tap('light')
-    const blob = await captureFrame()
-    if (!blob) return
-
-    const newCaptures = [...captures, blob]
-    const newPreviews = [...previews, URL.createObjectURL(blob)]
-    setCaptures(newCaptures)
-    setPreviews(newPreviews)
-
-    if (newCaptures.length >= STEPS.length) {
-      // All done — compose into a grid
-      await composeGrid(newCaptures)
+    canvas.toBlob((blob) => {
+      if (!blob) return
+      setCapture(blob)
+      setPreview(URL.createObjectURL(blob))
+      setStatus('preview')
       stopCamera()
-    } else {
-      setStepIndex(newCaptures.length)
-    }
-  }
-
-  // Auto-countdown for each capture (2 seconds)
-  useEffect(() => {
-    if (!cameraActive) return
-    if (countdown > 0) {
-      const t = setTimeout(() => setCountdown(countdown - 1), 1000)
-      return () => clearTimeout(t)
-    }
-    if (countdown === 0 && cameraActive && stepIndex >= 0 && stepIndex < STEPS.length && captures.length < STEPS.length) {
-      // When stepIndex changes, kick off countdown
-    }
-  }, [countdown, cameraActive, stepIndex, captures.length])
-
-  function beginCountdown() {
-    setCountdown(2)
-  }
-
-  useEffect(() => {
-    if (countdown === 0) return
-    if (countdown === 1) {
-      // last tick — capture after 1 more second
-      const t = setTimeout(() => { doCapture() }, 1000)
-      return () => clearTimeout(t)
-    }
-    // countdown > 1 — just decrement (handled by main effect)
-  }, [countdown])
-
-  async function composeGrid(blobs) {
-    const canvas = document.createElement('canvas')
-    canvas.width = 960
-    canvas.height = 960
-    const ctx = canvas.getContext('2d')
-    ctx.fillStyle = '#0B0B14'
-    ctx.fillRect(0, 0, 960, 960)
-
-    // 2x2 grid at 480x480 each = 4 cells; we have 5 captures
-    // Layout: 3 on top row (320 wide each), 2 on bottom row (480 wide each)
-    // Simpler: 2x2 grid of the first 4, and put the 5th (down) below in a small strip
-    // Actually cleanest: 2 columns x 3 rows is awkward. Let's do a 2x3 grid = 6 cells, use 5.
-
-    const cellW = 480
-    const cellH = 320
-    // 2 columns x 3 rows = 6 cells
-    // positions: (0,0), (480,0), (0,320), (480,320), (0,640), (480,640)
-    const positions = [
-      [0, 0], [480, 0],
-      [0, 320], [480, 320],
-      [0, 640], [480, 640],
-    ]
-
-    await Promise.all(blobs.slice(0, 5).map(async (blob, i) => {
-      const img = await loadImage(URL.createObjectURL(blob))
-      const [x, y] = positions[i]
-      ctx.drawImage(img, x, y, cellW, cellH)
-      // label overlay
-      ctx.fillStyle = 'rgba(0,0,0,0.55)'
-      ctx.fillRect(x, y + cellH - 32, cellW, 32)
-      ctx.fillStyle = '#fff'
-      ctx.font = 'bold 18px sans-serif'
-      ctx.textAlign = 'center'
-      ctx.fillText(STEPS[i].label.replace('Slowly ', ''), x + cellW / 2, y + cellH - 10)
-    }))
-
-    return new Promise((resolve) => {
-      canvas.toBlob((finalBlob) => {
-        setComposed(finalBlob)
-        setComposedPreview(URL.createObjectURL(finalBlob))
-        resolve(finalBlob)
-      }, 'image/jpeg', 0.85)
-    })
-  }
-
-  function loadImage(url) {
-    return new Promise((resolve) => {
-      const img = new Image()
-      img.onload = () => resolve(img)
-      img.src = url
-    })
-  }
-
-  function resetCaptures() {
-    previews.forEach((u) => URL.revokeObjectURL(u))
-    if (composedPreview) URL.revokeObjectURL(composedPreview)
-    setCaptures([])
-    setPreviews([])
-    setComposed(null)
-    setComposedPreview('')
-    setStepIndex(0)
-    setCountdown(0)
+    }, 'image/jpeg', 0.85)
   }
 
   async function retake() {
-    resetCaptures()
+    setCapture(null)
+    if (preview) URL.revokeObjectURL(preview)
+    setPreview('')
     await startCamera()
   }
 
   async function submit() {
-    if (!composed || !session?.user?.id) return
+    if (!capture || !session?.user?.id) return
     setUploading(true); setError('')
-
     const path = `${session.user.id}/${Date.now()}.jpg`
     const { error: upErr } = await supabase.storage
       .from('verification-selfies')
-      .upload(path, composed, { upsert: false, contentType: 'image/jpeg' })
-
+      .upload(path, capture, { upsert: false, contentType: 'image/jpeg' })
     if (upErr) { setUploading(false); setError(upErr.message); return }
 
     const { error: rpcErr } = await supabase.rpc('request_verification', { p_selfie_path: path })
     if (rpcErr) { setUploading(false); setError(rpcErr.message); return }
 
     setUploading(false)
-    setSubmitted(true)
     setStatus('pending')
-    resetCaptures()
-    stopCamera()
+    setCapture(null)
+    if (preview) URL.revokeObjectURL(preview)
+    setPreview('')
+    tap('match')
   }
-
-  const totalSteps = STEPS.length
-  const doneSteps = captures.length
-  const currentStep = STEPS[stepIndex] || null
-  const inProgress = cameraActive && !composed
-  const allCaptured = composed !== null
 
   return (
     <div style={{
@@ -259,290 +139,259 @@ export default function Verify() {
       background: '#0B0B14', overflow: 'hidden',
     }}>
       <div className="pointer-events-none absolute inset-0 overflow-hidden -z-10" aria-hidden="true">
-        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[520px] h-[520px] rounded-full bg-purple-600/22" style={{ filter: 'blur(120px)' }} />
-        <div className="absolute bottom-[-180px] right-[-100px] w-[420px] h-[420px] rounded-full bg-pink-500/14" style={{ filter: 'blur(120px)' }} />
+        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[520px] h-[520px] rounded-full bg-sky-600/22" style={{ filter: 'blur(120px)' }} />
+        <div className="absolute bottom-[-180px] right-[-100px] w-[420px] h-[420px] rounded-full bg-purple-500/14" style={{ filter: 'blur(120px)' }} />
       </div>
 
-      <header style={{ height: 52, flexShrink: 0 }} className="px-3 flex items-center gap-2">
-        <button onClick={() => nav(-1)} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Back">
+      <header style={{ height: 52, flexShrink: 0 }}
+        className="px-3 flex items-center gap-2 border-b border-white/8">
+        <button onClick={() => { stopCamera(); nav(-1) }}
+          className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Back">
           <ArrowLeft size={20} strokeWidth={2.3} />
         </button>
-        <span className="text-cream font-bold text-[15px]">Get verified</span>
+        <span className="text-cream font-bold text-[15px] flex-1">Prove you're real</span>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-5 py-4 pb-32">
+      <div className="flex-1 overflow-y-auto px-5 py-6 pb-12">
         {loading ? (
           <div className="grid place-items-center h-40 text-muted text-[13px]">Loading…</div>
-        ) : isVerified || status === 'approved' ? (
-          <ApprovedState />
+        ) : error && status === 'none' ? (
+          <div className="text-danger text-[13px] bg-danger/10 border border-danger/30 rounded-2xl px-4 py-3">
+            {error}
+          </div>
+        ) : status === 'approved' ? (
+          <ApprovedView />
         ) : status === 'pending' ? (
-          <PendingState submitted={submitted} />
+          <PendingView />
+        ) : status === 'rejected' ? (
+          <RejectedView reason={reason} onRetry={() => setStatus('none')} />
+        ) : status === 'camera' ? (
+          <CameraView
+            videoRef={videoRef}
+            countdown={countdown}
+            error={error}
+            onCancel={() => { stopCamera(); setStatus('none') }}
+            onCapture={takePhoto}
+          />
+        ) : status === 'preview' ? (
+          <PreviewView
+            preview={preview}
+            uploading={uploading}
+            error={error}
+            onRetake={retake}
+            onSubmit={submit}
+          />
         ) : (
-          <>
-            {status === 'rejected' && (
-              <div className="mb-5 p-4 rounded-2xl bg-red-500/10 border border-red-500/30">
-                <div className="flex items-start gap-3">
-                  <AlertCircle size={18} strokeWidth={2.3} className="text-red-400 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-cream font-bold text-[14.5px] mb-1">Previous request wasn't accepted</p>
-                    <p className="text-muted text-[12.5px] leading-relaxed">
-                      {reason || 'We could not verify your selfie. Please try again.'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {!inProgress && !allCaptured && (
-              <>
-                <div className="text-center mb-5">
-                  <div className="w-16 h-16 rounded-2xl grid place-items-center mx-auto mb-4"
-                    style={{
-                      background: 'linear-gradient(135deg, #C084FC 0%, #A855F7 50%, #EC4899 100%)',
-                      boxShadow: '0 12px 36px rgba(168,85,247,0.5)',
-                    }}>
-                    <ShieldCheck size={28} strokeWidth={2.2} className="text-white" />
-                  </div>
-                  <h1 className="text-cream text-[22px] font-extrabold tracking-tight mb-2">
-                    Prove it's you
-                  </h1>
-                  <p className="text-muted text-[13.5px] leading-relaxed max-w-[330px] mx-auto">
-                    We'll guide you through 5 quick head movements. It takes about 15 seconds.
-                    Your selfies go to our team only — never to other users.
-                  </p>
-                </div>
-
-                <div className="rounded-2xl bg-white/[0.04] border border-purple-500/30 p-5 mb-5">
-                  <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-3">
-                    You'll do these 5 steps
-                  </p>
-                  <div className="flex flex-col gap-2.5">
-                    {STEPS.map((s) => (
-                      <div key={s.key} className="flex items-center gap-3">
-                        <span className="text-[22px] leading-none w-7 text-center">{s.icon}</span>
-                        <span className="text-cream/90 text-[13.5px] font-medium">{s.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl bg-white/[0.04] border border-white/8 p-4 mb-5">
-                  <p className="text-cream text-[12.5px] font-semibold mb-1">When approved you get</p>
-                  <p className="text-muted text-[12.5px]">
-                    A blue <span className="text-purple-300 font-semibold">✓ verified badge</span> on your profile and cards, plus{' '}
-                    <span className="text-purple-300 font-semibold">150 coins</span>.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={startCamera}
-                  className="w-full h-14 rounded-full text-white font-bold text-[15px] flex items-center justify-center gap-2"
-                  style={{
-                    background: 'linear-gradient(135deg, #EC4899 0%, #A855F7 100%)',
-                    boxShadow: '0 12px 36px rgba(236,72,153,0.5)',
-                  }}
-                >
-                  <Camera size={18} strokeWidth={2.4} /> Start verification
-                </button>
-
-                {cameraError && (
-                  <div className="mt-4 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5">
-                    {cameraError}
-                  </div>
-                )}
-              </>
-            )}
-
-            {inProgress && currentStep && (
-              <>
-                {/* Progress dots */}
-                <div className="flex items-center justify-center gap-1.5 mb-4">
-                  {STEPS.map((_, i) => (
-                    <span
-                      key={i}
-                      className={`h-1.5 rounded-full transition-all ${
-                        i < doneSteps ? 'w-8 bg-purple-500' : i === stepIndex ? 'w-8 bg-purple-400' : 'w-4 bg-white/15'
-                      }`}
-                    />
-                  ))}
-                </div>
-
-                <div className="text-center mb-3">
-                  <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-1">
-                    Step {stepIndex + 1} of {totalSteps}
-                  </p>
-                  <h2 className="text-cream text-[20px] font-extrabold tracking-tight">
-                    {currentStep.label}
-                  </h2>
-                </div>
-
-                <div className="relative rounded-2xl overflow-hidden border border-purple-500/40 bg-black mb-4" style={{ aspectRatio: '1 / 1' }}>
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    muted
-                    playsInline
-                    className="w-full h-full object-cover"
-                    style={{ transform: 'scaleX(-1)' }}
-                  />
-
-                  {/* Countdown overlay */}
-                  {countdown > 0 && (
-                    <div className="absolute inset-0 grid place-items-center bg-obsidian/55 backdrop-blur-sm">
-                      <div className="text-white text-[90px] font-black leading-none tabular-nums"
-                        style={{ textShadow: '0 4px 30px rgba(0,0,0,0.9)' }}
-                      >
-                        {countdown}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Pose emoji overlay */}
-                  <div className="absolute top-4 left-1/2 -translate-x-1/2 w-14 h-14 rounded-full bg-obsidian/70 border border-white/20 grid place-items-center pointer-events-none">
-                    <span className="text-[28px] leading-none">{currentStep.icon}</span>
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { resetCaptures(); stopCamera() }}
-                    className="flex-1 h-11 rounded-full bg-white/[0.06] border border-white/12 text-muted font-semibold text-[13.5px]"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={beginCountdown}
-                    disabled={countdown > 0}
-                    className="flex-1 h-11 rounded-full text-white font-bold text-[13.5px] flex items-center justify-center gap-2 disabled:opacity-50"
-                    style={{
-                      background: 'linear-gradient(135deg, #EC4899 0%, #A855F7 100%)',
-                      boxShadow: '0 8px 24px rgba(236,72,153,0.4)',
-                    }}
-                  >
-                    <Camera size={15} strokeWidth={2.4} />
-                    {countdown > 0 ? 'Hold still…' : 'Capture'}
-                  </button>
-                </div>
-
-                {/* Preview strip */}
-                {previews.length > 0 && (
-                  <div className="flex gap-2 mt-4">
-                    {previews.map((url, i) => (
-                      <div key={i} className="w-14 h-14 rounded-xl overflow-hidden border-2 border-purple-500/40">
-                        <img src={url} alt="" className="w-full h-full object-cover" />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-
-            {allCaptured && (
-              <>
-                <div className="text-center mb-5">
-                  <h2 className="text-cream text-[20px] font-extrabold tracking-tight mb-2">
-                    All 5 captured
-                  </h2>
-                  <p className="text-muted text-[13px]">
-                    Review the collage below. Submit if it looks right.
-                  </p>
-                </div>
-
-                <div className="rounded-2xl overflow-hidden border border-purple-500/40 mb-5">
-                  <img src={composedPreview} alt="Your verification collage" className="w-full" />
-                </div>
-
-                <div className="flex gap-2 mb-4">
-                  <button
-                    type="button"
-                    onClick={retake}
-                    className="flex-1 h-11 rounded-full bg-white/[0.06] border border-white/12 text-cream font-semibold text-[13.5px] flex items-center justify-center gap-2"
-                  >
-                    <RotateCcw size={15} strokeWidth={2.4} /> Retake
-                  </button>
-                </div>
-              </>
-            )}
-
-            {error && (
-              <div className="mt-3 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5">
-                {error}
-              </div>
-            )}
-          </>
+          <IntroView onStart={startCamera} />
         )}
       </div>
+    </div>
+  )
+}
 
-      {/* Submit bar */}
-      {allCaptured && !submitted && (
-        <div
-          className="shrink-0 px-5 pt-3 border-t border-white/8"
-          style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}
-        >
-          <button
-            onClick={submit}
-            disabled={uploading}
-            className="w-full h-12 rounded-full text-white font-bold text-[15px] disabled:opacity-50 flex items-center justify-center gap-2"
-            style={{
-              background: 'linear-gradient(135deg, #EC4899 0%, #A855F7 100%)',
-              boxShadow: '0 10px 28px rgba(236,72,153,0.5)',
-            }}
-          >
-            <Check size={16} strokeWidth={2.6} />
-            {uploading ? 'Sending…' : 'Submit for review'}
-          </button>
+// ------------------------------------------------------------
+// Intro
+// ------------------------------------------------------------
+function IntroView({ onStart }) {
+  return (
+    <div>
+      <div className="text-center mb-6">
+        <div className="w-20 h-20 rounded-3xl bg-sky-500/15 border border-sky-500/30 grid place-items-center mx-auto mb-4">
+          <ShieldCheck size={36} strokeWidth={2.2} className="text-sky-300" />
+        </div>
+        <h1 className="text-cream text-[22px] font-extrabold tracking-tight mb-2">
+          Prove you're a real person
+        </h1>
+        <p className="text-muted text-[13.5px] leading-relaxed max-w-[320px] mx-auto">
+          Quick selfie check. We use it only to keep Nakubonye safe — it never appears on your profile.
+        </p>
+      </div>
+
+      <div className="rounded-2xl bg-white/[0.04] border border-white/8 p-4 mb-4">
+        <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">
+          How it works
+        </p>
+        <ul className="space-y-2">
+          <Bullet>Take one selfie — look straight at the camera.</Bullet>
+          <Bullet>Our team reviews it within 24 hours.</Bullet>
+          <Bullet>You'll earn 50 coins once approved.</Bullet>
+          <Bullet>Your selfie is private — no one else sees it.</Bullet>
+        </ul>
+      </div>
+
+      <div className="rounded-2xl bg-emerald-500/8 border border-emerald-500/25 p-4 mb-6">
+        <p className="text-emerald-300 text-[12.5px] leading-relaxed">
+          <strong className="font-bold">This is a safety check, not a badge.</strong> The blue badge is a separate paid feature in "Get your badge."
+        </p>
+      </div>
+
+      <button onClick={onStart}
+        className="w-full h-12 rounded-full text-white font-bold text-[14.5px] flex items-center justify-center gap-2"
+        style={{ background: 'linear-gradient(135deg, #0EA5E9 0%, #A855F7 100%)', boxShadow: '0 10px 28px rgba(14,165,233,0.45)' }}>
+        <Camera size={17} strokeWidth={2.4} /> Start selfie
+      </button>
+    </div>
+  )
+}
+
+function Bullet({ children }) {
+  return (
+    <li className="flex items-start gap-2">
+      <span className="w-1.5 h-1.5 rounded-full bg-sky-400 mt-2 shrink-0" />
+      <span className="text-muted text-[13px] leading-relaxed">{children}</span>
+    </li>
+  )
+}
+
+// ------------------------------------------------------------
+// Camera
+// ------------------------------------------------------------
+function CameraView({ videoRef, countdown, error, onCancel, onCapture }) {
+  return (
+    <div>
+      <div className="rounded-3xl overflow-hidden bg-black border border-white/10 mb-4 relative"
+        style={{ aspectRatio: '1 / 1' }}>
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className="w-full h-full object-cover"
+          style={{ transform: 'scaleX(-1)' }}
+        />
+        {countdown > 0 && (
+          <div className="absolute inset-0 grid place-items-center bg-black/40">
+            <p className="text-white font-black text-[80px] leading-none">{countdown}</p>
+          </div>
+        )}
+        {/* Face oval guide */}
+        <div className="absolute inset-0 pointer-events-none grid place-items-center">
+          <div style={{
+            width: '62%', height: '78%',
+            border: '3px dashed rgba(255,255,255,0.6)',
+            borderRadius: '50%',
+          }} />
+        </div>
+      </div>
+
+      {error && (
+        <div className="flex items-start gap-2 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5 mb-4">
+          <AlertCircle size={14} strokeWidth={2.4} className="shrink-0 mt-0.5" />
+          <span>{error}</span>
         </div>
       )}
-    </div>
-  )
-}
 
-function PendingState({ submitted }) {
-  return (
-    <div className="pt-16 text-center">
-      <div className="w-20 h-20 rounded-3xl bg-purple-500/15 border border-purple-500/30 grid place-items-center mx-auto mb-6">
-        <span className="text-4xl">⏳</span>
-      </div>
-      <h2 className="text-cream text-[20px] font-extrabold tracking-tight mb-2">
-        {submitted ? 'Sent for review' : 'Review in progress'}
-      </h2>
-      <p className="text-muted text-[13.5px] leading-relaxed max-w-[300px] mx-auto mb-6">
-        Our team is checking your selfies. This usually takes a few hours.
+      <p className="text-center text-muted text-[12.5px] mb-4">
+        Center your face in the oval. Good lighting helps.
       </p>
-      <div className="rounded-2xl bg-white/[0.04] border border-white/8 p-4 text-left max-w-[340px] mx-auto">
-        <p className="text-purple-300 text-[11px] font-bold tracking-wide uppercase mb-2">
-          While you wait
-        </p>
-        <p className="text-cream/90 text-[13px] leading-relaxed">
-          Make sure your profile photos show your face clearly. Blurry or
-          heavily-filtered photos are the most common reason verification fails.
-        </p>
+
+      <div className="flex gap-3">
+        <button onClick={onCancel}
+          className="flex-1 h-12 rounded-full text-cream font-bold text-[14px] bg-white/[0.06] border border-white/10">
+          Cancel
+        </button>
+        <button onClick={onCapture} disabled={countdown > 0}
+          className="flex-1 h-12 rounded-full text-white font-bold text-[14px] flex items-center justify-center gap-2 disabled:opacity-50"
+          style={{ background: 'linear-gradient(135deg, #0EA5E9 0%, #A855F7 100%)' }}>
+          <Camera size={16} strokeWidth={2.4} /> Take photo
+        </button>
       </div>
     </div>
   )
 }
 
-function ApprovedState() {
+// ------------------------------------------------------------
+// Preview
+// ------------------------------------------------------------
+function PreviewView({ preview, uploading, error, onRetake, onSubmit }) {
   return (
-    <div className="pt-16 text-center">
-      <div
-        className="w-20 h-20 rounded-3xl grid place-items-center mx-auto mb-6"
-        style={{
-          background: 'linear-gradient(135deg, #C084FC 0%, #A855F7 50%, #EC4899 100%)',
-          boxShadow: '0 16px 44px rgba(168,85,247,0.6)',
-        }}
-      >
-        <Check size={40} strokeWidth={3} className="text-white" />
-      </div>
-      <h2 className="text-cream text-[22px] font-extrabold tracking-tight mb-2">
-        You're verified
+    <div>
+      <h2 className="text-cream text-[19px] font-extrabold tracking-tight text-center mb-1">
+        Looking good?
       </h2>
+      <p className="text-muted text-[13px] text-center mb-5">
+        Submit this selfie or retake it.
+      </p>
+
+      <div className="rounded-3xl overflow-hidden border border-white/10 mb-5 mx-auto"
+        style={{ maxWidth: 320, aspectRatio: '1 / 1' }}>
+        <img src={preview} alt="Selfie" className="w-full h-full object-cover" />
+      </div>
+
+      {error && (
+        <div className="flex items-start gap-2 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5 mb-4">
+          <AlertCircle size={14} strokeWidth={2.4} className="shrink-0 mt-0.5" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <div className="flex gap-3">
+        <button onClick={onRetake} disabled={uploading}
+          className="flex-1 h-12 rounded-full text-cream font-bold text-[14px] bg-white/[0.06] border border-white/10 disabled:opacity-50 flex items-center justify-center gap-2">
+          <RotateCcw size={15} strokeWidth={2.4} /> Retake
+        </button>
+        <button onClick={onSubmit} disabled={uploading}
+          className="flex-1 h-12 rounded-full text-white font-bold text-[14px] flex items-center justify-center gap-2 disabled:opacity-50"
+          style={{ background: 'linear-gradient(135deg, #0EA5E9 0%, #A855F7 100%)' }}>
+          {uploading ? 'Submitting…' : <><Check size={16} strokeWidth={2.6} /> Submit</>}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ------------------------------------------------------------
+// Pending
+// ------------------------------------------------------------
+function PendingView() {
+  return (
+    <div className="text-center pt-6">
+      <div className="w-20 h-20 rounded-full bg-amber-500/20 border-2 border-amber-500/40 grid place-items-center mx-auto mb-5">
+        <Clock size={36} strokeWidth={2.2} className="text-amber-400" />
+      </div>
+      <h2 className="text-cream text-[20px] font-extrabold mb-2">Under review</h2>
       <p className="text-muted text-[13.5px] leading-relaxed max-w-[300px] mx-auto">
-        Your blue check appears on your profile and cards.
+        We're checking your selfie. Most reviews take less than 24 hours. You'll get 50 coins once approved.
       </p>
+    </div>
+  )
+}
+
+// ------------------------------------------------------------
+// Approved
+// ------------------------------------------------------------
+function ApprovedView() {
+  return (
+    <div className="text-center pt-6">
+      <div className="w-20 h-20 rounded-full bg-emerald-500/20 border-2 border-emerald-500/40 grid place-items-center mx-auto mb-5">
+        <Check size={40} strokeWidth={3} className="text-emerald-400" />
+      </div>
+      <h2 className="text-cream text-[20px] font-extrabold mb-2">You're verified</h2>
+      <p className="text-muted text-[13.5px] leading-relaxed max-w-[300px] mx-auto">
+        We've confirmed you're a real person. Thanks for helping keep Nakubonye safe.
+      </p>
+    </div>
+  )
+}
+
+// ------------------------------------------------------------
+// Rejected
+// ------------------------------------------------------------
+function RejectedView({ reason, onRetry }) {
+  return (
+    <div className="text-center pt-6">
+      <div className="w-20 h-20 rounded-full bg-red-500/20 border-2 border-red-500/40 grid place-items-center mx-auto mb-5">
+        <X size={36} strokeWidth={2.4} className="text-red-400" />
+      </div>
+      <h2 className="text-cream text-[20px] font-extrabold mb-2">Not approved</h2>
+      <p className="text-muted text-[13.5px] leading-relaxed max-w-[300px] mx-auto mb-6">
+        {reason || 'We could not verify your selfie. Try again with better lighting and your face clearly visible.'}
+      </p>
+      <button onClick={onRetry}
+        className="w-full h-12 rounded-full text-white font-bold text-[14.5px]"
+        style={{ background: 'linear-gradient(135deg, #0EA5E9 0%, #A855F7 100%)', boxShadow: '0 10px 28px rgba(14,165,233,0.45)' }}>
+        Try again
+      </button>
     </div>
   )
 }

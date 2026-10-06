@@ -13,14 +13,13 @@ const MOBILE_NUMBER = '65394084'
 const FORM_FEE_USD = 8
 
 const SERVICES = [
-  { id: 'lumicash', label: 'Lumicash (Lumitel)' },
-  { id: 'bancobu',  label: 'Bancobu' },
-  { id: 'enoti',    label: 'Enoti' },
-  { id: 'ccm',      label: 'CCM' },
-  { id: 'ingodo',   label: 'Ingodo yanje' },
-  { id: 'coopec',   label: 'COOPEC e-Wallet' },
-  { id: 'cashtel',  label: 'Cashtel' },
-  { id: 'other',    label: 'Other service' },
+  { id: 'lumicash',       label: 'Lumicash (Lumitel)' },
+  { id: 'bancobu_enoti',  label: 'Bancobu Enoti' },
+  { id: 'ccm',            label: 'CCM' },
+  { id: 'ingodo',         label: 'Ingodo yanje' },
+  { id: 'coopec',         label: 'COOPEC e-Wallet' },
+  { id: 'cashtel',        label: 'Cashtel' },
+  { id: 'other',          label: 'Other service' },
 ]
 
 const CATEGORIES = [
@@ -86,7 +85,7 @@ export default function Verify() {
           className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Back">
           <ArrowLeft size={20} strokeWidth={2.3} />
         </button>
-        <span className="text-cream font-bold text-[15px] flex-1">Get verified</span>
+        <span className="text-cream font-bold text-[15px] flex-1">Get your badge</span>
       </header>
 
       <div className="flex-1 overflow-y-auto px-5 py-6 pb-12">
