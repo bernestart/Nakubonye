@@ -4,6 +4,7 @@ import { ArrowLeft, Search, X, Check } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
+import { loadBlockedIds } from "../lib/blocks"
 import BrandGlow from "../components/BrandGlow"
 
 export default function AddGroupMembers() {
@@ -17,6 +18,7 @@ export default function AddGroupMembers() {
   const [results, setResults] = useState([])
   const [selected, setSelected] = useState([])
   const [busy, setBusy] = useState(false)
+  const [blockedIds, setBlockedIds] = useState(new Set())
   const [error, setError] = useState("")
 
   useEffect(() => {
@@ -24,7 +26,11 @@ export default function AddGroupMembers() {
       const { data } = await supabase.from("group_members").select("user_id").eq("group_id", groupId)
       setExistingIds(new Set((data || []).map((m) => m.user_id)))
     })()
-  }, [groupId])
+    ;(async () => {
+      const blocked = await loadBlockedIds(myId)
+      setBlockedIds(blocked)
+    })()
+  }, [groupId, myId])
 
   useEffect(() => {
     const q = query.trim()
@@ -37,10 +43,10 @@ export default function AddGroupMembers() {
         .or("display_name.ilike.%" + q + "%,username.ilike.%" + q + "%")
         .limit(20)
       if (cancelled) return
-      setResults((data || []).filter((u) => !existingIds.has(u.id)))
+      setResults((data || []).filter((u) => !existingIds.has(u.id) && !blockedIds.has(u.id)))
     }, 250)
     return () => { cancelled = true; clearTimeout(t) }
-  }, [query, existingIds])
+  }, [query, existingIds, blockedIds])
 
   function toggle(u) {
     if (selected.find((s) => s.id === u.id)) setSelected((a) => a.filter((s) => s.id !== u.id))
@@ -50,19 +56,50 @@ export default function AddGroupMembers() {
   async function add() {
     if (selected.length === 0 || !myId) return
     setBusy(true); setError(""); tap("light")
-    const rows = selected.map((u) => ({ group_id: groupId, user_id: u.id, role: "member" }))
+
+    // Enforce each recipient's who_can_add_to_group
+    const allowed = []
+    const denied = []
+    for (const u of selected) {
+      try {
+        const { data: ok } = await supabase.rpc("can_add_to_group", { sender: myId, recipient: u.id })
+        if (ok === true) allowed.push(u)
+        else denied.push(u)
+      } catch (e) {
+        console.warn("can_add_to_group rpc failed", e)
+        allowed.push(u) // fail-open on RPC error
+      }
+    }
+
+    if (allowed.length === 0) {
+      setBusy(false)
+      setError(denied.length === 1
+        ? (denied[0].display_name || denied[0].username || "This user") + " doesn't allow being added to groups"
+        : "None of these users allow being added to groups")
+      return
+    }
+
+    const rows = allowed.map((u) => ({ group_id: groupId, user_id: u.id, role: "member" }))
     const { error: insErr } = await supabase.from("group_members").insert(rows)
     if (!insErr) {
-      // System message
       const { data: me } = await supabase.from("profiles").select("display_name, username").eq("id", myId).maybeSingle()
       const myName = me?.display_name || me?.username || "Someone"
-      const names = selected.map((u) => u.display_name || u.username || "Someone").join(", ")
+      const names = allowed.map((u) => u.display_name || u.username || "Someone").join(", ")
       await supabase.from("group_messages").insert({
         group_id: groupId,
         sender_id: myId,
         content: myName + " added " + names,
         is_system: true,
       })
+      if (denied.length > 0) {
+        const skippedNames = denied.map((u) => u.display_name || u.username || "Someone").join(", ")
+        await supabase.from("group_messages").insert({
+          group_id: groupId,
+          sender_id: myId,
+          content: "Couldn't add " + skippedNames + " — they don't allow being added to groups",
+          is_system: true,
+        })
+      }
     }
     setBusy(false)
     if (insErr) { setError(insErr.message); return }

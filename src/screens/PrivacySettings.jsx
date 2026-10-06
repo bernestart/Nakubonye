@@ -185,6 +185,23 @@ export default function PrivacySettings() {
               value={labelFor('who_can_tag', TAG_LEVELS)}
               onClick={() => openSheet('who_can_tag', 'Who can tag or mention me', TAG_LEVELS)}
             />
+            <SelectorRow
+              icon={<Users size={18} />}
+              label="Who can add me to group chats"
+              value={labelFor('who_can_add_to_group', [
+                { id: 'everyone',  label: 'Everyone' },
+                { id: 'followers', label: 'People I follow' },
+                { id: 'matches',   label: 'Matches' },
+                { id: 'nobody',    label: 'Nobody' },
+              ])}
+              onClick={() => openSheet('who_can_add_to_group', 'Who can add me to group chats', [
+                { id: 'everyone',  label: 'Everyone',        sub: 'Anyone can add you to a group chat' },
+                { id: 'followers', label: 'People I follow', sub: 'Only accounts you follow' },
+                { id: 'matches',   label: 'Matches',         sub: "Only people you've matched with" },
+                { id: 'nobody',    label: 'Nobody',          sub: 'Only invite links work' },
+              ])}
+            />
+
             <ToggleRow
               icon={<AtSign size={18} />}
               label="Tag review"
