@@ -3,6 +3,7 @@ import { X, ImagePlus, Send, BarChart2, Trash2, Plus } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { loadBlockedIds } from "../lib/blocks"
 import { useAuth } from "../lib/auth"
+import { useSettings } from "../lib/settings.jsx"
 import { tap } from "../lib/haptic"
 import { autosaveDraft, deleteDraftsByKind } from "../lib/drafts"
 
@@ -15,6 +16,7 @@ const AUDIENCES = [
 const MAX_IMAGES = 10
 
 export default function PostComposer({ onClose, onDone, onOptimistic, onResolve, onFail, onRetryStart }) {
+  const { settings } = useSettings()
   const { session } = useAuth()
   const myId = session?.user?.id
   const fileRef = useRef(null)
@@ -25,6 +27,7 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
   const [imageFiles, setImageFiles] = useState([])
   const [imagePreviews, setImagePreviews] = useState([])
   const [audience, setAudience] = useState("public")
+  const [audienceInitialized, setAudienceInitialized] = useState(false)
   const [audienceSheetOpen, setAudienceSheetOpen] = useState(false)
   const [myCircles, setMyCircles] = useState([])
   const [audienceView, setAudienceView] = useState("main")  // main | circles
@@ -37,6 +40,14 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
   const [stage, setStage] = useState("compose") // compose | preview
   const [resumeDraftId, setResumeDraftId] = useState(null)
   const [reshareRef, setReshareRef] = useState(null)  // { type, id, snapshot }
+  // Seed default audience from settings once
+  useEffect(() => {
+    if (audienceInitialized) return
+    const def = settings?.default_post_audience
+    if (def && def !== "public") setAudience(def)
+    setAudienceInitialized(true)
+  }, [settings?.default_post_audience, audienceInitialized])
+
   useEffect(() => {
     try {
       const url = new URL(window.location.href)
