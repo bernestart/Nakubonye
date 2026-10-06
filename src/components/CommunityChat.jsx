@@ -36,6 +36,7 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
   const [profiles, setProfiles] = useState(new Map())
   const [photos, setPhotos] = useState(new Map())
   const [text, setText] = useState('')
+  const [showTypingIndicator, setShowTypingIndicator] = useState(true)
   const [mentionResults, setMentionResults] = useState([])
   const [mentionQuery, setMentionQuery] = useState(null)
   const [sending, setSending] = useState(false)
@@ -261,6 +262,7 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
   }, [])
 
   function notifyTyping(value) {
+    if (!showTypingIndicator) return
     const ch = typingChannelRef.current
     if (!ch) return
     ch.send({ type: "broadcast", event: "typing", payload: { user_id: myId, typing: value.trim().length > 0 } })

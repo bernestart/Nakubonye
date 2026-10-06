@@ -218,6 +218,14 @@ export default function PrivacySettings() {
             />
             {/* Allow sharing to stories — deferred to Phase 10 (needs a share-to-story feature first) */}
 
+            <ToggleRow
+              icon={<Activity size={18} />}
+              label="Show typing indicator"
+              sub="Let others see when you're typing"
+              value={settings.show_typing_indicator !== false}
+              onChange={(v) => update({ show_typing_indicator: v })}
+            />
+
             {/* ─── PROFILE DETAILS ─── */}
             <SectionLabel icon={<Eye size={14} />}>Profile details</SectionLabel>
 

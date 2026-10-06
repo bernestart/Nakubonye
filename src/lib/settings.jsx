@@ -19,6 +19,7 @@ const DEFAULTS = {
   who_can_see_location: 'matches',
   show_activity_status: true,
   show_read_receipts: true,
+  show_typing_indicator: true,
   show_location_on_profile: true,
   phone_visibility: 'only_me',
   email_visibility: 'only_me',

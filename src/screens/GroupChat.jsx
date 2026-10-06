@@ -66,6 +66,7 @@ export default function GroupChat() {
   const [forwardingMsg, setForwardingMsg] = useState(null)
   const [typers, setTypers] = useState({})  // userId -> timestamp
   const typingChannelRef = useRef(null)
+  const [showTypingIndicator, setShowTypingIndicator] = useState(true)
   const typingTimeoutRef = useRef(null)
   const [clearedAt, setClearedAt] = useState(null)
   const longPressTimer = useRef(null)
@@ -285,6 +286,7 @@ export default function GroupChat() {
   }, [])
 
   function notifyTyping(value) {
+    if (!showTypingIndicator) return
     const ch = typingChannelRef.current
     if (!ch) return
     ch.send({ type: "broadcast", event: "typing", payload: { user_id: myId, typing: value.trim().length > 0 } })

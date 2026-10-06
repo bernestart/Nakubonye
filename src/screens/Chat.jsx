@@ -127,6 +127,7 @@ export default function Chat() {
   const [canMsgReason, setCanMsgReason] = useState('')
   const [canMsgRequest, setCanMsgRequest] = useState(false)
   const [canSeeOnline, setCanSeeOnline] = useState(true)
+  const [showTypingIndicator, setShowTypingIndicator] = useState(true)
   const [canSeeReadReceipts, setCanSeeReadReceipts] = useState(true)
   const [recordSeconds, setRecordSeconds] = useState(0)
   const recorderRef = useRef(null)
@@ -485,6 +486,7 @@ export default function Chat() {
   useEffect(() => { messagesRef.current = messages }, [messages])
 
   function notifyTyping(value) {
+    if (!showTypingIndicator) return
     const ch = typingChannelRef.current
     if (!ch) return
     ch.send({ type: 'broadcast', event: 'typing', payload: { user_id: myId, typing: value.trim().length > 0 } })
