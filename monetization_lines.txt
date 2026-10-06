@@ -1,0 +1,92 @@
+src/screens/Discover.jsx:110:  const [isPremium, setIsPremium] = useState(false)
+src/screens/Discover.jsx:178:    if (!session?.user?.id) { setIsPremium(false); return }
+src/screens/Discover.jsx:180:    supabase.rpc('is_premium').then(({ data }) => {
+src/screens/Discover.jsx:181:      if (!cancelled) setIsPremium(!!data)
+src/screens/Discover.jsx:262:    // PREMIUM GATE
+src/screens/Discover.jsx:263:    if (!isPremium) {
+src/screens/Discover.jsx:264:      setError('Undo is a Premium feature.')
+src/screens/Discover.jsx:346:          <ActionBtn onClick={handleUndo} disabled={busy || !canUndo} label="Undo" size={48} variant="undo" iconColor={isPremium ? 'text-amber-400' : 'text-white/80'}>
+src/screens/Discover.jsx:349:              {!isPremium && (
+src/screens/Likes.jsx:23:  const [isPremium, setIsPremium] = useState(false)
+src/screens/Likes.jsx:24:  const [premiumLoading, setPremiumLoading] = useState(true)
+src/screens/Likes.jsx:112:    if (!session?.user?.id) { setPremiumLoading(false); return }
+src/screens/Likes.jsx:115:      const { data, error: err } = await supabase.rpc('is_premium')
+src/screens/Likes.jsx:117:      setIsPremium(!!data)
+src/screens/Likes.jsx:118:      setPremiumLoading(false)
+src/screens/Likes.jsx:176:        {loading || premiumLoading ? (
+src/screens/Likes.jsx:305:            Premium shows you everyone who liked you — so you can decide who to match with, instead of waiting to be discovered.
+src/screens/Likes.jsx:323:            to="/premium"
+src/screens/EditProfile.jsx:24:  const [isPremium, setIsPremium] = useState(false)
+src/screens/EditProfile.jsx:77:  const effectiveMax = isPremium ? 9 : 6 + extraSlots
+src/screens/EditProfile.jsx:78:  const canBuySlot = !isPremium && extraSlots < 3
+src/screens/EditProfile.jsx:422:      else if (/premium/i.test(err.message)) setError('Premium already includes 9 slots.')
+src/screens/Wallet.jsx:13:  { key: 'premium', name: 'Premium', coins: 3000, bonus: 600, price: '$39.99', label: '' },
+src/screens/Premium.jsx:40:export default function Premium() {
+src/screens/Premium.jsx:46:  const [isPremium, setIsPremium] = useState(false)
+src/screens/Premium.jsx:53:    const { data: subData } = await supabase.rpc('get_my_subscription')
+src/screens/Premium.jsx:56:    setIsPremium(!!row?.is_active)
+src/screens/Premium.jsx:68:      `For now, ask the developer to grant your account premium with:\n\n` +
+src/screens/Premium.jsx:69:      `grant_premium('<your-user-id>', '${planKey}', 30)`
+src/screens/Premium.jsx:100:        <span className="text-cream font-bold text-[15px]">Premium</span>
+src/screens/Premium.jsx:110:            Nakubonye Premium
+src/screens/Premium.jsx:121:        {isPremium && sub ? (
+src/screens/Premium.jsx:128:                <p className="text-cream font-bold text-[15px]">You're Premium</p>
+src/screens/Premium.jsx:145:              onClick={() => alert('Manage subscription is only active once a payment provider is connected.')}
+src/screens/Premium.jsx:148:              Manage subscription
+src/screens/Premium.jsx:154:        {!isPremium && !loading && (
+src/screens/Premium.jsx:238:          Premium never bypasses safety, blocking, reporting, or moderation.
+src/screens/ProfileSettings.jsx:191:          <FeatureTile icon={<Crown size={20} />} label="Premium" to="/premium" nav={nav} />
+src/screens/Filters.jsx:14:  const [isPremium, setIsPremium] = useState(false)
+src/screens/Filters.jsx:61:    if (!session?.user?.id) { setIsPremium(false); return }
+src/screens/Filters.jsx:62:    supabase.rpc('is_premium').then(({ data }) => setIsPremium(!!data))
+src/screens/Filters.jsx:225:            <PremiumToggle
+src/screens/Filters.jsx:230:              isPremium={isPremium}
+src/screens/Filters.jsx:231:              onUpgrade={() => { tap('light'); nav('/premium') }}
+src/screens/Filters.jsx:233:            <PremiumToggle
+src/screens/Filters.jsx:238:              isPremium={isPremium}
+src/screens/Filters.jsx:239:              onUpgrade={() => { tap('light'); nav('/premium') }}
+src/screens/Filters.jsx:241:            <PremiumToggle
+src/screens/Filters.jsx:246:              isPremium={isPremium}
+src/screens/Filters.jsx:247:              onUpgrade={() => { tap('light'); nav('/premium') }}
+src/screens/Filters.jsx:306:function PremiumToggle({ label, desc, on, onToggle, isPremium, onUpgrade }) {
+src/screens/Filters.jsx:310:        if (!isPremium) { onUpgrade(); return }
+src/screens/Filters.jsx:318:          {!isPremium && <Lock size={11} strokeWidth={2.4} className="text-amber-400" />}
+src/screens/Filters.jsx:323:        !isPremium ? 'bg-amber-500/15 border border-amber-500/30' : (on ? 'bg-purple-600' : 'bg-white/15')
+src/screens/Filters.jsx:326:          !isPremium ? 'left-0.5' : (on ? 'left-[22px]' : 'left-0.5')
+src/screens/Terms.jsx:50:        <H>Coins and Premium</H>
+src/screens/Terms.jsx:51:        <P>Coins and Premium subscriptions are digital items. Coins are not real money, cannot be transferred to another user, and are not refundable. Premium subscriptions do not auto-renew unless you set them up to. You can cancel Premium at any time and keep the benefits until the end of the paid period.</P>
+src/screens/Boost.jsx:220:        Premium members get 1 free boost every week.
+src/screens/CommunityView.jsx:28:  const [isPremium, setIsPremium] = useState(false)
+src/screens/CommunityView.jsx:158:    if (!session?.user?.id) { setIsPremium(false); return }
+src/screens/CommunityView.jsx:159:    supabase.rpc('is_premium').then(({ data }) => setIsPremium(!!data))
+src/screens/CommunityView.jsx:471:              <CommunityChat communityId={community.id} isMember={joined} isPremium={isPremium} communityName={community.name} />
+src/screens/ProfileViewers.jsx:17:  const [premiumRequired, setPremiumRequired] = useState(false)
+src/screens/ProfileViewers.jsx:21:    setLoading(true); setError(''); setPremiumRequired(false)
+src/screens/ProfileViewers.jsx:26:      if (/premium/i.test(err.message)) {
+src/screens/ProfileViewers.jsx:27:        setPremiumRequired(true)
+src/screens/ProfileViewers.jsx:80:        ) : premiumRequired ? (
+src/screens/ProfileViewers.jsx:81:          <PremiumGate onUpgrade={() => nav('/premium')} />
+src/screens/ProfileViewers.jsx:156:function PremiumGate({ onUpgrade }) {
+src/screens/ProfileViewers.jsx:173:            Premium shows you everyone who opened your profile — and how many times. Turn browsers into matches.
+src/screens/ProfileViewers.jsx:185:        Your profile still shows up in Discover for free users — Premium just shows you who visited.
+src/screens/Admin.jsx:542:                  const days = prompt('Grant premium for how many days?', '30')
+src/screens/Admin.jsx:546:                  run(() => supabase.rpc('admin_grant_premium', { p_user_id: selected.id, p_days: n }))
+src/screens/Admin.jsx:551:                <Crown size={15} strokeWidth={2.4} /> Grant premium
+src/screens/Admin.jsx:556:                  if (!confirm('Revoke premium immediately?')) return
+src/screens/Admin.jsx:557:                  run(() => supabase.rpc('admin_revoke_premium', { p_user_id: selected.id }))
+src/screens/Admin.jsx:562:                <Crown size={15} strokeWidth={2.4} /> Revoke premium
+src/screens/Roadmap.jsx:12:  { name: "Coins & Premium", desc: "Boosts, pins, super likes" },
+src/lib/auth.jsx:80:    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+src/lib/auth.jsx:99:      subscription.unsubscribe()
+src/lib/wallet.jsx:54:      await supabase.rpc('claim_welcome_bonus')
+src/lib/wallet.jsx:57:      const { data: daily } = await supabase.rpc('claim_daily_login')
+src/components/SuperRequestModal.jsx:26:        .eq('key', 'super_request_cost')
+src/components/SuperRequestModal.jsx:55:    const { error: err } = await supabase.rpc('send_super_request', {
+src/components/DirectMessageModal.jsx:104:                ? 'Free with Premium ✨'
+src/components/DeleteAccountModal.jsx:59:          Coins and Premium time are not refunded. If you have an active subscription,
+src/components/BrandGlow.jsx:2:// Matches the base color and warmth used on Premium / Safety Center / Matches.
+src/components/CommunityFeed.jsx:229:    const { data, error: err } = await supabase.rpc('pin_community_post', { p_post_id: postId })
+src/components/CommunityChat.jsx:36:export default function CommunityChat({ communityId, isMember, isPremium, communityName }) {
+src/components/GlobalEventPopup.jsx:31:        { event: "INSERT", schema: "public", table: "super_requests", filter: "recipient_id=eq." + myId },
+src/App.jsx:100:import Premium from './screens/Premium'
+src/App.jsx:321:        <Route path="/premium" element={<Guard><Premium /></Guard>} />

@@ -65,6 +65,8 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
   const [isMuted, setIsMuted] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [disappearingTimer, setDisappearingTimer] = useState(null)
+  const [viewOnce, setViewOnce] = useState(false)
+  const [viewOnceActive, setViewOnceActive] = useState(null)
   const [timerSheetOpen, setTimerSheetOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
@@ -95,7 +97,7 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
 
     const { data: rows, error: err } = await supabase
       .from('community_messages')
-      .select('id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, created_at, highlighted_until, metadata, expires_at')
+      .select('id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, created_at, highlighted_until, metadata, expires_at, view_once, viewed_by')
       .eq('community_id', communityId)
       .order('created_at', { ascending: true })
       .limit(200)
@@ -367,7 +369,7 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
     const { data: inserted, error: err } = await supabase
       .from("community_messages")
       .insert(payload)
-      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, created_at, highlighted_until, metadata")
+      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, created_at, highlighted_until, metadata, view_once, viewed_by")
       .single()
     if (!err && inserted) {
       setMessages((cur) => cur.some((x) => x.id === inserted.id) ? cur : [...cur, inserted])
@@ -401,6 +403,7 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
       content: bodyToSend || "",
     }
     if (disappearingTimer) payload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
+    if (viewOnce && mediaUrl) { payload.view_once = true; payload.viewed_by = [] }
     if (mediaUrl) { payload.media_url = mediaUrl; payload.media_type = mediaType; payload.media_name = mediaName }
     if (replyingTo?.id) payload.reply_to_id = replyingTo.id
     setReplyingTo(null)
@@ -452,6 +455,15 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
       next[messageId] = (data || []).map((r) => ({ user_id: r.user_id, reaction: r.reaction }))
       return next
     })
+  }
+
+  async function markViewOnceOpened(m) {
+    if (!m || !myId) return
+    const already = Array.isArray(m.viewed_by) && m.viewed_by.includes(myId)
+    if (already) return
+    const nextViewedBy = Array.isArray(m.viewed_by) ? [...m.viewed_by, myId] : [myId]
+    setMessages((cur) => cur.map((x) => x.id === m.id ? { ...x, viewed_by: nextViewedBy } : x))
+    try { await supabase.from("community_messages").update({ viewed_by: nextViewedBy }).eq("id", m.id) } catch (e) {}
   }
 
   async function deleteMessage(messageId) {
@@ -640,6 +652,25 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
           targetId={communityId}
           onClose={() => setSearchOpen(false)}
         />
+      )}
+
+      {viewOnceActive && (
+        <div
+          className="fixed inset-0 z-[600] bg-black flex items-center justify-center"
+          onClick={() => { const m = viewOnceActive; setViewOnceActive(null); markViewOnceOpened(m) }}
+        >
+          <div className="absolute top-4 right-4 z-10 px-3 h-8 rounded-full bg-white/15 text-white text-[12px] font-bold flex items-center gap-1.5">
+            <span>1</span><span>View once</span>
+          </div>
+          {viewOnceActive.media_type?.startsWith("image/") ? (
+            <img src={viewOnceActive.media_url} alt="" className="max-w-full max-h-full object-contain" onClick={(e) => e.stopPropagation()} />
+          ) : viewOnceActive.media_type?.startsWith("audio/") ? (
+            <div onClick={(e) => e.stopPropagation()} className="p-6">
+              <AudioBubble src={viewOnceActive.media_url} mine={false} />
+              <p className="text-muted text-[12.5px] text-center mt-4">Tap anywhere to close</p>
+            </div>
+          ) : null}
+        </div>
       )}
 
       {menuOpen && (
@@ -888,6 +919,31 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
                         : ''
                     }`}
                   >
+                    {m.view_once && m.media_url && !m.deleted_at ? (() => {
+                      const viewed = Array.isArray(m.viewed_by) && m.viewed_by.includes(myId)
+                      if (mine) return (
+                        <div className="px-3 py-2 text-[13px] flex items-center gap-2 text-purple-200">
+                          <span className="w-6 h-6 rounded-full grid place-items-center text-[11px] font-black border-2 border-purple-300">1</span>
+                          <span>View once · {viewed ? "Opened" : "Sent"}</span>
+                        </div>
+                      )
+                      if (viewed) return (
+                        <div className="px-3 py-2 text-[13px] text-muted flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-full grid place-items-center text-[11px] font-black border-2 border-white/30">1</span>
+                          <span>Opened</span>
+                        </div>
+                      )
+                      return (
+                        <button
+                          onClick={() => { tap("light"); setViewOnceActive(m) }}
+                          className="px-3 py-2 text-[13px] text-purple-100 flex items-center gap-2 active:opacity-80"
+                        >
+                          <span className="w-6 h-6 rounded-full grid place-items-center text-[11px] font-black border-2 border-purple-300">1</span>
+                          <span>Tap to view · {m.media_type?.startsWith("audio/") ? "voice" : "photo"}</span>
+                        </button>
+                      )
+                    })() : (
+                    <>
                     {m.media_url && m.media_type?.startsWith("image/") && (
                       <img
                         src={m.media_url}
@@ -901,6 +957,7 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
                     {m.media_url && m.media_type?.startsWith("audio/") && (
                       <AudioBubble src={m.media_url} mine={mine} />
                     )}
+                    </>)}
                     {m.content && <Linkify text={m.content} mine={mine} />}
                   </div>
                   <div className="flex items-center gap-1 px-1 mt-0.5">
@@ -1041,6 +1098,16 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
           aria-label="Attach"
         >
           <Paperclip size={19} strokeWidth={2.3} />
+        </button>
+
+        <button
+          onClick={() => { tap("light"); setViewOnce((v) => !v) }}
+          disabled={voice.recording || !attachment}
+          className="w-10 h-10 rounded-full grid place-items-center shrink-0 disabled:opacity-40 relative"
+          style={{ background: viewOnce ? "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" : "transparent" }}
+          aria-label={viewOnce ? "Disable view once" : "Enable view once"}
+        >
+          <span className="font-black text-[12px]" style={{ color: viewOnce ? "#fff" : "#888" }}>1</span>
         </button>
         <button
           onClick={() => { setEmojiOpen((v) => !v); tap("light") }}
