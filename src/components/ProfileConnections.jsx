@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 
-export default function ProfileConnections({ userId }) {
+export default function ProfileConnections({ userId, visibility }) {
   const nav = useNavigate()
   const [loading, setLoading] = useState(true)
   const [subTab, setSubTab] = useState('followers')

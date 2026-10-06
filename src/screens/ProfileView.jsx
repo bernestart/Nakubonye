@@ -14,6 +14,7 @@ import ProfileEditSheet from '../components/ProfileEditSheet'
 import ProfileFriendsStrip from '../components/ProfileFriendsStrip'
 import ProfileHobbies from '../components/ProfileHobbies'
 import ProfilePersonalDetails from '../components/ProfilePersonalDetails'
+import { canSeeField } from '../lib/visibility'
 import ProfileMenuSheet from '../components/ProfileMenuSheet'
 import ResharedPost from '../components/ResharedPost'
 import ProfilePostCard from '../components/ProfilePostCard'
@@ -36,6 +37,11 @@ export default function ProfileView() {
 
   const [loading, setLoading] = useState(true)
   const [person, setPerson] = useState(null)
+  const [targetVisibility, setTargetVisibility] = useState({
+    phone: true, email: true, birthday: true, relationship: true,
+    contact_info: true, followers_list: true, matches_list: true,
+    communities_membership: true,
+  })
   const [photos, setPhotos] = useState([])
   const [interests, setInterests] = useState([])
   const [prompts, setPrompts] = useState([])
@@ -87,6 +93,26 @@ export default function ProfileView() {
       return
     }
     setPerson(prof)
+
+    // Load target's visibility settings if viewing someone else
+    if (userId !== myId) {
+      try {
+        const { data: settings } = await supabase.from("user_settings").select("*").eq("user_id", userId).maybeSingle()
+        const s = settings || {}
+        const fields = ['phone','email','birthday','relationship','contact_info','followers_list','matches_list','communities_membership']
+        const map = {}
+        for (const f of fields) {
+          map[f] = await canSeeField({ viewerId: myId, ownerId: userId, settings: s, field: f })
+        }
+        setTargetVisibility(map)
+      } catch (e) { console.warn("load target visibility failed", e) }
+    } else {
+      setTargetVisibility({
+        phone: true, email: true, birthday: true, relationship: true,
+        contact_info: true, followers_list: true, matches_list: true,
+        communities_membership: true,
+      })
+    }
 
     // Enforce profile_visibility
     if (userId !== myId) {
@@ -653,7 +679,7 @@ export default function ProfileView() {
           <>
           {activeTab === 'all' && (
             <>
-              <ProfilePersonalDetails person={person} isMe={isMe} onEdit={() => isMe && setEditSheetKind("details")} />
+              <ProfilePersonalDetails person={person} isMe={isMe} visibility={targetVisibility} onEdit={() => isMe && setEditSheetKind("details")} />
 
               <ProfileHobbies interests={interests} isMe={isMe} onEdit={() => isMe && setEditSheetKind("hobbies")} />
 
@@ -846,7 +872,7 @@ export default function ProfileView() {
 
           {activeTab === 'about' && <ProfileAbout person={person} />}
 
-          {activeTab === 'connections' && <ProfileConnections userId={userId} />}
+          {activeTab === 'connections' && <ProfileConnections userId={userId} visibility={targetVisibility} />}
 
           {activeTab === 'more' && (
             <div className="px-4 py-3">

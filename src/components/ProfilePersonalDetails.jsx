@@ -2,7 +2,7 @@ import { useState } from "react"
 import { MapPin, Home, Cake, Briefcase, GraduationCap, Heart, Lock, Pencil, Ruler, User, Languages, BookOpen, Sparkles, Cigarette, Wine, Dumbbell, Salad, PawPrint, Baby } from "lucide-react"
 import { tap } from "../lib/haptic"
 
-export default function ProfilePersonalDetails({ person, isMe = false, onEdit }) {
+export default function ProfilePersonalDetails({ person, isMe = false, onEdit, visibility }) {
   const [expanded, setExpanded] = useState(false)
   if (!person) return null
 
@@ -17,10 +17,10 @@ export default function ProfilePersonalDetails({ person, isMe = false, onEdit })
   if (person.education) {
     rows.push({ icon: GraduationCap, text: person.education, locked: false })
   }
-  if (person.relationship_status) {
+  if (person.relationship_status && (!visibility || visibility.relationship !== false)) {
     rows.push({ icon: Heart, text: person.relationship_status, locked: false })
   }
-  if (person.date_of_birth) {
+  if (person.date_of_birth && (!visibility || visibility.birthday !== false)) {
     const d = new Date(person.date_of_birth)
     rows.push({ icon: Cake, text: d.toLocaleDateString([], { day: "numeric", month: "long" }), locked: false })
   }
