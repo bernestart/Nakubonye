@@ -56,6 +56,34 @@ export default function PostDetail() {
         }
         if (cancelled) return
         if (!row) { setError("Post not found"); setLoading(false); return }
+
+        // Audience enforcement — mirrors Feed rules
+        if (source === "personal") {
+          const aud = row.audience || "public"
+          const isMine = row.user_id === myId
+          if (!isMine) {
+            let allowed = false
+            if (aud === "public" || aud === "everyone") allowed = true
+            else if (aud === "matches") {
+              const lo = myId < row.user_id ? myId : row.user_id
+              const hi = myId < row.user_id ? row.user_id : myId
+              const { data: m } = await supabase.from("matches").select("id").eq("user_one_id", lo).eq("user_two_id", hi).maybeSingle()
+              allowed = !!m
+            } else if (typeof aud === "string" && aud.startsWith("circle:")) {
+              const cid = aud.slice(7)
+              const { data: cm } = await supabase.from("circle_members").select("circle_id").eq("circle_id", cid).eq("user_id", myId).maybeSingle()
+              allowed = !!cm
+            }
+            if (!allowed) { setError("You don't have access to this post"); setLoading(false); return }
+          }
+        } else if (source === "community") {
+          const isMine = row.author_id === myId
+          if (!isMine) {
+            const { data: cm } = await supabase.from("community_memberships").select("user_id").eq("community_id", row.community_id).eq("user_id", myId).maybeSingle()
+            if (!cm) { setError("Join the community to view this post"); setLoading(false); return }
+          }
+        }
+
         setPost(row)
 
         const authorId = row.author_id || row.user_id
