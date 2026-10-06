@@ -20,9 +20,10 @@ export function AuthProvider({ children }) {
     // Track which session creation timestamps we've already logged (avoid dupes)
     const loggedSessions = new Set()
 
-    function logLoginEvent(userId, sessionCreatedAt, method) {
+    function logLoginEvent(userId, sessionCreatedAt, method, accessToken) {
       if (!userId) return
-      const key = String(sessionCreatedAt || "") + ":" + userId
+      const sid = accessToken ? String(accessToken).slice(-20) : null
+      const key = String(sessionCreatedAt || "") + ":" + userId + ":" + (sid || "")
       if (loggedSessions.has(key)) return
       loggedSessions.add(key)
       try {
@@ -33,6 +34,8 @@ export function AuthProvider({ children }) {
           user_agent: ua,
           device_hint: hint,
           method: method || "password",
+          session_id: sid,
+          is_active: true,
         }).then(() => {}, () => {})
       } catch {}
     }
@@ -49,7 +52,7 @@ export function AuthProvider({ children }) {
         // Log sign-in events (initial + token refresh aren't new sign-ins)
         if (event === "SIGNED_IN") {
           const ca = newSession?.user?.last_sign_in_at || newSession?.user?.updated_at || Date.now()
-          logLoginEvent(newSession.user.id, ca, "password")
+          logLoginEvent(newSession.user.id, ca, "password", newSession?.access_token)
         }
       }
     )

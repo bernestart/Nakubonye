@@ -28,6 +28,8 @@ export default function AccountSecurity() {
   const [emailOk, setEmailOk] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [loginEvents, setLoginEvents] = useState([])
+  const [signOutOthersBusy, setSignOutOthersBusy] = useState(false)
+  const [signOutMsg, setSignOutMsg] = useState("")
   const [loginLoading, setLoginLoading] = useState(true)
 
   useEffect(() => {
@@ -48,6 +50,32 @@ export default function AccountSecurity() {
     })()
     return () => { cancelled = true }
   }, [session?.user?.id])
+
+  async function signOutOthers() {
+    if (signOutOthersBusy) return
+    if (!confirm("Sign out of all other devices? You'll stay signed in here.")) return
+    setSignOutOthersBusy(true); setSignOutMsg(""); tap("light")
+    try {
+      const { error } = await supabase.auth.signOut({ scope: "others" })
+      if (error) {
+        setSignOutMsg(error.message)
+      } else {
+        // Mark all other sessions as inactive
+        const uid = session?.user?.id
+        const sid = session?.access_token ? String(session.access_token).slice(-20) : null
+        if (uid) {
+          await supabase.from("login_events")
+            .update({ is_active: false })
+            .eq("user_id", uid)
+            .neq("session_id", sid || "")
+        }
+        setSignOutMsg("Signed out of all other devices")
+      }
+    } catch (e) {
+      setSignOutMsg(e.message || String(e))
+    }
+    setSignOutOthersBusy(false)
+  }
 
 
   async function changePassword() {
@@ -326,6 +354,17 @@ export default function AccountSecurity() {
           <p className="text-subtle text-[11.5px] mt-2 leading-relaxed">
             If you see a sign-in you don't recognize, change your password immediately.
           </p>
+
+          <button
+            onClick={signOutOthers}
+            disabled={signOutOthersBusy}
+            className="mt-3 w-full h-11 rounded-full bg-white/[0.06] border border-white/10 text-cream font-bold text-[13.5px] disabled:opacity-50"
+          >
+            {signOutOthersBusy ? "Signing out…" : "Sign out of all other devices"}
+          </button>
+          {signOutMsg && (
+            <p className="text-emerald-300 text-[12px] mt-2 text-center">{signOutMsg}</p>
+          )}
         </div>
 
         {/* Danger Zone */}
