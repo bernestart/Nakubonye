@@ -58,72 +58,76 @@ export default function Search() {
     setLoading(true)
     const like = `%${term}%`
 
+    // 1. People search — ilike by name/username (unchanged)
+    const pRes = await supabase
+      .from("profiles")
+      .select("id, display_name, username, is_verified, city")
+      .or(`display_name.ilike.${like},username.ilike.${like}`)
+      .eq("is_active", true)
+      .limit(20)
+
+    // 2. Content search — ranked full-text across posts/reels/listings/services/communities
+    let rpcRows = []
+    try {
+      const { data } = await supabase.rpc("search_content", { p_query: term, p_limit: 60 })
+      rpcRows = data || []
+    } catch (e) {
+      console.warn("search_content rpc failed", e)
+    }
+
+    // Split RPC results by kind
+    const postRows   = rpcRows.filter((r) => r.kind === "post")
+    const reelRows   = rpcRows.filter((r) => r.kind === "reel")
+    const commRows   = rpcRows.filter((r) => r.kind === "community")
+    const listRows   = rpcRows.filter((r) => r.kind === "listing")
+    const servRows   = rpcRows.filter((r) => r.kind === "service")
+
+    // Rehydrate: pull full rows from each table using the ids
+    const postPersonalIds  = postRows.filter((r) => r.source === "personal").map((r) => r.id).slice(0, 20)
+    const postCommunityIds = postRows.filter((r) => r.source === "community").map((r) => r.id).slice(0, 20)
+    const reelIds          = reelRows.map((r) => r.id).slice(0, 20)
+    const commIds          = commRows.map((r) => r.id).slice(0, 20)
+    const listIds          = listRows.map((r) => r.id).slice(0, 20)
+    const servIds          = servRows.map((r) => r.id).slice(0, 20)
+
     const [
-      pRes, upRes, cpRes, rRes, cRes, lRes, sRes,
+      upRes, cpRes, rRes, cRes, lRes, sRes,
     ] = await Promise.all([
-      // People — by name or username
-      supabase
-        .from("profiles")
-        .select("id, display_name, username, is_verified, city")
-        .or(`display_name.ilike.${like},username.ilike.${like}`)
-        .eq("is_active", true)
-        .limit(20),
-
-      // Personal posts — text match
-      supabase
-        .from("user_posts")
-        .select("id, user_id, content, image_path, created_at")
-        .ilike("content", like)
-        .eq("is_active", true)
-        .eq("audience", "public")
-        .order("created_at", { ascending: false })
-        .limit(15),
-
-      // Community posts
-      supabase
-        .from("community_posts")
-        .select("id, author_id, community_id, content, image_path, created_at")
-        .ilike("content", like)
-        .order("created_at", { ascending: false })
-        .limit(15),
-
-      // Reels — by caption
-      supabase
-        .from("reels")
-        .select("id, user_id, caption, thumbnail_url, video_url, created_at")
-        .ilike("caption", like)
-        .eq("is_active", true)
-        .eq("audience", "public")
-        .order("created_at", { ascending: false })
-        .limit(15),
-
-      // Communities — by name
-      supabase
-        .from("communities")
-        .select("id, name, emoji, cover_color, member_count")
-        .ilike("name", like)
-        .eq("is_active", true)
-        .limit(15),
-
-      // Listings — by title
-      supabase
-        .from("listings")
-        .select("id, title, price, currency, image_paths, location, created_at")
-        .ilike("title", like)
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
-        .limit(15),
-
-      // Services — by title
-      supabase
-        .from("services")
-        .select("id, title, price, currency, duration_minutes, image_paths, created_at")
-        .ilike("title", like)
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
-        .limit(15),
+      postPersonalIds.length > 0
+        ? supabase.from("user_posts").select("id, user_id, content, image_path, created_at").in("id", postPersonalIds)
+        : Promise.resolve({ data: [] }),
+      postCommunityIds.length > 0
+        ? supabase.from("community_posts").select("id, author_id, community_id, content, image_path, created_at").in("id", postCommunityIds)
+        : Promise.resolve({ data: [] }),
+      reelIds.length > 0
+        ? supabase.from("reels").select("id, user_id, caption, thumbnail_url, video_url, created_at").in("id", reelIds)
+        : Promise.resolve({ data: [] }),
+      commIds.length > 0
+        ? supabase.from("communities").select("id, name, emoji, cover_color, member_count").in("id", commIds)
+        : Promise.resolve({ data: [] }),
+      listIds.length > 0
+        ? supabase.from("listings").select("id, title, price, currency, image_paths, location, created_at").in("id", listIds)
+        : Promise.resolve({ data: [] }),
+      servIds.length > 0
+        ? supabase.from("services").select("id, title, price, currency, duration_minutes, image_paths, created_at").in("id", servIds)
+        : Promise.resolve({ data: [] }),
     ])
 
+    // Re-sort by the RPC's rank order (rehydrate shuffled them)
+    const byId = (arr) => new Map((arr || []).map((x) => [x.id, x]))
+    const rankOrder = (ids, rehydrated) => {
+      const m = byId(rehydrated)
+      return ids.map((id) => m.get(id)).filter(Boolean)
+    }
+
+    upRes.data = rankOrder(postPersonalIds, upRes.data)
+    cpRes.data = rankOrder(postCommunityIds, cpRes.data)
+    rRes.data  = rankOrder(reelIds, rRes.data)
+    cRes.data  = rankOrder(commIds, cRes.data)
+    lRes.data  = rankOrder(listIds, lRes.data)
+    sRes.data  = rankOrder(servIds, sRes.data)
+
+    // Load photos for people
     // Load photos for people
     const userList = pRes.data || []
     if (userList.length > 0) {

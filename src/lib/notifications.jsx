@@ -26,7 +26,7 @@ export function NotificationsProvider({ children }) {
 
   useEffect(() => { refresh() }, [refresh])
 
-  // Realtime: new notification → refresh count
+  // Realtime: increment/decrement locally — no DB roundtrip on every event
   useEffect(() => {
     if (!session?.user?.id) return
     const uid = session.user.id
@@ -34,13 +34,30 @@ export function NotificationsProvider({ children }) {
       .channel('notif-' + uid)
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notifications', filter: 'user_id=eq.' + uid },
-        () => refresh())
+        (payload) => {
+          // Only bump if the new row is unread
+          if (payload?.new && !payload.new.read_at) {
+            setUnreadCount((c) => c + 1)
+          }
+        })
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'notifications', filter: 'user_id=eq.' + uid },
-        () => refresh())
+        (payload) => {
+          const wasUnread = payload?.old && !payload.old.read_at
+          const isUnread = payload?.new && !payload.new.read_at
+          if (wasUnread && !isUnread) setUnreadCount((c) => Math.max(0, c - 1))
+          else if (!wasUnread && isUnread) setUnreadCount((c) => c + 1)
+        })
+      .on('postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'notifications', filter: 'user_id=eq.' + uid },
+        (payload) => {
+          if (payload?.old && !payload.old.read_at) {
+            setUnreadCount((c) => Math.max(0, c - 1))
+          }
+        })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [session?.user?.id, refresh])
+  }, [session?.user?.id])
 
   return (
     <NotifCtx.Provider value={{ unreadCount, loading, refresh }}>
