@@ -133,7 +133,7 @@ export default function Monetization() {
 
             {/* Hero card */}
             {isCreator ? (
-              <CreatorHero status={status} onWithdraw={() => { tap('light'); setWithdrawOpen(true) }} />
+              <CreatorHero status={status} />
             ) : isPro ? (
               <ProHero status={status} />
             ) : (
@@ -143,6 +143,12 @@ export default function Monetization() {
                 onUnlock={handleUnlockPro}
               />
             )}
+
+            <WalletCard
+              tier={tier}
+              coins={status?.unlock_paths?.current?.lifetime_coins || 0}
+              onWithdraw={() => { tap('light'); setWithdrawOpen(true) }}
+            />
 
             {error && (
               <div className="mt-4 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5">
@@ -318,10 +324,7 @@ function ProHero({ status }) {
 // ------------------------------------------------------------
 // CreatorHero — wallet + withdraw
 // ------------------------------------------------------------
-function CreatorHero({ status, onWithdraw }) {
-  // Coins come from referral data + wallet; we approximate from unlock_paths for now
-  const coins = status?.unlock_paths?.current?.lifetime_coins || 0
-  const usd = (coins / 1000).toFixed(2)
+function CreatorHero({ status }) {
   return (
     <div className="rounded-3xl p-5 mb-5 border border-amber-500/30"
       style={{ background: 'linear-gradient(160deg, rgba(245,158,11,0.18) 0%, rgba(236,72,153,0.10) 100%)' }}>
@@ -329,16 +332,12 @@ function CreatorHero({ status, onWithdraw }) {
         <Sparkles size={16} className="text-amber-400" />
         <span className="text-amber-300 text-[11px] font-black tracking-[0.14em] uppercase">Creator</span>
       </div>
-      <p className="text-cream text-[26px] font-extrabold tracking-tight leading-none mb-1">
-        {fmt(coins)} coins
+      <h2 className="text-cream text-[19px] font-extrabold tracking-tight mb-1">
+        You're earning
+      </h2>
+      <p className="text-muted text-[12.5px] leading-snug">
+        Every qualified view of your reels and stories now earns coins. Keep creating.
       </p>
-      <p className="text-muted text-[12.5px] mb-5">≈ ${usd} USD</p>
-      <button onClick={onWithdraw}
-        className="w-full h-11 rounded-full text-white font-bold text-[14px] flex items-center justify-center gap-2"
-        style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #EC4899 100%)', boxShadow: '0 10px 28px rgba(245,158,11,0.45)' }}>
-        <Wallet size={15} strokeWidth={2.4} />
-        Withdraw
-      </button>
     </div>
   )
 }
@@ -656,6 +655,57 @@ function BadgesRow({ badges }) {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+
+// ------------------------------------------------------------
+// WalletCard — visible to all tiers, CTA differs by tier
+// ------------------------------------------------------------
+function WalletCard({ tier, coins, onWithdraw }) {
+  const usd = (coins / 1000).toFixed(2)
+  const isCreator = tier === 'creator'
+  const isPro = tier === 'pro'
+
+  const lockedMessage = isPro
+    ? "You're on the journey — reach Creator tier to unlock withdrawals."
+    : "Withdrawals unlock at Creator tier. Grow your audience to start the journey."
+
+  return (
+    <div className="rounded-2xl bg-white/[0.04] border border-white/8 p-4 mb-5">
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex-1 min-w-0">
+          <p className="text-muted text-[10.5px] font-black tracking-[0.16em] uppercase mb-1.5">
+            Your wallet
+          </p>
+          <p className="text-cream font-extrabold text-[26px] leading-none tracking-tight">
+            {coins.toLocaleString()}
+            <span className="text-muted text-[13px] font-semibold ml-1.5">coins</span>
+          </p>
+          <p className="text-muted text-[12.5px] mt-1.5">≈ ${usd} USD</p>
+        </div>
+        <div className="w-12 h-12 rounded-2xl grid place-items-center shrink-0"
+          style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #EC4899 100%)', boxShadow: '0 6px 18px rgba(245,158,11,0.35)' }}>
+          <Coins size={22} strokeWidth={2.4} className="text-white" />
+        </div>
+      </div>
+
+      {isCreator ? (
+        <button onClick={onWithdraw}
+          className="w-full h-11 rounded-full text-white font-bold text-[14px] flex items-center justify-center gap-2"
+          style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #EC4899 100%)', boxShadow: '0 10px 28px rgba(245,158,11,0.45)' }}>
+          <Wallet size={15} strokeWidth={2.4} />
+          Withdraw
+        </button>
+      ) : (
+        <div className="rounded-xl bg-amber-500/8 border border-amber-500/25 px-3 py-2.5 flex items-start gap-2">
+          <Lock size={13} strokeWidth={2.4} className="text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-amber-200 text-[12px] leading-snug">
+            {lockedMessage}
+          </p>
+        </div>
+      )}
     </div>
   )
 }

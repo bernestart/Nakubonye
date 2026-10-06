@@ -27,6 +27,7 @@ import FollowButton from '../components/FollowButton'
 import DirectMessageModal from '../components/DirectMessageModal'
 import ReportModal from '../components/ReportModal'
 import BlockConfirm from '../components/BlockConfirm'
+import TierRing from '../components/TierRing'
 
 export default function ProfileView() {
   const [connections, setConnections] = useState([])
@@ -85,7 +86,7 @@ export default function ProfileView() {
 
     const { data: prof, error: profErr } = await supabase
       .from('profiles')
-      .select('id, display_name, username, date_of_birth, bio, city, country, is_verified, looking_for, cover_photo_path, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children, hide_age')
+      .select('id, display_name, username, date_of_birth, bio, city, country, is_verified, tier, looking_for, cover_photo_path, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children, hide_age')
       .eq('id', userId)
       .single()
 
@@ -524,16 +525,18 @@ export default function ProfileView() {
         {/* Header — centered Facebook layout */}
         <div className="flex justify-center -mt-16 relative z-10">
           <div className="relative">
-            <span className="block w-32 h-32 rounded-full overflow-hidden bg-elevated border-4" style={{ borderColor: '#0B0B14' }}>
-              {photos[0] ? (
-                <img src={photos[0]} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <span className="w-full h-full grid place-items-center text-purple-400 font-black text-3xl">
-                  {(person.display_name || person.username || '?')[0].toUpperCase()}
-                </span>
-              )}
-            </span>
-            <span className="absolute bottom-4 right-4 w-4 h-4 rounded-full bg-emerald-500 border-2 border-[#0B0B14]" />
+            <TierRing tier={person.tier || 'standard'} size={128}>
+              <span className="block w-full h-full rounded-full overflow-hidden bg-elevated">
+                {photos[0] ? (
+                  <img src={photos[0]} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="w-full h-full grid place-items-center text-purple-400 font-black text-3xl">
+                    {(person.display_name || person.username || '?')[0].toUpperCase()}
+                  </span>
+                )}
+              </span>
+            </TierRing>
+            <span className="absolute bottom-4 right-4 w-4 h-4 rounded-full bg-emerald-500 border-2 border-[#0B0B14] z-10" />
           </div>
         </div>
 

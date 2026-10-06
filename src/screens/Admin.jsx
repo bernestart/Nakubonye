@@ -33,6 +33,9 @@ export default function Admin() {
   const [badgeBusy, setBadgeBusy] = useState(null)
   const [verifRequests, setVerifRequests] = useState([])
   const [verifBusy, setVerifBusy] = useState(null)
+  const [mConfig, setMConfig] = useState(null)
+  const [configOpen, setConfigOpen] = useState(false)
+  const [configBusy, setConfigBusy] = useState(false)
 
   const loadUserTx = useCallback(async (userId) => {
     setUserTx([])
@@ -93,11 +96,28 @@ export default function Admin() {
       setVerifRequests([])
     }
 
+    // Monetization config
+    const { data: mc } = await supabase.rpc('admin_get_monetization_config')
+    if (mc) setMConfig(mc)
+
     setUsers((u.data || []).map((x) => ({ ...x, photo_url: publicPhotoUrl(x.primary_photo) })))
     setLoading(false)
   }, [isAdmin, search])
 
   useEffect(() => { load() }, [load])
+
+  async function saveMonetizationConfig(patch) {
+    if (configBusy) return
+    setConfigBusy(true); tap('medium')
+    const { data, error: err } = await supabase.rpc('admin_set_monetization_config', { p_patch: patch })
+    setConfigBusy(false)
+    if (err) { setError(err.message); return }
+    if (!data?.ok) { setError(data?.error || 'Failed'); return }
+    tap('match')
+    // Reload config
+    const { data: mc } = await supabase.rpc('admin_get_monetization_config')
+    if (mc) setMConfig(mc)
+  }
 
   async function reviewVerification(requestId, decision, note) {
     if (verifBusy) return
@@ -440,6 +460,101 @@ export default function Admin() {
               />
             </div>
 
+            {/* Monetization config editor */}
+            {mConfig && (
+              <div className="mb-6">
+                <button
+                  onClick={() => { tap('light'); setConfigOpen(!configOpen) }}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-2xl bg-white/[0.03] border border-purple-500/25 mb-2"
+                >
+                  <span className="text-purple-300 text-[11px] font-black tracking-[0.16em] uppercase">
+                    Monetization settings
+                  </span>
+                  <span className="text-muted text-[12px]">{configOpen ? 'Hide ▲' : 'Show ▼'}</span>
+                </button>
+
+                {configOpen && (
+                  <div className="rounded-2xl bg-white/[0.03] border border-purple-500/25 p-4 space-y-4">
+                    <ConfigSection title="Pro unlock paths">
+                      <ConfigField
+                        label="Followers (verified)" value={mConfig.pro_unlock_followers}
+                        onSave={(v) => saveMonetizationConfig({ pro_unlock_followers: v })}
+                        busy={configBusy} type="int"
+                      />
+                      <ConfigField
+                        label="Followers (unverified)" value={mConfig.pro_unlock_followers_unverified}
+                        onSave={(v) => saveMonetizationConfig({ pro_unlock_followers_unverified: v })}
+                        busy={configBusy} type="int"
+                      />
+                      <ConfigField
+                        label="Lifetime coins" value={mConfig.pro_unlock_lifetime_coins}
+                        onSave={(v) => saveMonetizationConfig({ pro_unlock_lifetime_coins: v })}
+                        busy={configBusy} type="int"
+                      />
+                      <ConfigField
+                        label="Watch minutes" value={mConfig.pro_unlock_watch_minutes}
+                        onSave={(v) => saveMonetizationConfig({ pro_unlock_watch_minutes: v })}
+                        busy={configBusy} type="int"
+                      />
+                    </ConfigSection>
+
+                    <ConfigSection title="Coin rates">
+                      <ConfigField
+                        label="Coins per qualified view" value={mConfig.coins_per_qualified_view}
+                        onSave={(v) => saveMonetizationConfig({ coins_per_qualified_view: v })}
+                        busy={configBusy} type="float" step="0.000001"
+                      />
+                      <ConfigField
+                        label="Story view weight" value={mConfig.story_view_weight}
+                        onSave={(v) => saveMonetizationConfig({ story_view_weight: v })}
+                        busy={configBusy} type="float" step="0.05"
+                      />
+                      <ConfigField
+                        label="Min withdraw (coins)" value={mConfig.min_withdraw_coins}
+                        onSave={(v) => saveMonetizationConfig({ min_withdraw_coins: v })}
+                        busy={configBusy} type="int"
+                      />
+                    </ConfigSection>
+
+                    <ConfigSection title="Creator gates (all required)">
+                      {['followers_verified','followers_unverified','watch_minutes','qualified_views','account_age_days','recent_posts','unique_viewers','clean_days'].map((k) => (
+                        <ConfigField
+                          key={k}
+                          label={k.replace(/_/g,' ')}
+                          value={mConfig.gates?.[k]}
+                          onSave={(v) => saveMonetizationConfig({ gates: { [k]: v } })}
+                          busy={configBusy} type="int"
+                        />
+                      ))}
+                    </ConfigSection>
+
+                    <ConfigSection title="Soft launch">
+                      <div className="flex items-center justify-between py-2">
+                        <span className="text-cream text-[12.5px]">Soft launch enabled</span>
+                        <button
+                          onClick={() => saveMonetizationConfig({ soft_launch_enabled: !mConfig.soft_launch_enabled })}
+                          disabled={configBusy}
+                          className={`px-3 h-7 rounded-full text-[11px] font-bold ${mConfig.soft_launch_enabled ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-white/[0.06] text-muted border border-white/10'}`}
+                        >
+                          {mConfig.soft_launch_enabled ? 'ON' : 'OFF'}
+                        </button>
+                      </div>
+                      <ConfigField
+                        label="Gate multiplier" value={mConfig.soft_launch_gate_multiplier}
+                        onSave={(v) => saveMonetizationConfig({ soft_launch_gate_multiplier: v })}
+                        busy={configBusy} type="float" step="0.05"
+                      />
+                      <ConfigField
+                        label="Until (ISO)" value={mConfig.soft_launch_until}
+                        onSave={(v) => saveMonetizationConfig({ soft_launch_until: v })}
+                        busy={configBusy} type="text"
+                      />
+                    </ConfigSection>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Verification requests queue */}
             {verifRequests.length > 0 && (
               <div className="mb-6">
@@ -779,6 +894,71 @@ function Info({ label, value, warn }) {
     <div className="rounded-lg bg-white/[0.03] border border-white/6 px-3 py-2">
       <p className="text-subtle text-[10px] font-bold uppercase tracking-wide mb-0.5">{label}</p>
       <p className={`text-[13px] font-semibold ${warn ? 'text-red-400' : 'text-cream'}`}>{value}</p>
+    </div>
+  )
+}
+
+
+function ConfigSection({ title, children }) {
+  return (
+    <div>
+      <p className="text-purple-400 text-[10px] font-black tracking-[0.16em] uppercase mb-2">
+        {title}
+      </p>
+      <div className="space-y-1">{children}</div>
+    </div>
+  )
+}
+
+function ConfigField({ label, value, onSave, busy, type, step }) {
+  const [local, setLocal] = useState(value ?? '')
+  const [editing, setEditing] = useState(false)
+
+  useEffect(() => { setLocal(value ?? '') }, [value])
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        className="w-full flex items-center justify-between py-2 px-3 rounded-lg active:bg-white/[0.04] text-left"
+      >
+        <span className="text-cream/85 text-[12.5px]">{label}</span>
+        <span className="text-muted text-[12px] font-mono tabular-nums">
+          {typeof value === 'number' ? value.toLocaleString() : String(value ?? '—')}
+        </span>
+      </button>
+    )
+  }
+
+  function commit() {
+    let v = local
+    if (type === 'int') v = parseInt(local, 10)
+    else if (type === 'float') v = parseFloat(local)
+    if (v === '' || v === null || Number.isNaN(v)) { setEditing(false); setLocal(value); return }
+    onSave(v)
+    setEditing(false)
+  }
+
+  return (
+    <div className="flex items-center gap-2 py-1.5 px-3 rounded-lg bg-white/[0.05]">
+      <span className="text-cream/85 text-[12px] flex-1">{label}</span>
+      <input
+        type={type === 'text' ? 'text' : 'number'}
+        step={step}
+        value={local}
+        onChange={(e) => setLocal(e.target.value)}
+        autoFocus
+        onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setEditing(false); setLocal(value) } }}
+        className="w-32 bg-elevated border border-purple-500/40 rounded-md px-2 py-1 text-cream text-[12px] font-mono tabular-nums focus:outline-none"
+      />
+      <button onClick={commit} disabled={busy}
+        className="w-7 h-7 rounded-md bg-emerald-500/20 border border-emerald-500/40 grid place-items-center disabled:opacity-50">
+        <Check size={13} strokeWidth={2.6} className="text-emerald-300" />
+      </button>
+      <button onClick={() => { setEditing(false); setLocal(value) }}
+        className="w-7 h-7 rounded-md bg-white/[0.05] border border-white/10 grid place-items-center">
+        <X size={13} strokeWidth={2.6} className="text-muted" />
+      </button>
     </div>
   )
 }
