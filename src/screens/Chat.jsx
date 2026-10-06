@@ -65,6 +65,7 @@ export default function Chat() {
   const [error, setError] = useState('')
   const [conversationId, setConversationId] = useState(null)
   const [disappearingTimer, setDisappearingTimer] = useState(null)
+  const [viewOnce, setViewOnce] = useState(false)
   const [timerSheetOpen, setTimerSheetOpen] = useState(false)
   const [other, setOther] = useState(null)
   const [messages, setMessages] = useState([])
@@ -676,12 +677,16 @@ export default function Chat() {
     if (disappearingTimer) {
       payload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
     }
+    if (viewOnce && mediaUrl) {
+      payload.view_once = true
+      payload.viewed_by = []
+    }
     if (storyReply) {
       payload.metadata = { story_reply: { story_id: storyReply.story_id, media_url: storyReply.media_url, media_type: storyReply.media_type } }
     }
     if (mediaUrl) { payload.media_url = mediaUrl; payload.media_type = mediaType; payload.media_name = mediaName }
     if (replyingTo?.id) payload.reply_to_id = replyingTo.id
-    setText(''); clearAttachment(); setReplyingTo(null); setStoryReply(null)
+    setText(''); clearAttachment(); setReplyingTo(null); setStoryReply(null); setViewOnce(false)
     const { data: inserted, error: sendErr } = await supabase
       .from('messages')
       .insert(payload)
@@ -1260,6 +1265,20 @@ export default function Chat() {
           aria-label="Attach photo"
         >
           <Paperclip size={19} strokeWidth={2.3} />
+        </button>
+        <button
+          onClick={() => { tap("light"); setViewOnce((v) => !v) }}
+          disabled={recording || !attachment}
+          className="w-10 h-10 rounded-full grid place-items-center shrink-0 disabled:opacity-40 relative"
+          style={{
+            background: viewOnce ? "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" : "transparent",
+          }}
+          aria-label={viewOnce ? "Disable view once" : "Enable view once"}
+        >
+          <span
+            className="font-black text-[12px]"
+            style={{ color: viewOnce ? "#fff" : "#888" }}
+          >1</span>
         </button>
         <button
           onClick={() => { setEmojiOpen((v) => !v); tap("light") }}
