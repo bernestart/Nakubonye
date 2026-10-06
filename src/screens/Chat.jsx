@@ -24,6 +24,14 @@ import ChatSearchSheet from '../components/ChatSearchSheet'
 import MessageActionsSheet from '../components/MessageActionsSheet'
 import MessagePopover from '../components/MessagePopover'
 
+const TIMER_OPTIONS = [
+  { value: null, label: "Off",     sub: "Messages stay forever" },
+  { value: 300,  label: "5 minutes" },
+  { value: 3600, label: "1 hour" },
+  { value: 86400,label: "24 hours" },
+  { value: 604800,label: "7 days" },
+]
+
 const REACTIONS = ['❤️', '😂', '😍', '👍', '🔥', '😮']
 
 
@@ -56,6 +64,8 @@ export default function Chat() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [conversationId, setConversationId] = useState(null)
+  const [disappearingTimer, setDisappearingTimer] = useState(null)
+  const [timerSheetOpen, setTimerSheetOpen] = useState(false)
   const [other, setOther] = useState(null)
   const [messages, setMessages] = useState([])
   const [reactions, setReactions] = useState({})
@@ -238,11 +248,12 @@ export default function Chat() {
 
     const { data: msgs, error: msgErr } = await supabase
       .from('messages')
-      .select('id, sender_id, content, created_at, edited_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata')
+      .select('id, sender_id, content, created_at, edited_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata, expires_at')
       .eq('conversation_id', convId)
       .order('created_at', { ascending: true }).limit(200)
     if (msgErr) { setError(msgErr.message); setLoading(false); return }
-    setMessages(msgs || [])
+    const __now = Date.now()
+    setMessages((msgs || []).filter((m) => !m.expires_at || new Date(m.expires_at).getTime() > __now))
 
     if (msgs?.length) {
       const ids = msgs.map((m) => m.id)
@@ -662,6 +673,9 @@ export default function Chat() {
       mediaName = attachment.name
     }
     const payload = { conversation_id: conversationId, sender_id: myId, content: body || '' }
+    if (disappearingTimer) {
+      payload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
+    }
     if (storyReply) {
       payload.metadata = { story_reply: { story_id: storyReply.story_id, media_url: storyReply.media_url, media_type: storyReply.media_type } }
     }
@@ -1337,9 +1351,60 @@ export default function Chat() {
               label={isMuted ? "Unmute" : "Mute notifications"}
               onClick={() => { setMenuOpen(false); toggleMute() }}
             />
+            <MenuItem
+              icon={<Timer size={16} />}
+              label={
+                disappearingTimer
+                  ? `Disappearing · ${disappearingTimer === 300 ? "5 min" : disappearingTimer === 3600 ? "1 h" : disappearingTimer === 86400 ? "24 h" : "7 d"}`
+                  : "Disappearing messages"
+              }
+              onClick={() => { setMenuOpen(false); setTimerSheetOpen(true) }}
+            />
             <MenuItem icon={<Eraser size={16} />} label="Clear chat" onClick={() => { setMenuOpen(false); clearChat() }} />
             <MenuItem icon={<Flag size={16} />} label="Report" onClick={() => { setMenuOpen(false); setReportOpen(true) }} />
             <MenuItem icon={<Ban size={16} />} label="Block" danger onClick={() => { setMenuOpen(false); setBlockOpen(true) }} />
+          </div>
+        </div>
+      )}
+
+      {timerSheetOpen && (
+        <div className="fixed inset-0 z-[150] flex items-end" onClick={() => setTimerSheetOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
+            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+          >
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
+            <h3 className="text-cream font-extrabold text-[16px] mb-1">Disappearing messages</h3>
+            <p className="text-muted text-[12.5px] leading-snug mb-3">
+              New messages in this chat will disappear after the chosen time. Applies to both sides.
+            </p>
+            {TIMER_OPTIONS.map((o) => {
+              const active = (disappearingTimer || null) === (o.value || null)
+              return (
+                <button
+                  key={String(o.value)}
+                  onClick={async () => {
+                    tap("light")
+                    setTimerSheetOpen(false)
+                    setDisappearingTimer(o.value)
+                    try {
+                      await supabase.from('conversations')
+                        .update({ disappearing_timer_seconds: o.value })
+                        .eq('id', conversationId)
+                    } catch (e) { console.warn("timer save failed", e) }
+                  }}
+                  className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left active:bg-white/[0.03] last:border-b-0"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-cream text-[15px] font-medium">{o.label}</p>
+                    {o.sub && <p className="text-muted text-[12px] mt-0.5">{o.sub}</p>}
+                  </div>
+                  {active && <span className="text-purple-400 text-[16px]">✓</span>}
+                </button>
+              )
+            })}
           </div>
         </div>
       )}
