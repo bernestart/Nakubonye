@@ -58,19 +58,32 @@ export default function Search() {
     setLoading(true)
     const like = `%${term}%`
 
-    // 1. People search — ilike by name/username (unchanged)
-    const pRes = await supabase
+    // 0. Load my blocks once
+    const { data: blockRows } = await supabase
+      .from("blocks")
+      .select("blocker_id, blocked_id")
+      .or("blocker_id.eq." + myId + ",blocked_id.eq." + myId)
+    const blockedIds = new Set()
+    ;(blockRows || []).forEach((b) => {
+      if (b.blocker_id === myId) blockedIds.add(b.blocked_id)
+      if (b.blocked_id === myId) blockedIds.add(b.blocker_id)
+    })
+
+    // 1. People search — ilike by name/username
+    const { data: peopleRaw } = await supabase
       .from("profiles")
       .select("id, display_name, username, is_verified, city")
       .or(`display_name.ilike.${like},username.ilike.${like}`)
       .eq("is_active", true)
-      .limit(20)
+      .limit(30)
+
+    const pRes = { data: (peopleRaw || []).filter((u) => !blockedIds.has(u.id)) }
 
     // 2. Content search — ranked full-text across posts/reels/listings/services/communities
     let rpcRows = []
     try {
       const { data } = await supabase.rpc("search_content", { p_query: term, p_limit: 60 })
-      rpcRows = data || []
+      rpcRows = (data || []).filter((r) => !r.author_id || !blockedIds.has(r.author_id))
     } catch (e) {
       console.warn("search_content rpc failed", e)
     }
