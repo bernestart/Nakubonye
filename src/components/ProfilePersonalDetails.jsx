@@ -20,7 +20,7 @@ export default function ProfilePersonalDetails({ person, isMe = false, onEdit, v
   if (person.relationship_status && (!visibility || visibility.relationship !== false)) {
     rows.push({ icon: Heart, text: person.relationship_status, locked: false })
   }
-  if (person.date_of_birth && (!visibility || visibility.birthday !== false)) {
+  if (person.date_of_birth && !person.hide_age && (!visibility || visibility.birthday !== false)) {
     const d = new Date(person.date_of_birth)
     rows.push({ icon: Cake, text: d.toLocaleDateString([], { day: "numeric", month: "long" }), locked: false })
   }

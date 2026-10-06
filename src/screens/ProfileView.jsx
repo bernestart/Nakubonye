@@ -83,7 +83,7 @@ export default function ProfileView() {
 
     const { data: prof, error: profErr } = await supabase
       .from('profiles')
-      .select('id, display_name, username, date_of_birth, bio, city, country, is_verified, looking_for, cover_photo_path, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children')
+      .select('id, display_name, username, date_of_birth, bio, city, country, is_verified, looking_for, cover_photo_path, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children, hide_age')
       .eq('id', userId)
       .single()
 

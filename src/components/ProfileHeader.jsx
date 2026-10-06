@@ -85,7 +85,7 @@ export default function ProfileHeader({
             <div className="flex items-center gap-1.5 mb-1">
               <h1 className="text-cream text-[18px] font-extrabold tracking-tight truncate">
                 {profile?.display_name || profile?.username || "You"}
-                {profile?.date_of_birth ? `, ${profile.age || ""}` : ""}
+                {profile?.date_of_birth && !profile.hide_age ? `, ${profile.age || ""}` : ""}
               </h1>
               {profile?.is_verified && <VerifiedBadge size={14} />}
             </div>
