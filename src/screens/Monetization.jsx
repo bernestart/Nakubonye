@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Check, Copy, Coins, Users, Clock, Eye, Sparkles,
   ShieldCheck, TrendingUp, Lock, Wallet, ChevronRight,
+  Globe, AtSign, Share2, User as UserIcon, Camera, Video, Gift, Zap,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -15,6 +16,9 @@ export default function Monetization() {
   const [error, setError] = useState('')
   const [status, setStatus] = useState(null)
   const [referral, setReferral] = useState(null)
+  const [tasks, setTasks] = useState(null)
+  const [badges, setBadges] = useState(null)
+  const [claimingTask, setClaimingTask] = useState(null)
   const [withdrawOpen, setWithdrawOpen] = useState(false)
   const [unlockBusy, setUnlockBusy] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -22,14 +26,18 @@ export default function Monetization() {
   const load = useCallback(async () => {
     if (!session?.user?.id) return
     setLoading(true); setError('')
-    const [s, r] = await Promise.all([
+    const [s, r, t, b] = await Promise.all([
       supabase.rpc('get_my_monetization_status'),
       supabase.rpc('get_my_referral_summary'),
+      supabase.rpc('get_my_tasks'),
+      supabase.rpc('get_my_badges'),
     ])
     if (s.error) { setError(s.error.message); setLoading(false); return }
     if (r.error) { setError(r.error.message); setLoading(false); return }
     setStatus(s.data)
     setReferral(r.data)
+    setTasks(t.data)
+    setBadges(b.data)
     setLoading(false)
   }, [session?.user?.id])
 
@@ -45,6 +53,20 @@ export default function Monetization() {
       setError(data?.error === 'not_eligible'
         ? "Keep growing — you're not quite there yet."
         : (data?.error || 'Could not unlock Pro.'))
+      return
+    }
+    tap('match')
+    load()
+  }
+
+  async function claimTask(key) {
+    if (claimingTask) return
+    setClaimingTask(key); tap('medium')
+    const { data, error: err } = await supabase.rpc('claim_task_bonus', { p_task_key: key })
+    setClaimingTask(null)
+    if (err) { setError(err.message); return }
+    if (!data?.ok) {
+      setError(data?.error === 'already_claimed' ? 'Already claimed.' : (data?.error || 'Could not claim.'))
       return
     }
     tap('match')
@@ -117,6 +139,21 @@ export default function Monetization() {
               <div className="mt-4 text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5">
                 {error}
               </div>
+            )}
+
+            {/* Tasks — earn coins for this tier */}
+            {tasks && !tasks.error && tasks.tasks && tasks.tasks.length > 0 && (
+              <TasksCard
+                tier={tasks.tier}
+                tasks={tasks.tasks}
+                claiming={claimingTask}
+                onClaim={claimTask}
+              />
+            )}
+
+            {/* Badges earned */}
+            {badges && !badges.error && badges.badges && badges.badges.length > 0 && (
+              <BadgesRow badges={badges.badges} />
             )}
 
             {/* Creator journey — only for Pro */}
@@ -481,4 +518,115 @@ function fmt(n) {
     return (k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)) + 'K'
   }
   return v.toLocaleString()
+}
+
+
+// ------------------------------------------------------------
+// TasksCard — current tier's task list
+// ------------------------------------------------------------
+const TASK_ICONS = {
+  facebook: Globe,
+  instagram: AtSign,
+  tiktok: Share2,
+  share: Share2,
+  user: UserIcon,
+  camera: Camera,
+  video: Video,
+  users: Users,
+  gift: Gift,
+  zap: Zap,
+  eye: Eye,
+  'trending-up': TrendingUp,
+}
+
+function TasksCard({ tier, tasks, claiming, onClaim }) {
+  const doneCount = tasks.filter((t) => t.done).length
+  return (
+    <div className="mb-5">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase">
+          Earn coins · {tier}
+        </p>
+        <p className="text-muted text-[11px] font-semibold">
+          {doneCount} / {tasks.length} done
+        </p>
+      </div>
+      <div className="rounded-2xl bg-white/[0.04] border border-white/8 divide-y divide-white/6">
+        {tasks.map((t) => {
+          const Icon = TASK_ICONS[t.icon] || Coins
+          const busy = claiming === t.key
+          return (
+            <div key={t.key} className="flex items-center gap-3 p-4">
+              <div className="w-9 h-9 rounded-xl bg-purple-500/15 border border-purple-500/25 grid place-items-center shrink-0">
+                <Icon size={16} strokeWidth={2.2} className="text-purple-300" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-[13.5px] font-semibold ${t.done ? 'text-muted line-through' : 'text-cream'}`}>
+                  {t.label}
+                </p>
+                <p className="text-amber-300 text-[11.5px] font-bold mt-0.5">
+                  +{t.reward} coins
+                </p>
+              </div>
+              {t.done ? (
+                <div className="w-7 h-7 rounded-full bg-emerald-500/20 border border-emerald-500/40 grid place-items-center shrink-0">
+                  <Check size={14} strokeWidth={3} className="text-emerald-400" />
+                </div>
+              ) : (
+                <button
+                  onClick={() => onClaim(t.key)}
+                  disabled={busy}
+                  className="px-3 h-8 rounded-full text-white text-[12px] font-bold disabled:opacity-50 shrink-0"
+                  style={{ background: 'linear-gradient(135deg, #A855F7 0%, #EC4899 100%)' }}
+                >
+                  {busy ? '…' : 'Claim'}
+                </button>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ------------------------------------------------------------
+// BadgesRow — achieved badges
+// ------------------------------------------------------------
+function BadgesRow({ badges }) {
+  return (
+    <div className="mb-5">
+      <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-3">
+        Badges earned
+      </p>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {badges.map((b, i) => (
+          <div
+            key={i}
+            className="shrink-0 rounded-xl border px-3 py-2 flex items-center gap-2"
+            style={{
+              background: b.tier === 'creator'
+                ? 'linear-gradient(135deg, rgba(245,158,11,0.18), rgba(236,72,153,0.12))'
+                : b.tier === 'pro'
+                ? 'rgba(168,85,247,0.15)'
+                : 'rgba(255,255,255,0.05)',
+              borderColor: b.tier === 'creator'
+                ? 'rgba(245,158,11,0.4)'
+                : b.tier === 'pro'
+                ? 'rgba(168,85,247,0.4)'
+                : 'rgba(255,255,255,0.12)',
+            }}
+          >
+            <Sparkles size={12} className={
+              b.tier === 'creator' ? 'text-amber-300' :
+              b.tier === 'pro' ? 'text-purple-300' : 'text-muted'
+            } />
+            <span className="text-cream text-[11.5px] font-bold whitespace-nowrap">
+              {b.key.replace(/_/g, ' ')}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
