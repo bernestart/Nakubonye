@@ -21,6 +21,8 @@ const DEFAULTS = {
   show_read_receipts: true,
   show_typing_indicator: true,
   show_location_on_profile: true,
+  personalized_ads: true,
+  location_services: true,
   phone_visibility: 'only_me',
   email_visibility: 'only_me',
   birthday_visibility: 'everyone',
