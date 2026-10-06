@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Key, Mail, Check, Eye, EyeOff, AlertCircle, Trash2, ChevronRight } from 'lucide-react'
+import { Smartphone, Monitor, ArrowLeft, Key, Mail, Check, Eye, EyeOff, AlertCircle, Trash2, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { tap } from '../lib/haptic'
@@ -27,6 +27,28 @@ export default function AccountSecurity() {
   const [emailErr, setEmailErr] = useState('')
   const [emailOk, setEmailOk] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [loginEvents, setLoginEvents] = useState([])
+  const [loginLoading, setLoginLoading] = useState(true)
+
+  useEffect(() => {
+    const uid = session?.user?.id
+    if (!uid) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data } = await supabase
+          .from("login_events")
+          .select("id, user_agent, device_hint, method, created_at")
+          .eq("user_id", uid)
+          .order("created_at", { ascending: false })
+          .limit(8)
+        if (!cancelled) setLoginEvents(data || [])
+      } catch (e) { console.warn("login events load failed", e) }
+      finally { if (!cancelled) setLoginLoading(false) }
+    })()
+    return () => { cancelled = true }
+  }, [session?.user?.id])
+
 
   async function changePassword() {
     setPwErr(''); setPwOk(false)
@@ -246,6 +268,66 @@ export default function AccountSecurity() {
             You'll get a confirmation link at the new address. Until you click it, your current email stays active.
           </p>
         </div>
+        {/* Login activity */}
+        <div className="mb-6">
+          <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-3">
+            Login activity
+          </p>
+          {loginLoading ? (
+            <p className="text-muted text-[12.5px]">Loading…</p>
+          ) : loginEvents.length === 0 ? (
+            <p className="text-muted text-[12.5px]">No sign-ins recorded yet.</p>
+          ) : (
+            <div className="flex flex-col">
+              {loginEvents.map((e, i) => {
+                const isMobile = /Android|iPhone|iPad|Mobi/i.test(e.user_agent || "")
+                const Icon = isMobile ? Smartphone : Monitor
+                const label = (() => {
+                  const ua = e.user_agent || ""
+                  if (/Android/i.test(ua)) return "Android device"
+                  if (/iPhone|iPad/i.test(ua)) return "iOS device"
+                  if (/Chrome/i.test(ua)) return "Chrome browser"
+                  if (/Safari/i.test(ua)) return "Safari browser"
+                  if (/Firefox/i.test(ua)) return "Firefox browser"
+                  return "Unknown device"
+                })()
+                const when = (() => {
+                  const d = new Date(e.created_at)
+                  const diff = Date.now() - d.getTime()
+                  const mins = Math.floor(diff / 60000)
+                  if (mins < 1) return "Just now"
+                  if (mins < 60) return mins + "m ago"
+                  const hrs = Math.floor(mins / 60)
+                  if (hrs < 24) return hrs + "h ago"
+                  const days = Math.floor(hrs / 24)
+                  if (days < 7) return days + "d ago"
+                  return d.toLocaleDateString([], { month: "short", day: "numeric" })
+                })()
+                return (
+                  <div
+                    key={e.id}
+                    className="flex items-center gap-4 px-4 py-3 border-b border-white/6 last:border-b-0"
+                  >
+                    <Icon size={18} className="text-cream shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-cream text-[14px] font-medium">{label}</p>
+                      <p className="text-muted text-[12px]">{when}</p>
+                    </div>
+                    {i === 0 && (
+                      <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 shrink-0">
+                        Current
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+          <p className="text-subtle text-[11.5px] mt-2 leading-relaxed">
+            If you see a sign-in you don't recognize, change your password immediately.
+          </p>
+        </div>
+
         {/* Danger Zone */}
         <div className="mb-6">
           <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-3">
