@@ -1,4 +1,5 @@
 import ProfileHighlights from '../components/ProfileHighlights'
+import ProfileEditSheet from '../components/ProfileEditSheet'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, Pencil, MoreVertical, MapPin, Edit, Share2, ArrowLeft } from 'lucide-react'
@@ -42,6 +43,7 @@ export default function Preview() {
   const [myReactionTypes, setMyReactionTypes] = useState(new Map())
   const [commentCounts, setCommentCounts] = useState(new Map())
   const [menuOpen, setMenuOpen] = useState(false)
+  const [editSheetKind, setEditSheetKind] = useState(null)
   const [playingReel, setPlayingReel] = useState(null)
   const [viewingPhoto, setViewingPhoto] = useState(null)
   const [copied, setCopied] = useState(false)
@@ -163,8 +165,8 @@ export default function Preview() {
 
   const tabs = [
     { id: "all",    label: "All" },
-    { id: "photos", label: "Photos" },
     { id: "reels",  label: "Reels" },
+    { id: "photos", label: "Photos" },
   ]
 
   return (
@@ -177,18 +179,8 @@ export default function Preview() {
       <BrandGlow />
       <AppHeader />
 
-      <div className="flex-1 overflow-y-auto pb-24">
-        {/* Cover */}
-        <div className="relative -mx-4" style={{ height: 150 }}>
-          {profile?.cover_photo_path ? (
-            <img src={publicPhotoUrl(profile.cover_photo_path)} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full" style={{ background: "linear-gradient(135deg, rgba(168,85,247,0.35) 0%, rgba(236,72,153,0.35) 100%)" }} />
-          )}
-        </div>
-
         {/* Top bar — name + edit + search + ⋯ */}
-        <div className="relative z-20 flex items-center gap-2 px-3 py-2 bg-[#0B0B14]/80 backdrop-blur-sm">
+        <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-white/6 bg-[#0B0B14]">
           <button onClick={() => nav(-1)} className="w-9 h-9 rounded-full grid place-items-center text-muted shrink-0" aria-label="Back">
             <ArrowLeft size={20} strokeWidth={2.3} />
           </button>
@@ -216,6 +208,16 @@ export default function Preview() {
           >
             <MoreVertical size={20} />
           </button>
+        </div>
+
+      <div className="flex-1 overflow-y-auto pb-24">
+        {/* Cover */}
+        <div className="relative -mx-4" style={{ height: 150 }}>
+          {profile?.cover_photo_path ? (
+            <img src={publicPhotoUrl(profile.cover_photo_path)} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full" style={{ background: "linear-gradient(135deg, rgba(168,85,247,0.35) 0%, rgba(236,72,153,0.35) 100%)" }} />
+          )}
         </div>
 
         {/* Avatar centered */}
@@ -326,9 +328,9 @@ export default function Preview() {
         <div className="pt-3">
           {activeTab === "all" && (
             <>
-              <ProfilePersonalDetails person={profile} isMe={true} />
+              <ProfilePersonalDetails person={profile} isMe={true} onEdit={() => setEditSheetKind("details")} />
 
-              <ProfileHobbies interests={interests} isMe={true} />
+              <ProfileHobbies interests={interests} isMe={true} onEdit={() => setEditSheetKind("hobbies")} />
 
               <ProfileFriendsStrip userId={myId} isMe={true} />
 
@@ -437,6 +439,16 @@ export default function Preview() {
           photo={viewingPhoto}
           currentUserId={myId}
           onClose={() => setViewingPhoto(null)}
+        />
+      )}
+
+      {editSheetKind && (
+        <ProfileEditSheet
+          kind={editSheetKind}
+          person={profile}
+          myId={myId}
+          onClose={() => setEditSheetKind(null)}
+          onSaved={(patch) => setProfile((cur) => cur ? { ...cur, ...patch } : cur)}
         />
       )}
 
