@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Send, Sparkles, Paperclip, Camera, X , Mic, Square , Pin , MoreVertical , Eraser , Bell, BellOff , Flag } from 'lucide-react'
+import { Timer, Search, Send, Sparkles, Paperclip, Camera, X , Mic, Square , Pin , MoreVertical , Eraser , Bell, BellOff , Flag } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { loadBlockedIds } from "../lib/blocks"
 import { useAuth } from '../lib/auth'
@@ -17,6 +17,14 @@ import ReportModal from './ReportModal'
 import AudioBubble from './chat/AudioBubble'
 import PollMessage from './PollMessage'
 import { useVoiceRecorder } from './chat/useVoiceRecorder'
+
+const TIMER_OPTIONS = [
+  { value: null,   label: "Off",      sub: "Messages stay forever" },
+  { value: 300,    label: "5 minutes" },
+  { value: 3600,   label: "1 hour" },
+  { value: 86400,  label: "24 hours" },
+  { value: 604800, label: "7 days" },
+]
 
 const UNSEND_WINDOW_MS = 3600000
 
@@ -56,6 +64,8 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
   const [clearedAt, setClearedAt] = useState(null)
   const [isMuted, setIsMuted] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [disappearingTimer, setDisappearingTimer] = useState(null)
+  const [timerSheetOpen, setTimerSheetOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
   const [forwardingMsg, setForwardingMsg] = useState(null)
@@ -85,7 +95,7 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
 
     const { data: rows, error: err } = await supabase
       .from('community_messages')
-      .select('id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, created_at, highlighted_until, metadata')
+      .select('id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, created_at, highlighted_until, metadata, expires_at')
       .eq('community_id', communityId)
       .order('created_at', { ascending: true })
       .limit(200)
@@ -93,7 +103,8 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
     if (err) { setError(err.message); setLoading(false); return }
 
     const list = rows || []
-    setMessages(list)
+    const __now = Date.now()
+    setMessages(list.filter((m) => !m.expires_at || new Date(m.expires_at).getTime() > __now))
 
     const ids = [...new Set(list.map((r) => r.sender_id))]
     if (ids.length > 0) {
@@ -122,6 +133,19 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
   }, [myId, communityId])
 
   useEffect(() => { load() }, [load])
+
+  // Live-remove expired messages
+  useEffect(() => {
+    if (!messages.length) return
+    const t = setInterval(() => {
+      const now = Date.now()
+      setMessages((cur) => {
+        const next = cur.filter((m) => !m.expires_at || new Date(m.expires_at).getTime() > now)
+        return next.length === cur.length ? cur : next
+      })
+    }, 15000)
+    return () => clearInterval(t)
+  }, [messages.length])
 
   // @mention autocomplete
   useEffect(() => {
@@ -304,14 +328,16 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
     if (upErr) { setSending(false); setError(upErr.message); return }
     const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
 
-    const { error: err } = await supabase.from("community_messages").insert({
+    const voicePayload = {
       community_id: communityId,
       sender_id: myId,
       content: "",
       media_url: pub?.publicUrl || null,
       media_type: "audio/webm",
       media_name: "Voice · " + result.seconds + "s",
-    })
+    }
+    if (disappearingTimer) voicePayload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
+    const { error: err } = await supabase.from("community_messages").insert(voicePayload)
     setSending(false)
     if (err) { setError(err.message); return }
     load()
@@ -337,6 +363,7 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
       content: poll.question || "",
       metadata: { poll },
     }
+    if (disappearingTimer) payload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
     const { data: inserted, error: err } = await supabase
       .from("community_messages")
       .insert(payload)
@@ -373,6 +400,7 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
       sender_id: myId,
       content: bodyToSend || "",
     }
+    if (disappearingTimer) payload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
     if (mediaUrl) { payload.media_url = mediaUrl; payload.media_type = mediaType; payload.media_name = mediaName }
     if (replyingTo?.id) payload.reply_to_id = replyingTo.id
     setReplyingTo(null)
@@ -638,6 +666,17 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
               <span className="font-semibold text-[14px]">Clear chat</span>
             </button>
             <button
+              onClick={() => { setMenuOpen(false); setTimerSheetOpen(true) }}
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]"
+            >
+              <Timer size={18} />
+              <span className="font-semibold text-[14px]">
+                {disappearingTimer
+                  ? `Disappearing · ${disappearingTimer === 300 ? "5 min" : disappearingTimer === 3600 ? "1 h" : disappearingTimer === 86400 ? "24 h" : "7 d"}`
+                  : "Disappearing messages"}
+              </span>
+            </button>
+            <button
               onClick={() => { setMenuOpen(false); setReportOpen(true) }}
               className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]"
             >
@@ -650,7 +689,49 @@ export default function CommunityChat({ communityId, isMember, isPremium, commun
         </div>
       )}
 
-      <ReportModal
+            {timerSheetOpen && (
+        <div className="fixed inset-0 z-[200] flex items-end" onClick={() => setTimerSheetOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
+            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+          >
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
+            <h3 className="text-cream font-extrabold text-[16px] mb-1">Disappearing messages</h3>
+            <p className="text-muted text-[12.5px] leading-snug mb-3">
+              New messages in this community chat will disappear after the chosen time.
+            </p>
+            {TIMER_OPTIONS.map((o) => {
+              const active = (disappearingTimer || null) === (o.value || null)
+              return (
+                <button
+                  key={String(o.value)}
+                  onClick={async () => {
+                    tap("light")
+                    setTimerSheetOpen(false)
+                    setDisappearingTimer(o.value)
+                    try {
+                      await supabase.from("communities")
+                        .update({ disappearing_timer_seconds: o.value })
+                        .eq("id", communityId)
+                    } catch (e) { console.warn("timer save failed", e) }
+                  }}
+                  className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left active:bg-white/[0.03] last:border-b-0"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-cream text-[15px] font-medium">{o.label}</p>
+                    {o.sub && <p className="text-muted text-[12px] mt-0.5">{o.sub}</p>}
+                  </div>
+                  {active && <span className="text-purple-400 text-[16px]">✓</span>}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+<ReportModal
         open={reportOpen}
         onClose={() => setReportOpen(false)}
         target={communityId ? { id: communityId, name: communityName, isCommunity: true } : null}
