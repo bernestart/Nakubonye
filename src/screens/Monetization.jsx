@@ -172,10 +172,10 @@ function StatusPill({ tier }) {
     ? { label: 'CREATOR', bg: 'linear-gradient(135deg, #F59E0B 0%, #EC4899 100%)', fg: '#FFFFFF' }
     : tier === 'pro'
     ? { label: 'PRO', bg: 'linear-gradient(135deg, #A855F7 0%, #EC4899 100%)', fg: '#FFFFFF' }
-    : { label: 'STANDARD', bg: 'rgba(255,255,255,0.08)', fg: '#C8C8D4' }
+    : { label: 'STANDARD', bg: 'rgba(255,255,255,0.08)', fg: '#8E8E9A' }
   return (
     <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11px] font-black tracking-[0.14em]"
-      style={{ background: cfg.bg, color: cfg.fg, boxShadow: '0 6px 20px rgba(168,85,247,0.35)' }}>
+      style={{ background: cfg.bg, color: cfg.fg, boxShadow: tier === 'standard' ? 'none' : '0 6px 20px rgba(168,85,247,0.35)' }}>
       {tier === 'creator' && <Sparkles size={11} strokeWidth={3} />}
       {cfg.label}
     </span>
@@ -424,7 +424,7 @@ function ReferralCard({ referral, copied, onCopy }) {
 
         {next.next && (
           <p className="text-subtle text-[11.5px]">
-            {next.remaining} more to unlock <span className="text-amber-300 font-semibold">+{next.bonus} coins</span>
+            Invite {next.remaining} more friend{next.remaining === 1 ? '' : 's'} → <span className="text-amber-300 font-semibold">+{next.bonus} coins</span>
           </p>
         )}
         {!next.next && (
@@ -472,7 +472,13 @@ function groupGates(gates) {
 
 function fmt(n) {
   const v = Number(n) || 0
-  if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M'
-  if (v >= 10000) return (v / 1000).toFixed(1) + 'K'
+  if (v >= 1000000) {
+    const m = v / 1000000
+    return (m % 1 === 0 ? m.toFixed(0) : m.toFixed(1)) + 'M'
+  }
+  if (v >= 1000) {
+    const k = v / 1000
+    return (k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)) + 'K'
+  }
   return v.toLocaleString()
 }
