@@ -12,12 +12,25 @@ export default function BlockConfirm({ open, onClose, target, onBlocked }) {
   async function confirm() {
     if (!session?.user?.id || !target?.id) return
     setBusy(true); setError('')
+    const me = session.user.id
+    const them = target.id
+
     const { error: err } = await supabase.from('blocks').insert({
-      blocker_id: session.user.id,
-      blocked_id: target.id,
+      blocker_id: me,
+      blocked_id: them,
     })
     setBusy(false)
     if (err) { setError(err.message); return }
+
+    // Cleanup: remove any photo_tags connecting the two users (both directions)
+    // Fire-and-forget — block already succeeded, cleanup shouldn't block the UX.
+    try {
+      Promise.all([
+        supabase.from('photo_tags').delete().eq('tagger_id', me).eq('tagged_user_id', them),
+        supabase.from('photo_tags').delete().eq('tagger_id', them).eq('tagged_user_id', me),
+      ]).catch(() => {})
+    } catch (e) { console.warn("tag cleanup failed", e) }
+
     onBlocked?.()
     onClose?.()
   }
