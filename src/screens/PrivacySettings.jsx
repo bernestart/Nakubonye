@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, ChevronRight, MessageCircle, Users, MessageSquare, Image,
-  AtSign, Eye, MapPin, Activity, Check, EyeOff, Bell, Shield,
+  AtSign, Eye, MapPin, Activity, Check, EyeOff, Bell, Shield, Lock,
 } from 'lucide-react'
 import { tap } from '../lib/haptic'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../lib/auth'
 import {
   useSettings, AUDIENCE_LEVELS, PROFILE_VISIBILITY_LEVELS,
   LOCATION_LEVELS, REQUEST_LEVELS, TAG_LEVELS,
@@ -16,6 +18,36 @@ export default function PrivacySettings() {
   const nav = useNavigate()
   const { settings, update, loading } = useSettings()
   const [sheet, setSheet] = useState(null) // { key, title, options, current }
+  const { session } = useAuth()
+  const myId = session?.user?.id
+  const [isPrivate, setIsPrivate] = useState(false)
+  const [privacyLoading, setPrivacyLoading] = useState(true)
+  const [privacyBusy, setPrivacyBusy] = useState(false)
+
+  useEffect(() => {
+    if (!myId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data } = await supabase.from("profiles").select("is_private").eq("id", myId).maybeSingle()
+        if (!cancelled) setIsPrivate(!!data?.is_private)
+      } catch (e) { console.warn("load is_private failed", e) }
+      finally { if (!cancelled) setPrivacyLoading(false) }
+    })()
+    return () => { cancelled = true }
+  }, [myId])
+
+  async function togglePrivate(next) {
+    if (!myId || privacyBusy) return
+    setPrivacyBusy(true)
+    tap("light")
+    const prev = isPrivate
+    setIsPrivate(next)
+    const { error } = await supabase.from("profiles").update({ is_private: next }).eq("id", myId)
+    if (error) { setIsPrivate(prev); console.warn("toggle failed", error) }
+    setPrivacyBusy(false)
+  }
+
 
   function openSheet(key, title, options) {
     tap('light')
@@ -60,6 +92,25 @@ export default function PrivacySettings() {
           </div>
         ) : (
           <>
+            {/* ─── PRIVATE ACCOUNT ─── */}
+            <SectionLabel icon={<Lock size={14} />}>Account Privacy</SectionLabel>
+
+            <ToggleRow
+              icon={<Lock size={18} />}
+              label="Private account"
+              sub={isPrivate
+                ? "Only approved followers can see your posts, reels and stories."
+                : "Anyone on Nakubonye can see your public posts."}
+              value={isPrivate}
+              onChange={(v) => togglePrivate(v)}
+            />
+
+            {isPrivate && (
+              <p className="text-muted text-[12px] leading-relaxed px-1 mb-4">
+                New follows will require your approval. Existing followers keep seeing your content.
+              </p>
+            )}
+
             {/* ─── INTERACTIONS ─── */}
             <SectionLabel icon={<Users size={14} />}>Interactions</SectionLabel>
 

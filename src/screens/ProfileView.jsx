@@ -425,39 +425,6 @@ export default function ProfileView() {
     )
   }
 
-  if (!canView && !isMe) {
-    return (
-      <div className="mobile-shell" style={{ position: 'fixed', inset: 0, background: '#0B0B14', display: 'flex', flexDirection: 'column' }}>
-        <header className="px-3 py-3 flex items-center gap-2 shrink-0">
-          <button onClick={() => nav(-1)} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Back">
-            <ArrowLeft size={20} strokeWidth={2.3} />
-          </button>
-          <span className="text-cream font-bold text-[15px] flex-1 truncate">{person?.display_name || person?.username || 'Profile'}</span>
-        </header>
-        <div className="flex-1 grid place-items-center px-6 text-center">
-          <div className="max-w-[300px]">
-            <div className="w-20 h-20 rounded-full overflow-hidden bg-purple-600 grid place-items-center mx-auto mb-4">
-              {photos[0] ? (
-                <img src={photos[0]} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-white text-2xl font-black">{(person?.display_name || person?.username || 'U')[0]?.toUpperCase()}</span>
-              )}
-            </div>
-            <p className="text-cream font-black text-[17px] mb-1">{person?.display_name || person?.username}</p>
-            <p className="text-muted text-[13px] leading-relaxed mb-6">{canViewMessage || 'This profile is private'}</p>
-            <button
-              onClick={() => nav('/messages/' + userId)}
-              className="h-11 px-5 rounded-full text-white font-bold text-[13.5px] inline-flex items-center justify-center gap-2"
-              style={{ background: 'linear-gradient(135deg, #EC4899 0%, #A855F7 100%)' }}
-            >
-              <MessageCircle size={15} /> Message
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   if (error || !person) {
     return (
       <div className="mobile-shell flex flex-col items-center justify-center gap-3" style={{ position: 'fixed', inset: 0, background: '#0B0B14' }}>
@@ -466,6 +433,8 @@ export default function ProfileView() {
       </div>
     )
   }
+
+  const canViewContent = isMe || canView
 
   const tabs = [
     { id: 'all',    label: 'All' },
@@ -663,6 +632,25 @@ export default function ProfileView() {
         </div>
 
         <div className="pt-3">
+          {!canViewContent ? (
+            <div className="grid place-items-center py-20 px-6 text-center">
+              <div className="max-w-[300px]">
+                <div className="w-14 h-14 rounded-full bg-white/[0.04] grid place-items-center mx-auto mb-4">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                </div>
+                <p className="text-cream font-extrabold text-[15px] mb-1">
+                  This account is private
+                </p>
+                <p className="text-muted text-[13px] leading-relaxed">
+                  {canViewMessage || "Follow or match with them to see their posts, photos, and reels."}
+                </p>
+              </div>
+            </div>
+          ) : (
+          <>
           {activeTab === 'all' && (
             <>
               <ProfilePersonalDetails person={person} isMe={isMe} onEdit={() => isMe && setEditSheetKind("details")} />
@@ -925,6 +913,8 @@ export default function ProfileView() {
           {activeTab === 'photos' && (
             <ProfilePhotos userId={userId} onPhotoClick={setViewingPhoto} emptySubtitle="No photos on this profile yet." />
           )}
+        </>
+        )}
         </div>
 
         <div style={{ height: 40 }} />
