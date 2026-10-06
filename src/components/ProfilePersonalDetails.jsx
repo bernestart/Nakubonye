@@ -2,7 +2,7 @@ import { MapPin, Home, Cake, Briefcase, GraduationCap, Heart, Lock, Pencil } fro
 import { useNavigate } from "react-router-dom"
 import { tap } from "../lib/haptic"
 
-export default function ProfilePersonalDetails({ person, isMe = false }) {
+export default function ProfilePersonalDetails({ person, isMe = false, onEdit }) {
   if (!person) return null
 
   const rows = []
@@ -32,7 +32,7 @@ export default function ProfilePersonalDetails({ person, isMe = false }) {
         <h2 className="text-cream font-extrabold text-[17px]">Personal details</h2>
         {isMe && (
           <button
-            onClick={() => { tap("light"); /* nav to edit */ }}
+            onClick={() => { tap("light"); onEdit?.() }}
             className="w-8 h-8 rounded-full grid place-items-center text-muted"
             aria-label="Edit personal details"
           >

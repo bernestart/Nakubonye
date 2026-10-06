@@ -188,7 +188,7 @@ export default function Preview() {
         </div>
 
         {/* Top bar — name + edit + search + ⋯ */}
-        <div className="flex items-center gap-2 px-3 py-2">
+        <div className="relative z-20 flex items-center gap-2 px-3 py-2 bg-[#0B0B14]/80 backdrop-blur-sm">
           <button onClick={() => nav(-1)} className="w-9 h-9 rounded-full grid place-items-center text-muted shrink-0" aria-label="Back">
             <ArrowLeft size={20} strokeWidth={2.3} />
           </button>

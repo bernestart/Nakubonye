@@ -43,7 +43,7 @@ export default function ProfileHighlights({ userId, isOwn = false, onAddNew }) {
   }, [userId, reloadKey])
 
   if (loading) return null
-  if (highlights.length === 0 && !isOwn) return null
+  if (highlights.length === 0) return null
 
   return (
     <>

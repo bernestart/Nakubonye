@@ -1,7 +1,7 @@
 import { Shapes, Pencil } from "lucide-react"
 import { tap } from "../lib/haptic"
 
-export default function ProfileHobbies({ interests = [], isMe = false }) {
+export default function ProfileHobbies({ interests = [], isMe = false, onEdit }) {
   if (!interests || interests.length === 0) return null
 
   return (
@@ -10,7 +10,7 @@ export default function ProfileHobbies({ interests = [], isMe = false }) {
         <h2 className="text-cream font-extrabold text-[17px]">Hobbies</h2>
         {isMe && (
           <button
-            onClick={() => { tap("light") }}
+            onClick={() => { tap("light"); onEdit?.() }}
             className="w-8 h-8 rounded-full grid place-items-center text-muted"
             aria-label="Edit hobbies"
           >

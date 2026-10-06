@@ -10,6 +10,7 @@ import ProfileConnections from '../components/ProfileConnections'
 import ProfileIntro from '../components/ProfileIntro'
 import ProfilePhotos from '../components/ProfilePhotos'
 import ProfileHighlights from '../components/ProfileHighlights'
+import ProfileEditSheet from '../components/ProfileEditSheet'
 import ProfileFriendsStrip from '../components/ProfileFriendsStrip'
 import ProfileHobbies from '../components/ProfileHobbies'
 import ProfilePersonalDetails from '../components/ProfilePersonalDetails'
@@ -56,6 +57,7 @@ export default function ProfileView() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('all')
+  const [editSheetKind, setEditSheetKind] = useState(null)
   const [postsFilter, setPostsFilter] = useState('all')
   const [playingReel, setPlayingReel] = useState(null)
   const [viewingPhoto, setViewingPhoto] = useState(null)
@@ -633,9 +635,9 @@ export default function ProfileView() {
         <div className="pt-3">
           {activeTab === 'all' && (
             <>
-              <ProfilePersonalDetails person={person} isMe={isMe} />
+              <ProfilePersonalDetails person={person} isMe={isMe} onEdit={() => isMe && setEditSheetKind("details")} />
 
-              <ProfileHobbies interests={interests} isMe={isMe} />
+              <ProfileHobbies interests={interests} isMe={isMe} onEdit={() => isMe && setEditSheetKind("hobbies")} />
 
               <ProfileFriendsStrip userId={userId} isMe={isMe} />
 
@@ -912,6 +914,18 @@ export default function ProfileView() {
           postId={repostsFor.id}
           postType={repostsFor.source}
           onClose={() => setRepostsFor(null)}
+        />
+      )}
+
+      {editSheetKind && (
+        <ProfileEditSheet
+          kind={editSheetKind}
+          person={person}
+          myId={myId}
+          onClose={() => setEditSheetKind(null)}
+          onSaved={(patch) => {
+            setPerson((cur) => cur ? { ...cur, ...patch } : cur)
+          }}
         />
       )}
 
