@@ -42,14 +42,26 @@ export default function OnboardingSuggestions() {
         }
       } catch {}
       if (list.length === 0) {
-        const { data } = await supabase
+        const { data: rawPeople } = await supabase
           .from("profiles")
           .select("id, display_name, username, is_verified, city")
           .eq("is_active", true)
           .neq("id", myId)
           .order("last_seen_at", { ascending: false, nullsFirst: false })
-          .limit(12)
-        const ids = (data || []).map((p) => p.id)
+          .limit(24)
+
+        // Filter out people who opted out of suggestions
+        const { data: settingsRows } = await supabase
+          .from("user_settings")
+          .select("user_id, discoverable_suggestions")
+        const optOutSet = new Set(
+          (settingsRows || [])
+            .filter((r) => r.discoverable_suggestions === false)
+            .map((r) => r.user_id)
+        )
+        const data = (rawPeople || []).filter((p) => !optOutSet.has(p.id)).slice(0, 12)
+
+        const ids = data.map((p) => p.id)
         let photoMap = new Map()
         if (ids.length > 0) {
           const { data: ph } = await supabase
@@ -60,7 +72,7 @@ export default function OnboardingSuggestions() {
             .order("display_order", { ascending: true })
           ;(ph || []).forEach((x) => { if (!photoMap.has(x.user_id)) photoMap.set(x.user_id, x.storage_path) })
         }
-        list = (data || []).map((r) => ({
+        list = data.map((r) => ({
           ...r,
           _photo: photoMap.get(r.id) ? publicPhotoUrl(photoMap.get(r.id)) : null,
         }))

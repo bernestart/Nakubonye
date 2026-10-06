@@ -111,6 +111,41 @@ export default function PrivacySettings() {
               </p>
             )}
 
+            {/* ─── DISCOVERABILITY ─── */}
+            <SectionLabel icon={<Search size={14} />}>Discoverability</SectionLabel>
+
+            <ToggleRow
+              icon={<Phone size={18} />}
+              label="Find me by phone"
+              sub="People who have your number can find your profile"
+              value={settings.discoverable_phone !== false}
+              onChange={(v) => update({ discoverable_phone: v })}
+            />
+
+            <ToggleRow
+              icon={<Mail size={18} />}
+              label="Find me by email"
+              sub="People who have your email can find your profile"
+              value={settings.discoverable_email !== false}
+              onChange={(v) => update({ discoverable_email: v })}
+            />
+
+            <ToggleRow
+              icon={<Search size={18} />}
+              label="Show profile in search engines"
+              sub="Let Google and others index your public profile"
+              value={settings.discoverable_search_engines === true}
+              onChange={(v) => update({ discoverable_search_engines: v })}
+            />
+
+            <ToggleRow
+              icon={<UserCheck size={18} />}
+              label="Allow suggestions"
+              sub="Include me in 'People you may know' and similar"
+              value={settings.discoverable_suggestions !== false}
+              onChange={(v) => update({ discoverable_suggestions: v })}
+            />
+
             {/* ─── INTERACTIONS ─── */}
             <SectionLabel icon={<Users size={14} />}>Interactions</SectionLabel>
 
