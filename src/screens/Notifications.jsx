@@ -159,6 +159,7 @@ export default function Notifications() {
     else if (n.ref_type === "reel" && n.ref_id) nav("/reels")
     else if (n.ref_type === "match" && n.actor_id) nav("/messages/" + n.actor_id)
     else if (n.ref_type === "profile" && n.actor_id) nav("/profile/" + n.actor_id)
+    else if (n.ref_type === "security") nav("/settings/security")
     else if (n.actor_id) nav("/profile/" + n.actor_id)
   }
 

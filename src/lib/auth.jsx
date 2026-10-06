@@ -20,7 +20,7 @@ export function AuthProvider({ children }) {
     // Track which session creation timestamps we've already logged (avoid dupes)
     const loggedSessions = new Set()
 
-    function logLoginEvent(userId, sessionCreatedAt, method, accessToken) {
+    async function logLoginEvent(userId, sessionCreatedAt, method, accessToken) {
       if (!userId) return
       const sid = accessToken ? String(accessToken).slice(-20) : null
       const key = String(sessionCreatedAt || "") + ":" + userId + ":" + (sid || "")
@@ -29,15 +29,52 @@ export function AuthProvider({ children }) {
       try {
         const ua = typeof navigator !== "undefined" ? navigator.userAgent : ""
         const hint = (ua || "").slice(0, 120)
-        supabase.from("login_events").insert({
-          user_id: userId,
-          user_agent: ua,
-          device_hint: hint,
-          method: method || "password",
-          session_id: sid,
-          is_active: true,
-        }).then(() => {}, () => {})
-      } catch {}
+
+        // Check if this device has been seen before
+        const { data: existing } = await supabase
+          .from("login_events")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("device_hint", hint)
+          .limit(1)
+          .maybeSingle()
+        const isNewDevice = !existing
+
+        // Check if this is the very first login event overall
+        const { count } = await supabase
+          .from("login_events")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", userId)
+        const isFirstEver = (count || 0) === 0
+
+        // Insert login event
+        const { data: inserted } = await supabase
+          .from("login_events")
+          .insert({
+            user_id: userId,
+            user_agent: ua,
+            device_hint: hint,
+            method: method || "password",
+            session_id: sid,
+            is_active: true,
+          })
+          .select("id")
+          .single()
+
+        // Notify if this is a new device AND not the first-ever login
+        if (isNewDevice && !isFirstEver && inserted?.id) {
+          try {
+            await supabase.from("notifications").insert({
+              user_id: userId,
+              actor_id: userId,
+              type: "new_login",
+              ref_id: String(inserted.id),
+              ref_type: "security",
+              body: "New sign-in to your account",
+            })
+          } catch (e) { console.warn("login alert notify failed", e) }
+        }
+      } catch (e) { console.warn("logLoginEvent failed", e) }
     }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
