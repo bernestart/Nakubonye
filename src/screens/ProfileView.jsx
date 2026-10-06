@@ -443,7 +443,7 @@ export default function ProfileView() {
       <BrandGlow />
 
       {/* Top bar */}
-      <header className="shrink-0 h-12 px-3 flex items-center gap-2"
+      <header className="relative z-20 shrink-0 h-12 px-3 flex items-center gap-2 bg-[#0B0B14]/80 backdrop-blur-sm"
               style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <button
           onClick={() => nav(-1)}
