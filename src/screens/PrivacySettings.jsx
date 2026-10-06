@@ -199,13 +199,7 @@ export default function PrivacySettings() {
               value={settings.allow_story_replies}
               onChange={(v) => update({ allow_story_replies: v })}
             />
-            <ToggleRow
-              icon={<Image size={18} />}
-              label="Allow sharing to stories"
-              sub="Others can share your posts to their story"
-              value={settings.allow_sharing_to_story}
-              onChange={(v) => update({ allow_sharing_to_story: v })}
-            />
+            {/* Allow sharing to stories — deferred to Phase 10 (needs a share-to-story feature first) */}
 
             {/* ─── VISIBILITY ─── */}
             <SectionLabel icon={<Eye size={14} />}>Visibility</SectionLabel>

@@ -54,6 +54,7 @@ export default function Reels() {
   const [likedAuthors, setLikedAuthors] = useState(new Set())
   const [remixOriginals, setRemixOriginals] = useState(new Map())
   const [matchSet, setMatchSet] = useState(new Set())
+  const [authorReelsVis, setAuthorReelsVis] = useState(new Map())
   const containerRef = useRef(null)
   const videoRefs = useRef([])
   const offlineBlobUrls = useRef(new Map())  // reelId → blob URL
@@ -91,12 +92,32 @@ export default function Reels() {
       .from("follows")
       .select("following_id")
       .eq("follower_id", myId)
+    // Load reel-visibility preferences for the authors in this batch
+    const __authorIds = [...new Set((rows || []).map((r) => r.user_id))].filter(Boolean)
+    let __prefsRes = { data: [] }
+    if (__authorIds.length > 0) {
+      try {
+        const { data } = await supabase
+          .from("user_settings")
+          .select("user_id, who_can_see_reels")
+          .in("user_id", __authorIds)
+        __prefsRes = { data }
+      } catch {}
+    }
+    const __prefsMap = new Map((__prefsRes.data || []).map((r) => [r.user_id, r.who_can_see_reels || "everyone"]))
     const followSet = new Set((followRows || []).map((f) => f.following_id))
     setFollowingIds(followSet)
 
     const list = (rows || []).filter((r) => {
       if (hiddenIds.has(r.id)) return false
       if (r.user_id === myId) return true
+
+      // Author preference: who_can_see_reels gates the whole author's reel library
+      const pref = __prefsMap.get(r.user_id) || "everyone"
+      if (pref === "nobody") return false
+      if (pref === "matches" && !matchSet.has(r.user_id)) return false
+      if (pref === "following" && !followSet.has(r.user_id)) return false
+
       const aud = r.audience || "public"
       if (aud === "public") return true
       if (aud === "matches") return matchSet.has(r.user_id)
@@ -109,6 +130,11 @@ export default function Reels() {
       return true
     })
     const ranked = feedTab === "foryou" ? [...list].sort((a, b) => fypScore(b) - fypScore(a)) : list
+    setAuthorReelsVis((cur) => {
+      const merged = new Map(cur)
+      __prefsMap.forEach((v, k) => merged.set(k, v))
+      return merged
+    })
     setReels(ranked)
     setCursor(list.length > 0 ? list[list.length - 1].created_at : null)
     setHasMore((rows || []).length >= 50)
@@ -241,9 +267,32 @@ export default function Reels() {
       .order("created_at", { ascending: false })
       .limit(20)
 
+    const __lmAuthorIds = [...new Set((rows || []).map((r) => r.user_id))].filter(Boolean)
+    if (__lmAuthorIds.length > 0) {
+      try {
+        const { data: __lmPrefs } = await supabase
+          .from("user_settings")
+          .select("user_id, who_can_see_reels")
+          .in("user_id", __lmAuthorIds)
+        if (__lmPrefs) {
+          setAuthorReelsVis((cur) => {
+            const merged = new Map(cur)
+            __lmPrefs.forEach((r) => merged.set(r.user_id, r.who_can_see_reels || "everyone"))
+            return merged
+          })
+        }
+      } catch {}
+    }
+
     const filtered = (rows || []).filter((r) => {
       if (hiddenIds.has(r.id)) return false
       if (r.user_id === myId) return true
+
+      const pref = authorReelsVis.get(r.user_id) || "everyone"
+      if (pref === "nobody") return false
+      if (pref === "matches" && !matchSet.has(r.user_id)) return false
+      if (pref === "following" && !followSet.has(r.user_id)) return false
+
       const aud = r.audience || "public"
       if (aud === "public") return true
       if (aud === "matches") return matchSet.has(r.user_id)

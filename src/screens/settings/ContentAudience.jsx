@@ -5,6 +5,13 @@ import { tap } from "../../lib/haptic"
 import { useSettings } from "../../lib/settings.jsx"
 import BrandGlow from "../../components/BrandGlow"
 
+const REELS_VIS_LEVELS = [
+  { id: "everyone",  label: "Everyone",       sub: "Anyone on Nakubonye can see your reels",  icon: Globe },
+  { id: "matches",   label: "Matches",        sub: "Only people you've matched with",         icon: Users },
+  { id: "following", label: "People I follow", sub: "Only accounts you follow",                icon: Users },
+  { id: "nobody",    label: "Nobody",         sub: "No one can see your reels",               icon: Lock },
+]
+
 const POST_AUDIENCE_LEVELS = [
   { id: "public",  label: "Everyone",   sub: "Anyone on Nakubonye can see this", icon: Globe },
   { id: "matches", label: "Matches",    sub: "Only people you've matched with",  icon: Users },
@@ -15,21 +22,37 @@ export default function ContentAudience() {
   const nav = useNavigate()
   const { settings, update, loading } = useSettings()
   const [sheet, setSheet] = useState(null)
+  const [sheetKind, setSheetKind] = useState("post")
 
   const current = POST_AUDIENCE_LEVELS.find((o) => o.id === (settings.default_post_audience || "public")) || POST_AUDIENCE_LEVELS[0]
+  const currentReelsVis = REELS_VIS_LEVELS.find((o) => o.id === (settings.who_can_see_reels || "everyone")) || REELS_VIS_LEVELS[0]
 
   function openPostAudienceSheet() {
     tap("light")
+    setSheetKind("post")
     setSheet({
       title: "Default audience for new posts",
       options: POST_AUDIENCE_LEVELS,
       current: settings.default_post_audience || "public",
+      key: "default_post_audience",
+    })
+  }
+
+  function openReelsVisSheet() {
+    tap("light")
+    setSheetKind("reels")
+    setSheet({
+      title: "Who can see your reels",
+      options: REELS_VIS_LEVELS,
+      current: settings.who_can_see_reels || "everyone",
+      key: "who_can_see_reels",
     })
   }
 
   function select(id) {
     tap("light")
-    update({ default_post_audience: id })
+    if (!sheet?.key) return
+    update({ [sheet.key]: id })
     setSheet(null)
   }
 
@@ -62,10 +85,47 @@ export default function ContentAudience() {
               <ChevronRight size={18} className="text-muted shrink-0" />
             </button>
 
-            <SoonRow icon={<Image size={18} />} label="Story visibility" />
-            <SoonRow icon={<PlayCircle size={18} />} label="Reels visibility" />
-            <SoonRow icon={<Download size={18} />} label="Allow downloads of my reels" />
-            <SoonRow icon={<Shuffle size={18} />} label="Allow remix / duet" />
+            {/* Story visibility lives in Privacy screen — link to it */}
+            <button
+              onClick={() => { tap("light"); nav("/settings/privacy") }}
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left active:bg-white/[0.03]"
+            >
+              <Image size={18} className="text-cream shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-cream text-[15px] font-medium">Story visibility</p>
+                <p className="text-muted text-[12px] mt-0.5 truncate">Also in Privacy settings</p>
+              </div>
+              <ChevronRight size={18} className="text-muted shrink-0" />
+            </button>
+
+            <button
+              onClick={openReelsVisSheet}
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left active:bg-white/[0.03]"
+            >
+              <PlayCircle size={18} className="text-cream shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-cream text-[15px] font-medium">Reels visibility</p>
+                <p className="text-muted text-[12px] mt-0.5 truncate">{currentReelsVis.label}</p>
+              </div>
+              <ChevronRight size={18} className="text-muted shrink-0" />
+            </button>
+
+            <ToggleRowCU
+              icon={<Download size={18} />}
+              label="Allow downloads of my reels"
+              sub="Others can download your reels for offline viewing"
+              value={settings.allow_reel_downloads !== false}
+              onChange={(v) => update({ allow_reel_downloads: v })}
+            />
+
+            <ToggleRowCU
+              icon={<Shuffle size={18} />}
+              label="Allow remix / duet"
+              sub="Others can create a remix using your reel"
+              value={settings.allow_reel_remix !== false}
+              onChange={(v) => update({ allow_reel_remix: v })}
+            />
+
             <SoonRow icon={<Video size={18} />} label="Live video visibility" />
           </div>
         )}
@@ -107,6 +167,27 @@ export default function ContentAudience() {
         </div>
       )}
     </div>
+  )
+}
+
+function ToggleRowCU({ icon, label, sub, value, onChange }) {
+  return (
+    <button
+      onClick={() => { tap("light"); onChange(!value) }}
+      className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left active:bg-white/[0.03]"
+    >
+      <span className="shrink-0 text-cream">{icon}</span>
+      <div className="flex-1 min-w-0 pr-2">
+        <p className="text-cream text-[15px] font-medium">{label}</p>
+        {sub && <p className="text-muted text-[12px] mt-0.5 truncate">{sub}</p>}
+      </div>
+      <span
+        className="w-11 h-6 rounded-full relative shrink-0 transition-colors"
+        style={{ background: value ? "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" : "rgba(255,255,255,0.12)" }}
+      >
+        <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all" style={{ left: value ? "calc(100% - 22px)" : 2 }} />
+      </span>
+    </button>
   )
 }
 
