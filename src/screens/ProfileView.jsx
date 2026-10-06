@@ -453,19 +453,9 @@ export default function ProfileView() {
           <ArrowLeft size={20} strokeWidth={2.3} />
         </button>
 
-        <span className="text-cream font-extrabold text-[17px] truncate flex-1 min-w-0">
+        <span className="text-cream font-extrabold text-[17px] truncate flex-1 text-center px-2">
           {person?.display_name || person?.username || "Profile"}
         </span>
-
-        {isMe && (
-          <button
-            onClick={() => { tap('light'); nav('/me/edit') }}
-            className="w-9 h-9 rounded-full grid place-items-center text-muted shrink-0"
-            aria-label="Edit profile"
-          >
-            <Pencil size={18} />
-          </button>
-        )}
 
         <button
           onClick={() => { tap('light'); nav('/search') }}
