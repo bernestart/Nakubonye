@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Camera, Trash2, Star } from 'lucide-react'
+import { ArrowLeft, Camera, Trash2, Star, X } from 'lucide-react'
 import BrandGlow from '../components/BrandGlow'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -438,7 +438,27 @@ export default function EditProfile() {
       background: '#0B0B14', overflow: 'hidden',
     }}>
       <BrandGlow />
-      <AppHeader />
+
+      {/* Top bar — X + title + Save */}
+      <header className="shrink-0 flex items-center gap-2 px-3 h-14 border-b border-white/6 bg-[#0B0B14]"
+              style={{ paddingTop: "env(safe-area-inset-top)" }}>
+        <button
+          onClick={() => nav(-1)}
+          className="w-9 h-9 rounded-full grid place-items-center text-cream shrink-0"
+          aria-label="Close"
+        >
+          <X size={22} strokeWidth={2.2} />
+        </button>
+        <span className="flex-1 text-cream font-extrabold text-[16px] text-center">Edit profile</span>
+        <button
+          onClick={save}
+          disabled={saving || loading}
+          className="h-9 px-4 rounded-full text-white font-bold text-[13px] disabled:opacity-50 shrink-0"
+          style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
+        >
+          {saving ? "…" : "Save"}
+        </button>
+      </header>
 
       <div className="px-4 pt-3">
       {/* Cover photo picker */}
@@ -1218,19 +1238,8 @@ export default function EditProfile() {
         )}
       </div>
 
-      {/* Save bar */}
-      <div
-        className="shrink-0 px-5 pt-3 border-t border-white/8"
-        style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
-      >
-        <button
-          onClick={save}
-          disabled={saving || loading}
-          className="w-full h-12 rounded-full bg-gradient-to-r from-purple-600 to-purple-500 text-white font-bold text-[15px] shadow-[0_10px_28px_rgba(124,58,237,0.5)] disabled:opacity-50"
-        >
-          {saving ? 'Saving…' : 'Save changes'}
-        </button>
-      </div>
+      {/* Bottom safe area padding */}
+      <div className="shrink-0" style={{ height: 'max(12px, env(safe-area-inset-bottom))' }} />
     </div>
   )
 }
