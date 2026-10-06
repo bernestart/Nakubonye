@@ -5,6 +5,8 @@ import {
   Users, UserCheck, Flag, Heart, Ban,
 } from "lucide-react"
 import { tap } from "../lib/haptic"
+import { supabase } from "../lib/supabase"
+import { useAuth } from "../lib/auth"
 
 function Row({ icon: Icon, label, onClick, danger = false }) {
   return (
@@ -21,6 +23,45 @@ function Row({ icon: Icon, label, onClick, danger = false }) {
 }
 
 export default function ProfileMenuSheet({ open, onClose, isMe, userId, person, onReport, onBlock }) {
+  const { session } = useAuth()
+  const myId = session?.user?.id
+  const [storyHidden, setStoryHidden] = useState(false)
+  const [storyHiddenBusy, setStoryHiddenBusy] = useState(false)
+
+  useEffect(() => {
+    if (!myId || !userId || isMe) return
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase
+        .from("story_hides")
+        .select("owner_id")
+        .eq("owner_id", myId)
+        .eq("hidden_user_id", userId)
+        .maybeSingle()
+      if (!cancelled) setStoryHidden(!!data)
+    })()
+    return () => { cancelled = true }
+  }, [myId, userId, isMe])
+
+  async function toggleStoryHide() {
+    if (!myId || !userId || storyHiddenBusy) return
+    setStoryHiddenBusy(true)
+    tap("light")
+    const next = !storyHidden
+    setStoryHidden(next)
+    try {
+      if (next) {
+        await supabase.from("story_hides").insert({ owner_id: myId, hidden_user_id: userId })
+      } else {
+        await supabase.from("story_hides").delete().eq("owner_id", myId).eq("hidden_user_id", userId)
+      }
+    } catch (e) {
+      setStoryHidden(!next)
+      console.warn("story hide toggle failed", e)
+    }
+    setStoryHiddenBusy(false)
+    onClose?.()
+  }
   const nav = useNavigate()
   if (!open) return null
 
@@ -70,6 +111,13 @@ export default function ProfileMenuSheet({ open, onClose, isMe, userId, person, 
               <Row icon={Heart}        label={"Help " + (person?.display_name?.split(" ")[0] || "them")} onClick={() => {}} />
               <Row icon={Search}       label="Search"                      onClick={() => go("/search")} />
               <Row icon={Link2}        label="Copy link to profile"        onClick={copyLink} />
+              <Row
+                icon={storyHidden ? Eye : EyeOff}
+                label={storyHidden
+                  ? "Unhide story from " + (person?.display_name?.split(" ")[0] || "them")
+                  : "Hide my story from " + (person?.display_name?.split(" ")[0] || "them")}
+                onClick={toggleStoryHide}
+              />
               <Row icon={Flag}         label="Report profile"              onClick={() => { onClose(); onReport?.() }} />
               <Row icon={Ban}          label="Block"                       danger onClick={() => { onClose(); onBlock?.() }} />
             </>

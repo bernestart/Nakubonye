@@ -18,6 +18,7 @@ async function filterStoriesByVisibility(stories, myId) {
     supabase.from('blocks').select('blocker_id, blocked_id').or(`blocker_id.eq.${myId},blocked_id.eq.${myId}`),
     supabase.from('matches').select('user_one_id, user_two_id').or(`user_one_id.eq.${myId},user_two_id.eq.${myId}`),
     supabase.from('follows').select('following_id').eq('follower_id', myId),
+    supabase.from('story_hides').select('hidden_user_id').eq('owner_id', myId),
     supabase.from('inner_circle').select('user_id, member_id').or(`user_id.eq.${myId},member_id.eq.${myId}`),
   ])
   const settingsMap = new Map((settingsRes.data || []).map((r) => [r.user_id, r.who_can_see_story || 'everyone']))
@@ -32,6 +33,7 @@ async function filterStoriesByVisibility(stories, myId) {
     if (m.user_two_id === myId) matchSet.add(m.user_one_id)
   })
   const followSet = new Set((followsRes.data || []).map((f) => f.following_id))
+  const storyHiddenSet = new Set((storyHidesRes?.data || []).map((r) => r.hidden_user_id))
 
   // Inner Circle: which owners have me in their circle
   const innerCircleVisibleSet = new Set()
@@ -42,6 +44,7 @@ async function filterStoriesByVisibility(stories, myId) {
   return stories.filter((r) => {
     if (r.user_id === myId) return true
     if (blockedSet.has(r.user_id)) return false
+    if (storyHiddenSet.has(r.user_id)) return false
     const aud = r.audience && r.audience !== 'default' ? r.audience : (settingsMap.get(r.user_id) || 'everyone')
     if (aud === 'everyone' || aud === 'public') return true
     if (aud === 'nobody' || aud === 'private') return false
