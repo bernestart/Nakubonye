@@ -15,13 +15,6 @@ export default function Admin() {
   const { session, profile } = useAuth()
   const isAdmin = profile?.is_admin === true
 
-  async function loadUserTx(userId) {
-    // TODO: fetch user transactions if needed
-    try {
-      await supabase.from("coin_transactions").select("*").eq("user_id", userId).limit(50)
-    } catch {}
-  }
-
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [stats, setStats] = useState(null)
@@ -36,16 +29,18 @@ export default function Admin() {
   const [selected, setSelected] = useState(null)
   const [userTx, setUserTx] = useState([])
   const [busy, setBusy] = useState(false)
+  const [badgeRequests, setBadgeRequests] = useState([])
+  const [badgeBusy, setBadgeBusy] = useState(null)
 
-  const load = useCallback(async () => {
-    async function loadUserTx(userId) {
+  const loadUserTx = useCallback(async (userId) => {
     setUserTx([])
     const { data, error: err } = await supabase.rpc('admin_get_user_transactions', { p_user_id: userId, p_limit: 20 })
     if (err) { setUserTx([]); return }
     setUserTx(data || [])
-  }
+  }, [])
 
-  if (!isAdmin) { setLoading(false); return }
+  const load = useCallback(async () => {
+    if (!isAdmin) { setLoading(false); return }
     setLoading(true); setError('')
 
     const [s, u, r] = await Promise.all([
@@ -66,11 +61,55 @@ export default function Admin() {
 
     const { data: rr } = await supabase.rpc("admin_list_reel_reports", { p_status: "pending" })
     setReelReports(rr || [])
+
+    // Badge requests (pending)
+    const { data: br } = await supabase
+      .from('badge_requests')
+      .select('id, user_id, method, proof_text, proof_url, status, created_at, admin_note')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true })
+      .limit(50)
+    if (br) {
+      // Enrich with profile data
+      const ids = [...new Set(br.map((x) => x.user_id))]
+      if (ids.length > 0) {
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('id, display_name, username, primary_photo')
+          .in('id', ids)
+        const pmap = new Map((profs || []).map((p) => [p.id, p]))
+        br.forEach((r) => {
+          const pf = pmap.get(r.user_id) || {}
+          r.display_name = pf.display_name
+          r.username = pf.username
+          r.photo_url = publicPhotoUrl(pf.primary_photo)
+        })
+      }
+      setBadgeRequests(br)
+    } else {
+      setBadgeRequests([])
+    }
+
     setUsers((u.data || []).map((x) => ({ ...x, photo_url: publicPhotoUrl(x.primary_photo) })))
     setLoading(false)
   }, [isAdmin, search])
 
   useEffect(() => { load() }, [load])
+
+  async function reviewBadge(requestId, decision, note) {
+    if (badgeBusy) return
+    setBadgeBusy(requestId)
+    const { data, error: err } = await supabase.rpc('admin_review_badge_request', {
+      p_request_id: requestId,
+      p_decision: decision,
+      p_note: note || null,
+    })
+    setBadgeBusy(null)
+    if (err) { setError(err.message); return }
+    if (!data?.ok) { setError(data?.error || 'Failed'); return }
+    tap(decision === 'approved' ? 'match' : 'light')
+    load()
+  }
 
   async function toggleMaintenance() {
     if (maintenanceBusy) return
@@ -383,6 +422,83 @@ export default function Admin() {
               />
             </div>
 
+            {/* Badge requests queue */}
+            {badgeRequests.length > 0 && (
+              <div className="mb-6">
+                <p className="text-sky-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">
+                  Badge requests · {badgeRequests.length}
+                </p>
+                <div className="flex flex-col gap-2">
+                  {badgeRequests.map((r) => {
+                    let parsed = null
+                    try { parsed = r.proof_text ? JSON.parse(r.proof_text) : null } catch {}
+                    const busy = badgeBusy === r.id
+                    return (
+                      <div key={r.id} className="rounded-2xl bg-white/[0.03] border border-sky-500/25 p-3">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-10 h-10 rounded-full overflow-hidden bg-elevated border border-white/8 shrink-0">
+                            {r.photo_url ? (
+                              <img src={r.photo_url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full grid place-items-center text-sm font-black text-sky-400">
+                                {(r.display_name || '?')[0]}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-cream font-semibold text-[13px] truncate">
+                              {r.display_name || r.username || r.user_id.slice(0, 8)}
+                            </p>
+                            <p className="text-muted text-[11.5px]">
+                              {r.method === 'mobile_money' ? '💳 Mobile money' : '🌍 Form'} · {new Date(r.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Proof block */}
+                        <div className="rounded-xl bg-black/25 border border-white/6 p-2.5 mb-3 text-[11.5px]">
+                          {parsed ? (
+                            <div className="space-y-1">
+                              {Object.entries(parsed).map(([k, v]) => (
+                                <div key={k} className="flex gap-2">
+                                  <span className="text-subtle min-w-[70px]">{k}:</span>
+                                  <span className="text-cream break-all flex-1">{String(v)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-cream whitespace-pre-wrap">{r.proof_text || '—'}</span>
+                          )}
+                          {r.proof_url && (
+                            <a href={r.proof_url} target="_blank" rel="noopener" className="text-sky-300 underline block mt-1">
+                              {r.proof_url}
+                            </a>
+                          )}
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => reviewBadge(r.id, 'rejected', prompt('Reason for rejection (optional):') || null)}
+                            disabled={busy}
+                            className="flex-1 h-9 rounded-full text-red-300 bg-red-500/15 border border-red-500/40 font-bold text-[12.5px] disabled:opacity-50"
+                          >
+                            Reject
+                          </button>
+                          <button
+                            onClick={() => reviewBadge(r.id, 'approved', null)}
+                            disabled={busy}
+                            className="flex-1 h-9 rounded-full text-emerald-300 bg-emerald-500/15 border border-emerald-500/40 font-bold text-[12.5px] disabled:opacity-50"
+                          >
+                            {busy ? '…' : 'Approve'}
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Users list */}
             <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">
               Users · {users.length}
@@ -542,31 +658,6 @@ export default function Admin() {
                   ? <><X size={15} strokeWidth={2.4} /> Remove verification</>
                   : <><Check size={15} strokeWidth={2.6} /> Mark verified</>
                 }
-              </button>
-
-              <button
-                onClick={() => {
-                  const days = prompt('Grant premium for how many days?', '30')
-                  if (!days) return
-                  const n = parseInt(days, 10)
-                  if (!n || n <= 0) return
-                  run(() => supabase.rpc('admin_grant_premium', { p_user_id: selected.id, p_days: n }))
-                }}
-                disabled={busy || selected.is_admin}
-                className="w-full h-11 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 font-bold text-[13.5px] flex items-center justify-center gap-2 disabled:opacity-40"
-              >
-                <Crown size={15} strokeWidth={2.4} /> Grant premium
-              </button>
-
-              <button
-                onClick={() => {
-                  if (!confirm('Revoke premium immediately?')) return
-                  run(() => supabase.rpc('admin_revoke_premium', { p_user_id: selected.id }))
-                }}
-                disabled={busy || selected.is_admin}
-                className="w-full h-11 rounded-full bg-white/[0.06] border border-white/12 text-muted font-bold text-[13.5px] flex items-center justify-center gap-2 disabled:opacity-40"
-              >
-                <Crown size={15} strokeWidth={2.4} /> Revoke premium
               </button>
 
               <button
