@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { Search, ArrowLeft, Send, Paperclip, X, MoreVertical, Users, Camera, Trash2, Flag, LogOut, UserPlus , Pencil , Link2 , Bell , Mic, Square , Pin , Eraser } from "lucide-react"
+import { Timer, Search, ArrowLeft, Send, Paperclip, X, MoreVertical, Users, Camera, Trash2, Flag, LogOut, UserPlus , Pencil , Link2 , Bell , Mic, Square , Pin , Eraser } from "lucide-react"
 import { motion } from "framer-motion"
 import { supabase } from "../lib/supabase"
 import { loadBlockedIds } from "../lib/blocks"
@@ -20,6 +20,14 @@ import AudioBubble from "../components/chat/AudioBubble"
 import EmojiPicker from "../components/chat/EmojiPicker"
 import ImageLightbox from "../components/chat/ImageLightbox"
 import { useVoiceRecorder } from "../components/chat/useVoiceRecorder"
+
+const TIMER_OPTIONS = [
+  { value: null,   label: "Off",      sub: "Messages stay forever" },
+  { value: 300,    label: "5 minutes" },
+  { value: 3600,   label: "1 hour" },
+  { value: 86400,  label: "24 hours" },
+  { value: 604800, label: "7 days" },
+]
 
 const UNSEND_WINDOW_MS = 3600000
 
@@ -51,6 +59,8 @@ export default function GroupChat() {
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [pollComposerOpen, setPollComposerOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [disappearingTimer, setDisappearingTimer] = useState(null)
+  const [timerSheetOpen, setTimerSheetOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
@@ -136,7 +146,7 @@ export default function GroupChat() {
     // Load messages
     const { data: msgs } = await supabase
       .from("group_messages")
-      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, edited_at, created_at, is_system")
+      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, edited_at, created_at, is_system, expires_at")
       .eq("group_id", groupId)
       .order("created_at", { ascending: true })
       .limit(300)
@@ -145,6 +155,19 @@ export default function GroupChat() {
   }, [groupId, myId])
 
   useEffect(() => { boot() }, [boot])
+
+  // Live-remove expired messages
+  useEffect(() => {
+    if (!messages.length) return
+    const t = setInterval(() => {
+      const now = Date.now()
+      setMessages((cur) => {
+        const next = cur.filter((m) => !m.expires_at || new Date(m.expires_at).getTime() > now)
+        return next.length === cur.length ? cur : next
+      })
+    }, 15000)
+    return () => clearInterval(t)
+  }, [messages.length])
 
   // @mention autocomplete
   useEffect(() => {
@@ -338,7 +361,7 @@ export default function GroupChat() {
         media_type: "audio/webm",
         media_name: "Voice · " + result.seconds + "s",
       })
-      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, edited_at, created_at, is_system")
+      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, edited_at, created_at, is_system, expires_at")
       .single()
 
     setBusy(false)
@@ -383,6 +406,7 @@ export default function GroupChat() {
       content: poll.question || "",
       metadata: { poll },
     }
+    if (disappearingTimer) payload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
     const { data: inserted, error: err } = await supabase
       .from("group_messages")
       .insert(payload)
@@ -418,6 +442,7 @@ export default function GroupChat() {
       sender_id: myId,
       content: body || "",
     }
+    if (disappearingTimer) payload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
     if (mediaUrl) { payload.media_url = mediaUrl; payload.media_type = mediaType; payload.media_name = mediaName }
     if (replyingTo?.id) payload.reply_to_id = replyingTo.id
     setReplyingTo(null)
@@ -427,7 +452,7 @@ export default function GroupChat() {
     const { data: inserted, error: sendErr } = await supabase
       .from("group_messages")
       .insert(payload)
-      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, edited_at, created_at, is_system")
+      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, edited_at, created_at, is_system, expires_at")
       .single()
 
     if (sendErr) { setError(sendErr.message); setText(body) }
@@ -1092,6 +1117,15 @@ export default function GroupChat() {
             <MenuItem icon={<Bell size={16} />} label={isMuted ? "Unmute notifications" : "Mute notifications"} onClick={() => { setMenuOpen(false); toggleMute() }} />
             <MenuItem icon={<Eraser size={16} />} label="Clear chat" onClick={() => { setMenuOpen(false); clearChat() }} />
             <MenuItem icon={<Flag size={16} />} label="Report group" danger onClick={() => { setMenuOpen(false); setReportOpen(true) }} />
+            <MenuItem
+              icon={<Timer size={16} />}
+              label={
+                disappearingTimer
+                  ? `Disappearing · ${disappearingTimer === 300 ? "5 min" : disappearingTimer === 3600 ? "1 h" : disappearingTimer === 86400 ? "24 h" : "7 d"}`
+                  : "Disappearing messages"
+              }
+              onClick={() => { setMenuOpen(false); setTimerSheetOpen(true) }}
+            />
             <MenuItem icon={<LogOut size={16} />} label="Leave group" danger onClick={() => { setMenuOpen(false); leaveGroup() }} />
           </div>
         </div>
@@ -1114,6 +1148,48 @@ export default function GroupChat() {
           onForwarded={() => {}}
         />
       )}
+      {timerSheetOpen && (
+        <div className="fixed inset-0 z-[150] flex items-end" onClick={() => setTimerSheetOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
+            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+          >
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
+            <h3 className="text-cream font-extrabold text-[16px] mb-1">Disappearing messages</h3>
+            <p className="text-muted text-[12.5px] leading-snug mb-3">
+              New messages in this group will disappear after the chosen time. Applies to everyone.
+            </p>
+            {TIMER_OPTIONS.map((o) => {
+              const active = (disappearingTimer || null) === (o.value || null)
+              return (
+                <button
+                  key={String(o.value)}
+                  onClick={async () => {
+                    tap("light")
+                    setTimerSheetOpen(false)
+                    setDisappearingTimer(o.value)
+                    try {
+                      await supabase.from("groups")
+                        .update({ disappearing_timer_seconds: o.value })
+                        .eq("id", groupId)
+                    } catch (e) { console.warn("timer save failed", e) }
+                  }}
+                  className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left active:bg-white/[0.03] last:border-b-0"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-cream text-[15px] font-medium">{o.label}</p>
+                    {o.sub && <p className="text-muted text-[12px] mt-0.5">{o.sub}</p>}
+                  </div>
+                  {active && <span className="text-purple-400 text-[16px]">✓</span>}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
