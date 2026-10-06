@@ -237,6 +237,8 @@ export default function Search() {
     } catch (e) { console.warn('suggestions failed', e) }
   }, [myId, suggestionsLoaded])
 
+  const isSearching = query.trim().length >= 2
+
   useEffect(() => {
     if (!isSearching) loadSuggestions()
   }, [isSearching, loadSuggestions])
@@ -245,7 +247,6 @@ export default function Search() {
     if (q) setQuery(q.slice(0, 60))
   }, [searchParams])
 
-  const isSearching = query.trim().length >= 2
 
   // Results filtered by active tab
   const showPeople      = (tab === "top" || tab === "people") && people.length > 0

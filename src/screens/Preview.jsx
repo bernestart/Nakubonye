@@ -1,6 +1,7 @@
+import ProfileHighlights from '../components/ProfileHighlights'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Pencil, MoreVertical, MapPin, Edit, Share2 } from 'lucide-react'
+import { Search, Pencil, MoreVertical, MapPin, Edit, Share2, ArrowLeft } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl, calcAge } from '../lib/photo'
@@ -439,6 +440,14 @@ export default function Preview() {
         />
       )}
 
+      <ProfileMenuSheet
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        isMe={true}
+        userId={myId}
+        person={profile}
+      />
+
       <BottomNav />
     </div>
   )
@@ -452,14 +461,6 @@ function EmptyTab({ icon, title, subtitle }) {
         <p className="text-cream font-bold text-[15px] mb-1">{title}</p>
         <p className="text-muted text-[13px] leading-relaxed">{subtitle}</p>
       </div>
-      <ProfileMenuSheet
-        open={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        isMe={true}
-        userId={myId}
-        person={profile}
-      />
-
     </div>
   )
 }
