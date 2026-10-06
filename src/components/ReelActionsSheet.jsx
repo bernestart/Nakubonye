@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { X, Flag, EyeOff, AlertTriangle , Trash2 , Bookmark, Link2 , Repeat2 } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
@@ -16,8 +16,26 @@ const REASONS = [
 export default function ReelActionsSheet({ reel, onClose, onHidden, onDeleted, onRemix }) {
   const { session } = useAuth()
   const myId = session?.user?.id
+
+  // Fetch author-level allow_reel_remix preference
+  useEffect(() => {
+    if (!reel?.user_id) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data } = await supabase
+          .from("user_settings")
+          .select("allow_reel_remix")
+          .eq("user_id", reel.user_id)
+          .maybeSingle()
+        if (!cancelled && data) setAuthorAllowsRemix(data.allow_reel_remix !== false)
+      } catch {}
+    })()
+    return () => { cancelled = true }
+  }, [reel?.user_id])
   const [screen, setScreen] = useState("menu") // menu | report
   const [reason, setReason] = useState(null)
+  const [authorAllowsRemix, setAuthorAllowsRemix] = useState(true)
   const [details, setDetails] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
@@ -91,7 +109,7 @@ export default function ReelActionsSheet({ reel, onClose, onHidden, onDeleted, o
           <>
             <h3 className="text-cream font-extrabold text-[17px] mb-4">Reel options</h3>
             <div className="flex flex-col gap-2">
-              {reel.user_id !== myId && onRemix && reel.allow_remix !== false && (
+              {reel.user_id !== myId && onRemix && reel.allow_remix !== false && authorAllowsRemix && (
                 <button
                   onClick={() => { onRemix(reel); onClose?.() }}
                   disabled={busy}

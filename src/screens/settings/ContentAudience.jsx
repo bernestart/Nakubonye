@@ -110,13 +110,7 @@ export default function ContentAudience() {
               <ChevronRight size={18} className="text-muted shrink-0" />
             </button>
 
-            <ToggleRowCU
-              icon={<Download size={18} />}
-              label="Allow downloads of my reels"
-              sub="Others can download your reels for offline viewing"
-              value={settings.allow_reel_downloads !== false}
-              onChange={(v) => update({ allow_reel_downloads: v })}
-            />
+            {/* Allow downloads — deferred until a download button exists in ReelViewer */}
 
             <ToggleRowCU
               icon={<Shuffle size={18} />}
