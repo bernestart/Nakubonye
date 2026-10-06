@@ -9,7 +9,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import {
   useSettings, AUDIENCE_LEVELS, PROFILE_VISIBILITY_LEVELS,
-  LOCATION_LEVELS, REQUEST_LEVELS, TAG_LEVELS,
+  LOCATION_LEVELS, REQUEST_LEVELS, TAG_LEVELS, VISIBILITY_LEVELS,
 } from '../lib/settings.jsx'
 import BrandGlow from '../components/BrandGlow'
 import BottomNav from '../components/BottomNav'
@@ -217,6 +217,62 @@ export default function PrivacySettings() {
               onChange={(v) => update({ allow_story_replies: v })}
             />
             {/* Allow sharing to stories — deferred to Phase 10 (needs a share-to-story feature first) */}
+
+            {/* ─── PROFILE DETAILS ─── */}
+            <SectionLabel icon={<Eye size={14} />}>Profile details</SectionLabel>
+
+            <SelectorRow
+              icon={<Phone size={18} />}
+              label="Phone number"
+              value={labelFor('phone_visibility', VISIBILITY_LEVELS)}
+              onClick={() => openSheet('phone_visibility', 'Who can see my phone number', VISIBILITY_LEVELS)}
+            />
+            <SelectorRow
+              icon={<Mail size={18} />}
+              label="Email"
+              value={labelFor('email_visibility', VISIBILITY_LEVELS)}
+              onClick={() => openSheet('email_visibility', 'Who can see my email', VISIBILITY_LEVELS)}
+            />
+            <SelectorRow
+              icon={<Cake size={18} />}
+              label="Birthday"
+              value={labelFor('birthday_visibility', VISIBILITY_LEVELS)}
+              onClick={() => openSheet('birthday_visibility', 'Who can see my birthday', VISIBILITY_LEVELS)}
+            />
+            <SelectorRow
+              icon={<Heart size={18} />}
+              label="Relationship status"
+              value={labelFor('relationship_visibility', VISIBILITY_LEVELS)}
+              onClick={() => openSheet('relationship_visibility', 'Who can see my relationship status', VISIBILITY_LEVELS)}
+            />
+            <SelectorRow
+              icon={<Info size={18} />}
+              label="Contact info"
+              value={labelFor('contact_info_visibility', VISIBILITY_LEVELS)}
+              onClick={() => openSheet('contact_info_visibility', 'Who can see my contact info', VISIBILITY_LEVELS)}
+            />
+
+            {/* ─── CONNECTIONS VISIBILITY ─── */}
+            <SectionLabel icon={<Users size={14} />}>Connections visibility</SectionLabel>
+
+            <SelectorRow
+              icon={<Users size={18} />}
+              label="Followers list"
+              value={labelFor('followers_list_visibility', VISIBILITY_LEVELS)}
+              onClick={() => openSheet('followers_list_visibility', 'Who can see my followers', VISIBILITY_LEVELS)}
+            />
+            <SelectorRow
+              icon={<Heart size={18} />}
+              label="Matches list"
+              value={labelFor('matches_list_visibility', VISIBILITY_LEVELS)}
+              onClick={() => openSheet('matches_list_visibility', 'Who can see my matches', VISIBILITY_LEVELS)}
+            />
+            <SelectorRow
+              icon={<Users size={18} />}
+              label="Communities I'm in"
+              value={labelFor('communities_membership_visibility', VISIBILITY_LEVELS)}
+              onClick={() => openSheet('communities_membership_visibility', 'Who can see my communities', VISIBILITY_LEVELS)}
+            />
 
             {/* ─── VISIBILITY ─── */}
             <SectionLabel icon={<Eye size={14} />}>Visibility</SectionLabel>

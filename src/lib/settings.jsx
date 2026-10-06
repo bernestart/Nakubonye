@@ -87,6 +87,13 @@ export function useSettings() {
 }
 
 // Reusable audience levels
+export const VISIBILITY_LEVELS = [
+  { id: 'everyone',  label: 'Everyone',      sub: 'Anyone on Nakubonye' },
+  { id: 'followers', label: 'My followers',  sub: 'People who follow you' },
+  { id: 'matches',   label: 'Matches',       sub: 'People you matched with' },
+  { id: 'only_me',   label: 'Only me',       sub: 'Just for you' },
+]
+
 export const AUDIENCE_LEVELS = [
   { id: 'everyone',  label: 'Everyone',           sub: 'Anyone on Nakubonye' },
   { id: 'matches',   label: 'Matches',            sub: 'People you have matched with' },
