@@ -196,25 +196,23 @@ export default function ProfileSettings() {
           <FeatureTile icon={<Briefcase size={20} />} label="Services" to="/services" nav={nav} />
         </div>
 
-        {/* Collapsible — Settings & privacy */}
+        {/* Collapsible — Settings & privacy (Facebook-style hierarchy) */}
         <Collapsible
           icon={<Key size={18} />}
           label="Settings & privacy"
           open={settingsOpen}
           onToggle={() => { tap('light'); setSettingsOpen((v) => !v) }}
         >
-          <MenuRow icon={<Key size={18} />} label="Account & security" to="/settings/security" nav={nav} />
-          <MenuRow icon={<Shield size={18} />} label="Privacy & visibility" to="/settings/privacy" nav={nav} />
-          <MenuRow icon={<FileText size={18} />} label="Muted words" to="/settings/muted-words" nav={nav} />
-          <MenuRow icon={<UserX size={18} />} label="Muted users" to="/settings/muted-users" nav={nav} />
-          <MenuRow icon={<Star size={18} />} label="Inner Circle" to="/inner-circle" nav={nav} />
-          <MenuRow icon={<Layers size={18} />} label="Circles" to="/circles" nav={nav} />
-          <MenuRow icon={<ShieldCheck size={18} />} label="Tag review" to="/settings/pending-tags" nav={nav} />
-          <MenuRow icon={<Bell size={18} />} label="Notifications" to="/notifications" nav={nav} />
-          <MenuRow icon={<Bell size={18} />} label="Notification settings" to="/settings/notifications" nav={nav} />
-          <MenuRow icon={<UserX size={18} />} label="Blocked users" to="/blocked" nav={nav} />
-          <MenuRow icon={<ShieldCheck size={18} />} label="Privacy Policy" to="/privacy" nav={nav} />
-          <MenuRow icon={<FileText size={18} />} label="Terms of Service" to="/terms" nav={nav} />
+          <MenuRow icon={<User size={18} />} label="Account" to="/settings/account" nav={nav} />
+          <MenuRow icon={<Shield size={18} />} label="Privacy" to="/settings/privacy" nav={nav} />
+          <MenuRow icon={<UserCircle size={18} />} label="Profile & tagging" to="/settings/profile-tagging" nav={nav} />
+          <MenuRow icon={<MessageCircle size={18} />} label="Interactions" to="/settings/interactions" nav={nav} />
+          <MenuRow icon={<Globe size={18} />} label="Content & audience" to="/settings/content-audience" nav={nav} />
+          <MenuRow icon={<Activity size={18} />} label="Activity & presence" to="/settings/activity-presence" nav={nav} />
+          <MenuRow icon={<Ban size={18} />} label="Blocking & muting" to="/settings/blocking-muted" nav={nav} />
+          <MenuRow icon={<Key size={18} />} label="Security" to="/settings/security" nav={nav} />
+          <MenuRow icon={<Bell size={18} />} label="Notifications" to="/settings/notifications" nav={nav} />
+          <MenuRow icon={<Download size={18} />} label="Your data" to="/settings/your-data" nav={nav} />
         </Collapsible>
 
         {/* Collapsible — Help & support */}
