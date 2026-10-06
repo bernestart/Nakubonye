@@ -132,6 +132,23 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
     const body = text.trim()
     if (!body || !myId || busy) return
     setBusy(true); tap("light")
+
+    // Enforce recipient's who_can_comment (post author)
+    if (postAuthorId && postAuthorId !== myId) {
+      try {
+        const { data: allowed } = await supabase.rpc("can_comment", {
+          sender: myId,
+          recipient: postAuthorId,
+        })
+        if (allowed === false) {
+          setBusy(false)
+          setCanComment(false)
+          setCanCommentReason("This user doesn't accept comments")
+          return
+        }
+      } catch (e) { console.warn("can_comment check failed", e) }
+    }
+
     const { error } = await supabase.from(table).insert({
       post_id: postId,
       user_id: myId,

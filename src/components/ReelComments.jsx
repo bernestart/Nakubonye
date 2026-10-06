@@ -117,6 +117,23 @@ export default function ReelComments({ reelId, onClose, onCountChange }) {
     const body = text.trim()
     if (!body || !myId || busy) return
     setBusy(true); tap("light")
+
+    // Enforce reel owner's who_can_comment
+    if (reelOwnerId && reelOwnerId !== myId) {
+      try {
+        const { data: allowed } = await supabase.rpc("can_comment", {
+          sender: myId,
+          recipient: reelOwnerId,
+        })
+        if (allowed === false) {
+          setBusy(false)
+          setCanComment(false)
+          setCanCommentReason("This user doesn't accept comments")
+          return
+        }
+      } catch (e) { console.warn("can_comment check failed", e) }
+    }
+
     const { error } = await supabase.from("reel_comments").insert({
       reel_id: reelId,
       user_id: myId,
