@@ -62,6 +62,7 @@ export default function ProfileView() {
   const [followedBy, setFollowedBy] = useState({ people: [], more: 0 })
   const [followingCount, setFollowingCount] = useState(0)
   const [canSeeFollowerCounts, setCanSeeFollowerCounts] = useState(true)
+  const [canSeeCommunities, setCanSeeCommunities] = useState(true)
   const [isMatch, setIsMatch] = useState(false)
   const [myLike, setMyLike] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -186,37 +187,61 @@ export default function ProfileView() {
     setFollowersCount(f1.count || 0)
     setFollowingCount(f2.count || 0)
 
-    // compute followers visibility
+    // compute followers visibility (kept as local var so followed-by can gate on it)
+    let localCanSeeFollowerCounts = true
+    let localCanSeeCommunities = true
     if (userId !== myId) {
       try {
         const [visRes, iFollowRes] = await Promise.all([
-          supabase.from('user_settings').select('followers_list_visibility').eq('user_id', userId).maybeSingle(),
+          supabase.from('user_settings').select('followers_list_visibility, communities_membership_visibility').eq('user_id', userId).maybeSingle(),
           supabase.from('follows').select('follower_id').eq('follower_id', myId).eq('following_id', userId).maybeSingle(),
         ])
         const vis = visRes.data?.followers_list_visibility || 'everyone'
+        const commVis = visRes.data?.communities_membership_visibility || 'everyone'
         const iFollow = !!iFollowRes.data
         const weMatched = myContext.matchIds.has(userId)
+
         let visible = true
         if (vis === 'only_me') visible = false
         else if (vis === 'followers') visible = iFollow
         else if (vis === 'matches') visible = weMatched
+        localCanSeeFollowerCounts = visible
         setCanSeeFollowerCounts(visible)
-      } catch { setCanSeeFollowerCounts(true) }
+
+        let commVisible = true
+        if (commVis === 'only_me') commVisible = false
+        else if (commVis === 'followers') commVisible = iFollow
+        else if (commVis === 'matches') commVisible = weMatched
+        localCanSeeCommunities = commVisible
+        setCanSeeCommunities(commVisible)
+      } catch {
+        setCanSeeFollowerCounts(true)
+        localCanSeeFollowerCounts = true
+        localCanSeeCommunities = true
+        setCanSeeCommunities(true)
+      }
     } else {
       setCanSeeFollowerCounts(true)
     }
 
     // Followed-by: people I follow who also follow this user
-    if (userId !== myId) {
+    // Gated on followers_list_visibility + block-aware
+    if (userId !== myId && localCanSeeFollowerCounts) {
       try {
-        const [myFollowsRes, theirFollowersRes] = await Promise.all([
+        const [myFollowsRes, theirFollowersRes, blockedRes] = await Promise.all([
           supabase.from('follows').select('following_id').eq('follower_id', myId).limit(500),
           supabase.from('follows').select('follower_id').eq('following_id', userId).limit(500),
+          supabase.from('blocks').select('blocker_id, blocked_id').or('blocker_id.eq.' + myId + ',blocked_id.eq.' + myId),
         ])
         const myFollowSet = new Set((myFollowsRes.data || []).map((r) => r.following_id))
+        const blockedIds = new Set()
+        ;(blockedRes.data || []).forEach((b) => {
+          if (b.blocker_id === myId) blockedIds.add(b.blocked_id)
+          if (b.blocked_id === myId) blockedIds.add(b.blocker_id)
+        })
         const sharedIds = (theirFollowersRes.data || [])
           .map((r) => r.follower_id)
-          .filter((id) => myFollowSet.has(id) && id !== myId && id !== userId)
+          .filter((id) => myFollowSet.has(id) && id !== myId && id !== userId && !blockedIds.has(id))
 
         if (sharedIds.length > 0) {
           const top = sharedIds.slice(0, 3)
@@ -239,15 +264,19 @@ export default function ProfileView() {
       setInterests((rows || []).map((r) => r.name))
     } else setInterests([])
 
-    // Communities (best-effort)
-    try {
-      const { data: cmRows } = await supabase
-        .from('community_memberships')
-        .select('community_id, communities(id, name, slug, emoji, cover_color)')
-        .eq('user_id', userId)
-        .limit(20)
-      setCommunities((cmRows || []).map((r) => r.communities).filter(Boolean))
-    } catch { setCommunities([]) }
+    // Communities (best-effort) — gated on communities_membership_visibility
+    if (userId === myId || localCanSeeCommunities) {
+      try {
+        const { data: cmRows } = await supabase
+          .from('community_memberships')
+          .select('community_id, communities(id, name, slug, emoji, cover_color)')
+          .eq('user_id', userId)
+          .limit(20)
+        setCommunities((cmRows || []).map((r) => r.communities).filter(Boolean))
+      } catch { setCommunities([]) }
+    } else {
+      setCommunities([])
+    }
 
     const isOwn = userId === myId
     const personal = (personalRes.data || [])
