@@ -19,13 +19,26 @@ export default function TagPicker({ initial = [], onClose, onSave }) {
     let cancelled = false
     setLoading(true)
     const t = setTimeout(async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("id, display_name, username")
-        .or(`display_name.ilike.%${q}%,username.ilike.%${q}%`)
-        .limit(20)
+      const [profRes, blockRes] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id, display_name, username")
+          .or(`display_name.ilike.%${q}%,username.ilike.%${q}%`)
+          .limit(20),
+        myId
+          ? supabase
+              .from("blocks")
+              .select("blocker_id, blocked_id")
+              .or(`blocker_id.eq.${myId},blocked_id.eq.${myId}`)
+          : Promise.resolve({ data: [] }),
+      ])
       if (cancelled) return
-      setResults(data || [])
+      const blockedIds = new Set()
+      ;(blockRes.data || []).forEach((b) => {
+        if (b.blocker_id === myId) blockedIds.add(b.blocked_id)
+        if (b.blocked_id === myId) blockedIds.add(b.blocker_id)
+      })
+      setResults((profRes.data || []).filter((u) => !blockedIds.has(u.id)))
       setLoading(false)
     }, 250)
     return () => { cancelled = true; clearTimeout(t) }
