@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
     "@supabase/supabase-js": "^2.112.3",
     "@tailwindcss/vite": "^4.1.14",
     "framer-motion": "^13.1.1",
@@ -19,6 +21,7 @@
     "tailwindcss": "^4.1.14"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
     "@eslint/js": "^10.0.1",
     "@vitejs/plugin-react": "^6.0.4",
     "eslint": "^10.12.0",

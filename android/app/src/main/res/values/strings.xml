@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Nakubonye</string>
+    <string name="title_activity_main">Nakubonye</string>
+    <string name="package_name">com.nakubonye.app</string>
+    <string name="custom_url_scheme">com.nakubonye.app</string>
+</resources>
