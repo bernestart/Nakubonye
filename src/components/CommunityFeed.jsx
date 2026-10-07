@@ -15,6 +15,7 @@ export default function CommunityFeed({ communityId, isMember }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [posts, setPosts] = useState([])
+  const [mutedIds, setMutedIds] = useState(new Set())
   const [text, setText] = useState('')
   const [isAnnouncement, setIsAnnouncement] = useState(false)
   const [announcementTitle, setAnnouncementTitle] = useState('')
@@ -36,14 +37,22 @@ export default function CommunityFeed({ communityId, isMember }) {
     if (!session?.user?.id || !communityId) return
     setLoading(true); setError('')
 
-    const { data: rows, error: pErr } = await supabase
-      .from('community_posts')
-      .select('id, author_id, content, image_path, image_paths, created_at, pinned_until, reshared_from_type, reshared_from_id, reshared_from_snapshot, reshared_include_original, is_announcement, announcement_title')
-      .eq('community_id', communityId)
-      .order('created_at', { ascending: false })
-      .limit(50)
+    const [postRes, muteRes] = await Promise.all([
+      supabase
+        .from('community_posts')
+        .select('id, author_id, content, image_path, image_paths, created_at, pinned_until, reshared_from_type, reshared_from_id, reshared_from_snapshot, reshared_include_original, is_announcement, announcement_title')
+        .eq('community_id', communityId)
+        .order('created_at', { ascending: false })
+        .limit(50),
+      supabase.from('user_mutes').select('muted_id').eq('muter_id', session.user.id),
+    ])
 
-    if (pErr) { setError(pErr.message); setLoading(false); return }
+    if (postRes.error) { setError(postRes.error.message); setLoading(false); return }
+
+    const muteSet = new Set((muteRes.data || []).map((m) => m.muted_id))
+    setMutedIds(muteSet)
+
+    const rows = (postRes.data || []).filter((r) => !muteSet.has(r.author_id))
 
     const ids = [...new Set((rows || []).map((r) => r.author_id))]
     let profMap = new Map()
