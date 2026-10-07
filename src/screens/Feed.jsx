@@ -370,9 +370,15 @@ export default function Feed() {
       return true
     })
 
+    const filteredReels = (enrichedReels || []).filter((r) => {
+      const authorId = r.author_id || r.user_id
+      if (authorId && mutedUsersSet.has(authorId)) return false
+      return true
+    })
+
     const list = mixFeed({
       posts: filteredEnriched,
-      reels: enrichedReels,
+      reels: filteredReels,
       pageSize: 20,
       reelEvery: 10,
       seenReelIds: seenReelIds.current,
