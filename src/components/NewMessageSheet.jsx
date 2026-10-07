@@ -22,12 +22,26 @@ export default function NewMessageSheet({ onClose }) {
     setLoading(true)
 
     // Load my matches (people I can message freely)
-    const { data: matchRows } = await supabase
-      .from("matches")
-      .select("user_one_id, user_two_id")
-      .or("user_one_id.eq." + myId + ",user_two_id.eq." + myId)
+    const [matchRes, blockRes] = await Promise.all([
+      supabase
+        .from("matches")
+        .select("user_one_id, user_two_id")
+        .or("user_one_id.eq." + myId + ",user_two_id.eq." + myId),
+      supabase
+        .from("blocks")
+        .select("blocker_id, blocked_id")
+        .or("blocker_id.eq." + myId + ",blocked_id.eq." + myId),
+    ])
 
-    const matchIds = (matchRows || []).map((m) => m.user_one_id === myId ? m.user_two_id : m.user_one_id)
+    const blockedIds = new Set()
+    ;(blockRes.data || []).forEach((b) => {
+      if (b.blocker_id === myId) blockedIds.add(b.blocked_id)
+      if (b.blocked_id === myId) blockedIds.add(b.blocker_id)
+    })
+
+    const matchIds = (matchRes.data || [])
+      .map((m) => m.user_one_id === myId ? m.user_two_id : m.user_one_id)
+      .filter((id) => !blockedIds.has(id))
 
     if (matchIds.length === 0) { setUsers([]); setLoading(false); return }
 
