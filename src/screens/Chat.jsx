@@ -218,9 +218,7 @@ export default function Chat() {
         }
       }
     } else {
-      // No match — look for a direct conversation between us
-      // Look for a direct conversation between us.
-      // Retry once in case the paid-DM RPC is still creating the row.
+      // No match — find or create a direct conversation
       let directConv = null
       for (let attempt = 0; attempt < 2; attempt++) {
         const { data: directConvs } = await supabase
@@ -241,9 +239,28 @@ export default function Chat() {
         convId = directConv.id
         isDirect = true
       } else {
-        setError("You're not matched with this person yet.")
-        setLoading(false)
-        return
+        // No conversation yet — check we're allowed to start one
+        const { data: allowed } = await supabase.rpc('can_send_message', {
+          sender: myId, recipient: otherId,
+        })
+        if (allowed === false) {
+          setError("This person isn't accepting new messages.")
+          setLoading(false)
+          return
+        }
+        // Create the direct conversation
+        const { data: created, error: cErr } = await supabase
+          .from('conversations')
+          .insert({ match_id: null, initiator_id: myId, recipient_id: otherId, is_direct: true })
+          .select('id')
+          .single()
+        if (cErr || !created) {
+          setError(cErr?.message || 'Could not start conversation.')
+          setLoading(false)
+          return
+        }
+        convId = created.id
+        isDirect = true
       }
     }
     setConversationId(convId)
