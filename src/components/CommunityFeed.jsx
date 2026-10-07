@@ -223,14 +223,13 @@ export default function CommunityFeed({ communityId, isMember }) {
   }
 
   async function pinCommunityPost(postId) {
-    if (!confirm('Pin this post to the top for 24 hours? Costs 40 coins.')) return
+    if (!confirm('Pin this post to the top for 7 days?')) return
     tap('medium')
     setError('')
     const { data, error: err } = await supabase.rpc('pin_community_post', { p_post_id: postId })
     if (err) {
-      if (/insufficient/i.test(err.message)) setError('Not enough coins. Get more in Wallet.')
-      else if (/already pinned/i.test(err.message)) setError('This post is already pinned.')
-      else if (/author/i.test(err.message)) setError('Only the author can pin a post.')
+      if (/already_pinned/i.test(err.message)) setError('This post is already pinned.')
+      else if (/not_authorized/i.test(err.message)) setError('Only community owners and admins can pin.')
       else setError(err.message)
       return
     }
