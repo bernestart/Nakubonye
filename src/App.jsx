@@ -93,6 +93,7 @@ import Admin from './screens/Admin'
 import FacebookReward from './screens/FacebookReward'
 import AccountSecurity from './screens/AccountSecurity'
 import Account from './screens/settings/Account'
+import TermsPolicies from './screens/settings/TermsPolicies'
 import Invite from './screens/Invite'
 import Communities from './screens/Communities'
 import CreateCommunity from './screens/CreateCommunity'
@@ -299,6 +300,7 @@ export default function App() {
         <Route path="/facebook-reward" element={<Guard><FacebookReward /></Guard>} />
         <Route path="/settings/security" element={<Guard><AccountSecurity /></Guard>} />
         <Route path="/settings/account" element={<Guard><Account /></Guard>} />
+        <Route path="/settings/terms-policies" element={<Guard><TermsPolicies /></Guard>} />
         <Route path="/settings/privacy" element={<Guard><PrivacySettings /></Guard>} />
         <Route path="/settings/your-data" element={<Guard><YourData /></Guard>} />
         <Route path="/settings/blocking-muted" element={<Guard><BlockingMuted /></Guard>} />
