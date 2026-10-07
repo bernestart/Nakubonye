@@ -61,6 +61,7 @@ export default function ProfileView() {
   const [followersCount, setFollowersCount] = useState(0)
   const [followedBy, setFollowedBy] = useState({ people: [], more: 0 })
   const [followingCount, setFollowingCount] = useState(0)
+  const [canSeeFollowerCounts, setCanSeeFollowerCounts] = useState(true)
   const [isMatch, setIsMatch] = useState(false)
   const [myLike, setMyLike] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -184,6 +185,26 @@ export default function ProfileView() {
     setReels(reelRes.data || [])
     setFollowersCount(f1.count || 0)
     setFollowingCount(f2.count || 0)
+
+    // compute followers visibility
+    if (userId !== myId) {
+      try {
+        const [visRes, iFollowRes] = await Promise.all([
+          supabase.from('user_settings').select('followers_list_visibility').eq('user_id', userId).maybeSingle(),
+          supabase.from('follows').select('follower_id').eq('follower_id', myId).eq('following_id', userId).maybeSingle(),
+        ])
+        const vis = visRes.data?.followers_list_visibility || 'everyone'
+        const iFollow = !!iFollowRes.data
+        const weMatched = myContext.matchIds.has(userId)
+        let visible = true
+        if (vis === 'only_me') visible = false
+        else if (vis === 'followers') visible = iFollow
+        else if (vis === 'matches') visible = weMatched
+        setCanSeeFollowerCounts(visible)
+      } catch { setCanSeeFollowerCounts(true) }
+    } else {
+      setCanSeeFollowerCounts(true)
+    }
 
     // Followed-by: people I follow who also follow this user
     if (userId !== myId) {
@@ -562,14 +583,18 @@ export default function ProfileView() {
         })()}
 
         <div className="flex items-center justify-center gap-2 mt-3 text-[13.5px]">
-          <button onClick={() => { tap('light'); nav(`/user/${userId}/followers`) }} className="text-cream font-bold active:opacity-70">
-            {followersCount} follower{followersCount === 1 ? "" : "s"}
-          </button>
-          <span className="text-muted">·</span>
-          <button onClick={() => { tap('light'); nav(`/user/${userId}/following`) }} className="text-cream font-bold active:opacity-70">
-            {followingCount} following
-          </button>
-          <span className="text-muted">·</span>
+          {canSeeFollowerCounts ? (
+            <>
+              <button onClick={() => { tap('light'); nav(`/user/${userId}/followers`) }} className="text-cream font-bold active:opacity-70">
+                {followersCount} follower{followersCount === 1 ? "" : "s"}
+              </button>
+              <span className="text-muted">·</span>
+              <button onClick={() => { tap('light'); nav(`/user/${userId}/following`) }} className="text-cream font-bold active:opacity-70">
+                {followingCount} following
+              </button>
+              <span className="text-muted">·</span>
+            </>
+          ) : null}
           <span className="text-cream font-bold">{myPosts.length} post{myPosts.length === 1 ? "" : "s"}</span>
         </div>
 
