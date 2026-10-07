@@ -76,6 +76,7 @@ export default function Reels() {
   const [reelProgress, setReelProgress] = useState(0)
   const [feedTab, setFeedTab] = useState("foryou")
   const [followingIds, setFollowingIds] = useState(new Set())
+  const [mutedIds, setMutedIds] = useState(new Set())
 
   const load = useCallback(async () => {
     if (!myId) return
@@ -87,11 +88,14 @@ export default function Reels() {
       .order("created_at", { ascending: false })
       .limit(50)
 
-    // Fetch who I follow (used by Following tab)
-    const { data: followRows } = await supabase
-      .from("follows")
-      .select("following_id")
-      .eq("follower_id", myId)
+    // Fetch who I follow (used by Following tab) + who I muted
+    const [followRes, muteRes] = await Promise.all([
+      supabase.from("follows").select("following_id").eq("follower_id", myId),
+      supabase.from("user_mutes").select("muted_id").eq("muter_id", myId),
+    ])
+    const followRows = followRes.data
+    const muteSet = new Set((muteRes.data || []).map((m) => m.muted_id))
+    setMutedIds(muteSet)
     // Load reel-visibility preferences for the authors in this batch
     const __authorIds = [...new Set((rows || []).map((r) => r.user_id))].filter(Boolean)
     let __prefsRes = { data: [] }
@@ -111,6 +115,7 @@ export default function Reels() {
     const list = (rows || []).filter((r) => {
       if (hiddenIds.has(r.id)) return false
       if (r.user_id === myId) return true
+      if (muteSet.has(r.user_id)) return false
 
       // Author preference: who_can_see_reels gates the whole author's reel library
       const pref = __prefsMap.get(r.user_id) || "everyone"
