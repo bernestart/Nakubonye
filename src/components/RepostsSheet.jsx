@@ -3,11 +3,14 @@ import { useNavigate } from "react-router-dom"
 import { X, Repeat2 } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { publicPhotoUrl } from "../lib/photo"
+import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
 import VerifiedBadge from "./VerifiedBadge"
 
 export default function RepostsSheet({ postId, postType, onClose }) {
   const nav = useNavigate()
+  const { session } = useAuth()
+  const myId = session?.user?.id
   const [loading, setLoading] = useState(true)
   const [people, setPeople] = useState([])
 
@@ -17,13 +20,21 @@ export default function RepostsSheet({ postId, postType, onClose }) {
     ;(async () => {
       setLoading(true)
       // Resharers are user_posts rows that reference this post
-      const { data: rows } = await supabase
-        .from("user_posts")
-        .select("id, user_id, created_at")
-        .eq("reshared_from_type", postType)
-        .eq("reshared_from_id", postId)
-        .order("created_at", { ascending: false })
-        .limit(200)
+      const [repostRes, muteRes] = await Promise.all([
+        supabase
+          .from("user_posts")
+          .select("id, user_id, created_at")
+          .eq("reshared_from_type", postType)
+          .eq("reshared_from_id", postId)
+          .order("created_at", { ascending: false })
+          .limit(200),
+        myId
+          ? supabase.from("user_mutes").select("muted_id").eq("muter_id", myId)
+          : Promise.resolve({ data: [] }),
+      ])
+
+      const muteSet = new Set((muteRes.data || []).map((m) => m.muted_id))
+      const rows = (repostRes.data || []).filter((r) => !muteSet.has(r.user_id))
 
       const ids = [...new Set((rows || []).map((r) => r.user_id))]
       let profMap = new Map(), photoMap = new Map()
