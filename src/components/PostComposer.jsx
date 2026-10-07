@@ -679,15 +679,15 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             <h3 className="text-cream font-extrabold text-[16px] mb-2">
-              {audienceView === "circles" ? "Choose a Circle" : "Who can see this?"}
+              {audienceView === "circles" ? "Choose an Audience" : "Who can see this?"}
             </h3>
 
             {audienceView === "circles" ? (
               <>
                 {myCircles.length === 0 ? (
                   <div className="py-6 text-center">
-                    <p className="text-cream font-semibold text-[14px] mb-1">No circles yet</p>
-                    <p className="text-muted text-[12px]">Create circles in Profile → Circles.</p>
+                    <p className="text-cream font-semibold text-[14px] mb-1">No audiences yet</p>
+                    <p className="text-muted text-[12px]">Create audiences in Settings → Audiences.</p>
                   </div>
                 ) : (
                   myCircles.map((c) => {

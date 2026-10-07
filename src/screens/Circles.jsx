@@ -60,7 +60,7 @@ export default function Circles() {
   }
 
   async function remove(id) {
-    if (!confirm("Delete this circle?")) return
+    if (!confirm("Delete this audience?")) return
     tap("light")
     setCircles((cur) => cur.filter((c) => c.id !== id))
     await supabase.from("circles").delete().eq("id", id).eq("owner_id", myId)
@@ -79,7 +79,7 @@ export default function Circles() {
           >
             <ArrowLeft size={18} className="text-cream" />
           </button>
-          <h1 className="text-cream font-extrabold text-[16px] flex-1">Circles</h1>
+          <h1 className="text-cream font-extrabold text-[16px] flex-1">Audiences</h1>
           <button
             onClick={() => { tap("light"); setCreateOpen(true) }}
             className="h-9 px-3 rounded-full text-white font-bold text-[12.5px] inline-flex items-center gap-1.5"
@@ -100,8 +100,8 @@ export default function Circles() {
         ) : circles.length === 0 ? (
           <div className="py-16 text-center px-6">
             <p className="text-[42px] mb-2">🔵</p>
-            <p className="text-cream font-bold text-[14.5px] mb-1">No circles yet</p>
-            <p className="text-muted text-[12.5px]">Create your first circle to get started.</p>
+            <p className="text-cream font-bold text-[14.5px] mb-1">No audiences yet</p>
+            <p className="text-muted text-[12.5px]">Create your first audience to get started.</p>
           </div>
         ) : (
           <div className="px-4 flex flex-col gap-1.5">
@@ -144,7 +144,7 @@ export default function Circles() {
             style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-1" />
-            <h3 className="text-cream font-extrabold text-[16px]">New circle</h3>
+            <h3 className="text-cream font-extrabold text-[16px]">New audience</h3>
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value.slice(0, 40))}
@@ -159,7 +159,7 @@ export default function Circles() {
               className="h-12 rounded-full text-white font-bold text-[14.5px] disabled:opacity-40"
               style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
             >
-              {busy ? "Creating…" : "Create circle"}
+              {busy ? "Creating…" : "Create audience"}
             </button>
           </div>
         </div>

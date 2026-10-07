@@ -184,6 +184,7 @@ export default function ProfileSettings() {
           <FeatureTile icon={<Users size={20} />} label="Communities" to="/communities" nav={nav} />
           <FeatureTile icon={<ShieldCheck size={20} />} label="Get verified" to="/verify" nav={nav} />
           <FeatureTile icon={<Coins size={20} />} label="Monetization" to="/monetization" nav={nav} />
+          <FeatureTile icon={<Layers size={20} />} label="Audiences" to="/circles" nav={nav} />
           <FeatureTile icon={<Store size={20} />} label="Marketplace" to="/marketplace" nav={nav} />
           <FeatureTile icon={<Briefcase size={20} />} label="Services" to="/services" nav={nav} />
         </div>

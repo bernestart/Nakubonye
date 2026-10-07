@@ -99,7 +99,7 @@ export default function ProfileMenuSheet({ open, onClose, isMe, userId, person, 
               <Row icon={Star}         label="Add highlights"              onClick={() => go("/story-archive")} />
               <Row icon={Eye}          label="View as"                     onClick={() => go("/me/preview")} />
               <Row icon={Search}       label="Search"                      onClick={() => go("/search")} />
-              <Row icon={Sparkles}     label="Inner Circle"                onClick={() => go("/inner-circle")} />
+              <Row icon={Sparkles}     label="Favorites"                onClick={() => go("/inner-circle")} />
               <Row icon={UserPlus}     label="Invite people to connect"    onClick={() => go("/invite")} />
               <Row icon={Link2}        label="Copy link to profile"        onClick={copyLink} />
             </>

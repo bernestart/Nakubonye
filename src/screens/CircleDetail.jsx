@@ -8,14 +8,14 @@ import { tap } from "../lib/haptic"
 import BrandGlow from "../components/BrandGlow"
 import AppHeader from "../components/AppHeader"
 
-export default function CircleDetail() {
+export default function AudienceDetail() {
   const { id } = useParams()
   const nav = useNavigate()
   const { session } = useAuth()
   const myId = session?.user?.id
 
   const [loading, setLoading] = useState(true)
-  const [circle, setCircle] = useState(null)
+  const [audience, setAudience] = useState(null)
   const [members, setMembers] = useState([])
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -31,7 +31,7 @@ export default function CircleDetail() {
       supabase.from("circles").select("id, name, owner_id").eq("id", id).maybeSingle(),
       supabase.from("circle_members").select("user_id, created_at").eq("circle_id", id).order("created_at", { ascending: false }),
     ])
-    setCircle(cRes.data || null)
+    setAudience(cRes.data || null)
     setNameDraft(cRes.data?.name || "")
     const ids = (mRes.data || []).map((r) => r.user_id)
     let profMap = new Map(), photoMap = new Map()
@@ -87,9 +87,9 @@ export default function CircleDetail() {
 
   async function saveName() {
     const n = nameDraft.trim()
-    if (!n || !circle) return
+    if (!n || !audience) return
     setRenaming(false)
-    setCircle((cur) => ({ ...cur, name: n.slice(0, 40) }))
+    setAudience((cur) => ({ ...cur, name: n.slice(0, 40) }))
     await supabase.from("circles").update({ name: n.slice(0, 40) }).eq("id", id).eq("owner_id", myId)
   }
 
@@ -106,7 +106,7 @@ export default function CircleDetail() {
           >
             <ArrowLeft size={18} className="text-cream" />
           </button>
-          <h1 className="text-cream font-extrabold text-[16px] flex-1 truncate">{circle?.name || "Circle"}</h1>
+          <h1 className="text-cream font-extrabold text-[16px] flex-1 truncate">{audience?.name || "Audience"}</h1>
           <button
             onClick={() => { tap("light"); setSearchOpen((v) => !v) }}
             className="h-9 px-3 rounded-full bg-white/[0.06] border border-white/10 text-cream font-bold text-[12.5px] inline-flex items-center gap-1.5"
@@ -127,13 +127,13 @@ export default function CircleDetail() {
             <button onClick={saveName} className="h-10 px-3 rounded-full text-white text-[12.5px] font-bold" style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}>Save</button>
           </div>
         ) : (
-          circle && (
+          audience && (
             <div className="px-4 py-3">
               <button
                 onClick={() => { tap("light"); setRenaming(true) }}
                 className="text-purple-300 text-[12.5px] font-semibold"
               >
-                ✎ Rename circle
+                ✎ Rename audience
               </button>
             </div>
           )
@@ -183,7 +183,7 @@ export default function CircleDetail() {
         ) : members.length === 0 ? (
           <div className="py-16 text-center px-6">
             <p className="text-[42px] mb-2">👥</p>
-            <p className="text-cream font-bold text-[14.5px] mb-1">Nobody in this circle yet</p>
+            <p className="text-cream font-bold text-[14.5px] mb-1">Nobody in this audience yet</p>
             <p className="text-muted text-[12.5px]">Tap Add to bring people in.</p>
           </div>
         ) : (

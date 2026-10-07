@@ -95,7 +95,7 @@ export default function InnerCircle() {
           >
             <ArrowLeft size={18} className="text-cream" />
           </button>
-          <h1 className="text-cream font-extrabold text-[16px] flex-1">Inner Circle</h1>
+          <h1 className="text-cream font-extrabold text-[16px] flex-1">Favorites</h1>
           <button
             onClick={() => { tap("light"); setSearchOpen((v) => !v) }}
             className="h-9 px-3 rounded-full bg-white/[0.06] border border-white/10 text-cream font-bold text-[12.5px] inline-flex items-center gap-1.5"
@@ -105,7 +105,7 @@ export default function InnerCircle() {
         </div>
 
         <p className="px-4 py-3 text-muted text-[12.5px] leading-relaxed">
-          Your Inner Circle is a private list of people you share close content with — stories, posts, and more.
+          Your Favorites is a private list of people you share close content with — stories, posts, and more.
         </p>
 
         {searchOpen && (
@@ -152,7 +152,7 @@ export default function InnerCircle() {
         ) : members.length === 0 ? (
           <div className="py-16 text-center px-6">
             <p className="text-[42px] mb-2">💫</p>
-            <p className="text-cream font-bold text-[14.5px] mb-1">Inner Circle is empty</p>
+            <p className="text-cream font-bold text-[14.5px] mb-1">Favorites is empty</p>
             <p className="text-muted text-[12.5px]">Tap Add to bring people in.</p>
           </div>
         ) : (
