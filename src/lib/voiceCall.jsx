@@ -108,14 +108,45 @@ export function VoiceCallProvider({ children }) {
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       video: isVideo ? {
         facingMode: 'user',
-        width:  { ideal: 720, min: 480, max: 1080 },
-        height: { ideal: 1280, min: 640, max: 1920 },
-        aspectRatio: { ideal: 9 / 16 },
-        frameRate: { ideal: 24, min: 15, max: 30 },
+        width:  { ideal: 720 },
+        height: { ideal: 1280 },
+        frameRate: { ideal: 30, max: 30 },
       } : false,
     })
     localStreamRef.current = stream
     stream.getTracks().forEach((t) => pc.addTrack(t, stream))
+
+    // Prefer H.264 (hardware-accelerated on Android) over VP8/VP9
+    try {
+      if (typeof RTCRtpSender !== 'undefined' && RTCRtpSender.getCapabilities) {
+        const caps = RTCRtpSender.getCapabilities('video')
+        if (caps && caps.codecs) {
+          const preferred = caps.codecs.filter((c) => /H264/i.test(c.mimeType))
+          const rest = caps.codecs.filter((c) => !/H264/i.test(c.mimeType))
+          const ordered = [...preferred, ...rest]
+          if (preferred.length > 0) {
+            for (const tr of pc.getTransceivers()) {
+              if (tr.sender?.track?.kind === 'video' || tr.receiver?.track?.kind === 'video') {
+                try { tr.setCodecPreferences(ordered) } catch (e) { console.warn('[Nakubonye] setCodecPreferences failed', e) }
+              }
+            }
+          }
+        }
+      }
+    } catch (e) { console.warn('[Nakubonye] codec preference setup failed', e) }
+
+    // Cap send bitrate + set degradation preference on video sender
+    try {
+      const videoSender = pc.getSenders().find((s) => s.track?.kind === 'video')
+      if (videoSender) {
+        const params = videoSender.getParameters()
+        if (!params.encodings || params.encodings.length === 0) params.encodings = [{}]
+        params.encodings[0].maxBitrate = 2500000
+        params.encodings[0].maxFramerate = 30
+        params.degradationPreference = 'balanced'
+        await videoSender.setParameters(params)
+      }
+    } catch (e) { console.warn('[Nakubonye] setParameters failed', e) }
 
     // Log actual camera resolution Chrome gave us
     const videoTrack = stream.getVideoTracks()[0]

@@ -4,6 +4,8 @@ import { ArrowLeft, Search, X, Camera, Check } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
+import { Capacitor } from "@capacitor/core"
+import { Camera as NativeCamera, CameraResultType, CameraSource } from "@capacitor/camera"
 import { tap } from "../lib/haptic"
 import BrandGlow from "../components/BrandGlow"
 
@@ -45,6 +47,18 @@ export default function CreateGroup() {
     } else {
       setSelected((arr) => [...arr, user])
     }
+  }
+
+  async function pickNativeAvatar() {
+    if (!Capacitor.isNativePlatform()) { avatarRef.current?.click(); return }
+    try {
+      const shot = await NativeCamera.getPhoto({ quality: 90, resultType: CameraResultType.Uri, source: CameraSource.Prompt })
+      const res = await fetch(shot.webPath)
+      const blob = await res.blob()
+      const ext = (shot.format || "jpeg").toLowerCase()
+      const file = new File([blob], "avatar-" + Date.now() + "." + ext, { type: blob.type })
+      await pickAvatar({ target: { files: [file], value: "" } })
+    } catch (e) { if (e && e.message && !/cancel/i.test(e.message)) console.warn(e) }
   }
 
   function pickAvatar(e) {
@@ -129,7 +143,7 @@ export default function CreateGroup() {
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {/* Avatar + name */}
         <div className="flex items-center gap-4 mb-6">
-          <button onClick={() => avatarRef.current?.click()} className="relative shrink-0">
+          <button onClick={pickNativeAvatar} className="relative shrink-0">
             <div className="w-16 h-16 rounded-full bg-purple-500/20 border-2 border-purple-500/40 grid place-items-center overflow-hidden">
               {avatarPreview ? (
                 <img src={avatarPreview} alt="" className="w-full h-full object-cover" />

@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, ImagePlus, X, MapPin, DollarSign, AlertCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
+import { Capacitor } from '@capacitor/core'
+import { Camera as NativeCamera, CameraResultType, CameraSource } from '@capacitor/camera'
 import { tap } from '../lib/haptic'
 import BrandGlow from '../components/BrandGlow'
 
@@ -32,6 +34,18 @@ export default function CreateListing() {
   const [error, setError] = useState('')
 
   useEffect(() => () => imagePreviews.forEach((p) => URL.revokeObjectURL(p)), [imagePreviews])
+
+  async function pickNativePhotos() {
+    if (!Capacitor.isNativePlatform()) { fileRef.current?.click(); return }
+    try {
+      const shot = await NativeCamera.getPhoto({ quality: 90, resultType: CameraResultType.Uri, source: CameraSource.Prompt })
+      const res = await fetch(shot.webPath)
+      const blob = await res.blob()
+      const ext = (shot.format || 'jpeg').toLowerCase()
+      const file = new File([blob], 'photo-' + Date.now() + '.' + ext, { type: blob.type })
+      await pickImages({ target: { files: [file], value: '' } })
+    } catch (e) { if (e && e.message && !/cancel/i.test(e.message)) console.warn(e) }
+  }
 
   function pickImages(e) {
     const files = Array.from(e.target.files || [])
@@ -132,7 +146,7 @@ export default function CreateListing() {
             ))}
             {imageFiles.length < MAX_IMAGES && (
               <button
-                onClick={() => fileRef.current?.click()}
+                onClick={pickNativePhotos}
                 className="shrink-0 grid place-items-center rounded-xl border-2 border-dashed border-white/15"
                 style={{ width: 88, height: 88 }}
               >

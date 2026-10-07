@@ -9,7 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor-community/camera-preview": "^8.0.2",
     "@capacitor/android": "^8.5.2",
+    "@capacitor/camera": "^8.2.5",
     "@capacitor/core": "^8.5.2",
     "@supabase/supabase-js": "^2.112.3",
     "@tailwindcss/vite": "^4.1.14",

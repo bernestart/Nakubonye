@@ -3,6 +3,8 @@ import { X, ImagePlus, RefreshCw, Send, Pencil } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { deleteDraftsByKind } from "../lib/drafts"
 import { useAuth } from "../lib/auth"
+import { Capacitor } from "@capacitor/core"
+import { Camera as NativeCamera, CameraResultType, CameraSource } from "@capacitor/camera"
 import { tap } from "../lib/haptic"
 import StoryEditor from "./StoryEditor"
 import { createPortal } from "react-dom"
@@ -89,6 +91,18 @@ export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve
 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
+
+  async function pickNative() {
+    if (!Capacitor.isNativePlatform()) { fileRef.current?.click(); return }
+    try {
+      const shot = await NativeCamera.getPhoto({ quality: 90, resultType: CameraResultType.Uri, source: CameraSource.Prompt })
+      const res = await fetch(shot.webPath)
+      const blob = await res.blob()
+      const ext = (shot.format || "jpeg").toLowerCase()
+      const file = new File([blob], "story-" + Date.now() + "." + ext, { type: blob.type })
+      await pick({ target: { files: [file], value: "" } })
+    } catch (e) { if (e && e.message && !/cancel/i.test(e.message)) console.warn(e) }
+  }
 
   function pick(e) {
     const f = e.target.files?.[0]
@@ -247,6 +261,12 @@ export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve
   }
 
   useEffect(() => {
+    // On native, launch the OS camera/gallery via the plugin.
+    // On web, fall back to the hidden file input (which the browser opens).
+    if (Capacitor.isNativePlatform()) {
+      const t = setTimeout(() => { pickNative() }, 80)
+      return () => clearTimeout(t)
+    }
     const el = fileRef.current
     if (!el) return
     const onCancel = () => onClose?.()
@@ -360,7 +380,7 @@ export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve
           <div className="p-3 flex flex-col gap-2" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
             <div className="flex gap-2">
               <button
-                onClick={() => fileRef.current?.click()}
+                onClick={pickNative}
                 className="flex-1 h-11 rounded-full bg-white/10 text-white font-semibold text-[13.5px] inline-flex items-center justify-center gap-2"
               >
                 <RefreshCw size={15} /> Change

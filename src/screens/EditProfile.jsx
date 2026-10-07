@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Camera, Trash2, Star, X } from 'lucide-react'
+import { Capacitor } from '@capacitor/core'
+import { Camera as NativeCamera, CameraResultType, CameraSource } from '@capacitor/camera'
 import BrandGlow from '../components/BrandGlow'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -179,7 +181,33 @@ export default function EditProfile() {
   async function uploadPhoto(e) {
     const files = Array.from(e.target.files || [])
     e.target.value = ''
-    if (!files.length) return
+    await uploadFiles(files)
+  }
+
+  async function pickPhoto() {
+    if (!Capacitor.isNativePlatform()) {
+      fileInputRef.current?.click()
+      return
+    }
+    try {
+      const shot = await NativeCamera.getPhoto({
+        quality: 90,
+        allowEditing: false,
+        resultType: CameraResultType.Uri,
+        source: CameraSource.Prompt,
+      })
+      const res = await fetch(shot.webPath)
+      const blob = await res.blob()
+      const ext = (shot.format || 'jpeg').toLowerCase()
+      const file = new File([blob], 'photo-' + Date.now() + '.' + ext, { type: blob.type })
+      await uploadFiles([file])
+    } catch (e) {
+      if (e && e.message && !/cancel/i.test(e.message)) setError(e.message)
+    }
+  }
+
+  async function uploadFiles(files) {
+    if (!files || !files.length) return
     if (photos.length + files.length > MAX_PHOTOS) {
       setError(`You can have up to ${MAX_PHOTOS} photos.`)
       return
@@ -561,7 +589,7 @@ export default function EditProfile() {
               {photos.length < effectiveMax && (
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={pickPhoto}
                   disabled={uploading}
                   className="rounded-2xl aspect-[3/4] border-2 border-dashed border-white/15 bg-white/[0.02] flex flex-col items-center justify-center gap-1.5 disabled:opacity-50"
                 >

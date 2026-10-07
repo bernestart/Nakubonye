@@ -11,6 +11,7 @@ export default function CallOverlay() {
   } = useVoiceCall()
 
   const [speakerOn, setSpeakerOn] = useState(false)
+  const [localRes, setLocalRes] = useState('')
   const localVideoRef = useRef(null)
   const remoteVideoRef = useRef(null)
 
@@ -32,6 +33,14 @@ export default function CallOverlay() {
           local.srcObject = localStreamRef.current
         }
         local.play?.().catch(() => {})
+        try {
+          const track = localStreamRef.current.getVideoTracks?.()[0]
+          const s = track?.getSettings?.()
+          if (s && s.width) {
+            const info = s.width + 'x' + s.height + ' @ ' + (s.frameRate || '?') + 'fps'
+            setLocalRes((prev) => (prev === info ? prev : info))
+          }
+        } catch {}
       }
       if (remote && remoteStreamRef?.current) {
         if (remote.srcObject !== remoteStreamRef.current) {
@@ -144,6 +153,12 @@ export default function CallOverlay() {
           </div>
         )}
 
+        {localRes && (
+          <div className="absolute top-14 left-2 px-2 py-1 rounded-md bg-black/70 text-white/90 text-[10px] font-mono z-50 pointer-events-none">
+            {localRes}
+          </div>
+        )}
+
         {/* Top bar — name + duration */}
         <div
           className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between"
@@ -218,6 +233,12 @@ export default function CallOverlay() {
           className="absolute inset-0 w-full h-full object-cover"
           style={{ transform: 'scaleX(-1)' }}
         />
+
+        {localRes && (
+          <div className="absolute top-14 left-2 px-2 py-1 rounded-md bg-black/70 text-white/90 text-[10px] font-mono z-50 pointer-events-none">
+            {localRes}
+          </div>
+        )}
 
         {/* Top: name + status, small, centered — nothing else covers the frame */}
         <div className="absolute top-0 left-0 right-0 pt-14 px-6 text-center pointer-events-none">

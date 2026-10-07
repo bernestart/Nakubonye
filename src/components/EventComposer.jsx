@@ -3,6 +3,8 @@ import { createPortal } from "react-dom"
 import { X, ImagePlus } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
+import { Capacitor } from "@capacitor/core"
+import { Camera as NativeCamera, CameraResultType, CameraSource } from "@capacitor/camera"
 import { tap } from "../lib/haptic"
 
 export default function EventComposer({ communityId, onClose, onCreated, existing = null }) {
@@ -22,6 +24,18 @@ export default function EventComposer({ communityId, onClose, onCreated, existin
   const [coverPreview, setCoverPreview] = useState(existing?.cover_url || "")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
+
+  async function pickNativeCover() {
+    if (!Capacitor.isNativePlatform()) { fileRef.current?.click(); return }
+    try {
+      const shot = await NativeCamera.getPhoto({ quality: 90, resultType: CameraResultType.Uri, source: CameraSource.Prompt })
+      const res = await fetch(shot.webPath)
+      const blob = await res.blob()
+      const ext = (shot.format || "jpeg").toLowerCase()
+      const file = new File([blob], "cover-" + Date.now() + "." + ext, { type: blob.type })
+      await pickCover({ target: { files: [file], value: "" } })
+    } catch (e) { if (e && e.message && !/cancel/i.test(e.message)) console.warn(e) }
+  }
 
   function pickCover(e) {
     const f = e.target.files?.[0]
@@ -122,7 +136,7 @@ export default function EventComposer({ communityId, onClose, onCreated, existin
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
           {/* Cover */}
           <button
-            onClick={() => fileRef.current?.click()}
+            onClick={pickNativeCover}
             className="w-full h-32 rounded-2xl bg-white/[0.03] border border-dashed border-white/15 grid place-items-center overflow-hidden"
           >
             {coverPreview ? (

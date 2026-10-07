@@ -5,6 +5,8 @@ import { motion } from "framer-motion"
 import { supabase } from "../lib/supabase"
 import { loadBlockedIds } from "../lib/blocks"
 import { useAuth } from "../lib/auth"
+import { Capacitor } from "@capacitor/core"
+import { Camera as NativeCamera, CameraResultType, CameraSource } from "@capacitor/camera"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 import BrandGlow from "../components/BrandGlow"
@@ -331,6 +333,20 @@ export default function GroupChat() {
     if (!f.type.startsWith("image/")) { setError("Only images supported"); e.target.value = ""; return }
     if (f.size > 8 * 1024 * 1024) { setError("Image must be under 8 MB"); e.target.value = ""; return }
     setAttachment(f); setAttachmentPreview(URL.createObjectURL(f)); setError("")
+  }
+
+  async function pickFromNativeCamera() {
+    if (!Capacitor.isNativePlatform()) { cameraInputRef.current?.click(); return }
+    try {
+      const shot = await NativeCamera.getPhoto({ quality: 90, resultType: CameraResultType.Uri, source: CameraSource.Camera })
+      const res = await fetch(shot.webPath)
+      const blob = await res.blob()
+      const ext = (shot.format || "jpeg").toLowerCase()
+      const file = new File([blob], "cam-" + Date.now() + "." + ext, { type: blob.type })
+      if (!file.type.startsWith("image/")) { setError("Only images supported"); return }
+      if (file.size > 8 * 1024 * 1024) { setError("Image must be under 8 MB"); return }
+      setAttachment(file); setAttachmentPreview(URL.createObjectURL(file)); setError("")
+    } catch (e) { if (e && e.message && !/cancel/i.test(e.message)) console.warn(e) }
   }
 
   function clearAttachment() {
@@ -1115,7 +1131,7 @@ export default function GroupChat() {
             style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
-            <button onClick={() => { setAttachMenuOpen(false); setTimeout(() => cameraInputRef.current?.click(), 100) }}
+            <button onClick={() => { setAttachMenuOpen(false); setTimeout(() => pickFromNativeCamera(), 100) }}
               className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]">
               <Camera size={18} className="text-purple-300" />
               <span className="font-semibold text-[14px]">Take photo</span>
