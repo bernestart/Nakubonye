@@ -203,6 +203,7 @@ export default function ProfileSettings() {
           <MenuRow icon={<Key size={18} />} label="Security" to="/settings/security" nav={nav} />
           <MenuRow icon={<Bell size={18} />} label="Notifications" to="/settings/notifications" nav={nav} />
           <MenuRow icon={<Download size={18} />} label="Your data" to="/settings/your-data" nav={nav} />
+          <MenuRow icon={<FileText size={18} />} label="Terms & policies" to="/settings/terms-policies" nav={nav} />
         </Collapsible>
 
         {/* Collapsible — Help & support */}
