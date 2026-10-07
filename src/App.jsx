@@ -70,11 +70,7 @@ import Monetization from './screens/Monetization'
 import PrivacySettings from './screens/PrivacySettings'
 import YourData from './screens/settings/YourData'
 import BlockingMuted from './screens/settings/BlockingMuted'
-import ActivityPresence from './screens/settings/ActivityPresence'
 import ContentAudience from './screens/settings/ContentAudience'
-import Interactions from './screens/settings/Interactions'
-import ProfileTagging from './screens/settings/ProfileTagging'
-import Account from './screens/settings/Account'
 import PendingTags from './screens/PendingTags'
 import Marketplace from './screens/Marketplace'
 import CreateGroup from './screens/CreateGroup'
@@ -304,11 +300,7 @@ export default function App() {
         <Route path="/settings/privacy" element={<Guard><PrivacySettings /></Guard>} />
         <Route path="/settings/your-data" element={<Guard><YourData /></Guard>} />
         <Route path="/settings/blocking-muted" element={<Guard><BlockingMuted /></Guard>} />
-        <Route path="/settings/activity-presence" element={<Guard><ActivityPresence /></Guard>} />
         <Route path="/settings/content-audience" element={<Guard><ContentAudience /></Guard>} />
-        <Route path="/settings/interactions" element={<Guard><Interactions /></Guard>} />
-        <Route path="/settings/profile-tagging" element={<Guard><ProfileTagging /></Guard>} />
-        <Route path="/settings/account" element={<Guard><Account /></Guard>} />
         <Route path="/settings/pending-tags" element={<Guard><PendingTags /></Guard>} />
         <Route path="/safety"   element={<Guard><SafetyCenter /></Guard>} />
         <Route path="/blocked"  element={<Guard><BlockedList /></Guard>} />

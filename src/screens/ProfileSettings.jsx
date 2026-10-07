@@ -196,12 +196,8 @@ export default function ProfileSettings() {
           open={settingsOpen}
           onToggle={() => { tap('light'); setSettingsOpen((v) => !v) }}
         >
-          <MenuRow icon={<User size={18} />} label="Account" to="/settings/account" nav={nav} />
           <MenuRow icon={<Shield size={18} />} label="Privacy" to="/settings/privacy" nav={nav} />
-          <MenuRow icon={<UserCircle size={18} />} label="Profile & tagging" to="/settings/profile-tagging" nav={nav} />
-          <MenuRow icon={<MessageCircle size={18} />} label="Interactions" to="/settings/interactions" nav={nav} />
           <MenuRow icon={<Globe size={18} />} label="Content & audience" to="/settings/content-audience" nav={nav} />
-          <MenuRow icon={<Activity size={18} />} label="Activity & presence" to="/settings/activity-presence" nav={nav} />
           <MenuRow icon={<Ban size={18} />} label="Blocking & muting" to="/settings/blocking-muted" nav={nav} />
           <MenuRow icon={<Key size={18} />} label="Security" to="/settings/security" nav={nav} />
           <MenuRow icon={<Bell size={18} />} label="Notifications" to="/settings/notifications" nav={nav} />
