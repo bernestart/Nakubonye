@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { ArrowLeft, Heart, MessageCircle, UserPlus, Sparkles, Play, MessageSquare, Bell, Check, Trash2, Users, AtSign } from 'lucide-react'
+import { ArrowLeft, Heart, MessageCircle, UserPlus, Sparkles, Play, MessageSquare, Bell, Check, Trash2, Users, AtSign, Settings } from 'lucide-react'
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
@@ -214,6 +214,13 @@ export default function Notifications() {
             <Check size={14} strokeWidth={3} /> Mark all read
           </button>
         )}
+        <button
+          onClick={() => { tap('light'); nav('/settings/notifications') }}
+          className="w-9 h-9 rounded-full grid place-items-center text-muted"
+          aria-label="Notification settings"
+        >
+          <Settings size={19} strokeWidth={2.2} />
+        </button>
       </header>
 
       <div className="flex-1 overflow-y-auto px-3 py-3">
