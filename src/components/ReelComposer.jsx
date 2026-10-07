@@ -105,7 +105,12 @@ export default function ReelComposer({ onClose, onDone, remixOf, kind = "reel" }
         streamRef.current = null
       }
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: newFacing || facing, width: { ideal: 720 }, height: { ideal: 1280 } },
+        video: {
+          facingMode: newFacing || facing,
+          width: { ideal: 1080 },
+          height: { ideal: 1920 },
+          frameRate: { ideal: 30 },
+        },
         audio: micOn,
       })
       streamRef.current = stream
@@ -140,15 +145,30 @@ export default function ReelComposer({ onClose, onDone, remixOf, kind = "reel" }
     const stream = streamRef.current
     if (!stream) { setError("Camera not ready"); return }
     try {
-      const mime = typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-        ? "video/webm;codecs=vp9"
-        : "video/webm"
-      const mr = new MediaRecorder(stream, { mimeType: mime })
+      let mime = "video/webm"
+      let ext = "webm"
+      if (typeof MediaRecorder !== "undefined") {
+        const candidates = [
+          ["video/mp4;codecs=h264", "mp4"],
+          ["video/mp4", "mp4"],
+          ["video/webm;codecs=h264", "webm"],
+          ["video/webm;codecs=vp8", "webm"],
+          ["video/webm", "webm"],
+        ]
+        for (const c of candidates) {
+          if (MediaRecorder.isTypeSupported(c[0])) { mime = c[0]; ext = c[1]; break }
+        }
+      }
+      const mr = new MediaRecorder(stream, {
+        mimeType: mime,
+        videoBitsPerSecond: 8000000,
+        audioBitsPerSecond: 128000,
+      })
       chunksRef.current = []
       mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data) }
       mr.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: "video/webm" })
-        const f = new File([blob], "recording.webm", { type: "video/webm" })
+        const blob = new Blob(chunksRef.current, { type: mime })
+        const f = new File([blob], "recording." + ext, { type: mime })
         setFile(f)
         setPreview(URL.createObjectURL(f))
         setDuration(recordSec)
@@ -205,6 +225,14 @@ export default function ReelComposer({ onClose, onDone, remixOf, kind = "reel" }
 
   function onLoadedMeta(e) { setDuration(Math.round(e.target.duration || 0)) }
 
+  // Diagnostics: file size display (temporary)
+  function fmtSize(bytes) {
+    if (!bytes) return "0"
+    if (bytes < 1024) return bytes + " B"
+    if (bytes < 1048576) return (bytes / 1024).toFixed(0) + " KB"
+    return (bytes / 1048576).toFixed(1) + " MB"
+  }
+
   async function submit() {
     if (!file || !myId) return
     setBusy(true); setError(""); setProgress(0)
@@ -226,7 +254,13 @@ export default function ReelComposer({ onClose, onDone, remixOf, kind = "reel" }
       const { error: upErr } = await supabase.storage
         .from("reels-media")
         .upload(path, cFile, { upsert: false, contentType: cFile.type })
-      if (upErr) { setError(upErr.message); setBusy(false); return }
+      if (upErr) {
+        const sizeMB = (cFile.size / 1048576).toFixed(1)
+        setError(upErr.message + " (" + sizeMB + " MB, " + cFile.type + ")")
+        console.error("[reel-upload] failed", { name: upErr.name, message: upErr.message, size: cFile.size, type: cFile.type })
+        setBusy(false)
+        return
+      }
       const { data: pub } = supabase.storage.from("reels-media").getPublicUrl(path)
       if (!pub?.publicUrl) { setError("Upload failed"); setBusy(false); return }
       uploaded.push({
@@ -498,6 +532,11 @@ export default function ReelComposer({ onClose, onDone, remixOf, kind = "reel" }
               className="flex-1 rounded-xl bg-white/[0.06] border border-white/10 px-3 py-2.5 text-white text-[14px] placeholder:text-white/45 focus:outline-none focus:border-purple-500 resize-none"
             />
           </div>
+          {file && (
+            <div className="px-3 mt-2 text-[11px] text-white/50">
+              {fmtSize(file.size)} · {file.type}
+            </div>
+          )}
 
           {/* Cover frame picker */}
           <div className="px-3 mt-3">
