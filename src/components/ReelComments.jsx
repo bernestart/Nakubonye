@@ -33,12 +33,18 @@ export default function ReelComments({ reelId, onClose, onCountChange }) {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data: rows } = await supabase
-      .from("reel_comments")
-      .select("id, user_id, content, created_at, reply_to_id, edited_at, deleted_at, pinned_at")
-      .eq("reel_id", reelId)
-      .order("created_at", { ascending: true })
-      .limit(300)
+    const [commentRes, muteRes] = await Promise.all([
+      supabase
+        .from("reel_comments")
+        .select("id, user_id, content, created_at, reply_to_id, edited_at, deleted_at, pinned_at")
+        .eq("reel_id", reelId)
+        .order("created_at", { ascending: true })
+        .limit(300),
+      supabase.from("user_mutes").select("muted_id").eq("muter_id", myId),
+    ])
+
+    const muteSet = new Set((muteRes.data || []).map((m) => m.muted_id))
+    const rows = (commentRes.data || []).filter((c) => !muteSet.has(c.user_id))
 
     const list = (rows || []).slice().sort((a, b) => {
       if (a.pinned_at && !b.pinned_at) return -1
