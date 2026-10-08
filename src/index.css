@@ -33,7 +33,7 @@ html, body, #root { height: 100%; }
 body {
   margin: 0;
   font-family: var(--font-sans);
-  background: var(--color-obsidian);
+  background: radial-gradient(circle at 50% 0%, #2A1055 0%, #1A0A38 40%, #0B0B14 100%) fixed;
   color: var(--color-cream);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
@@ -48,8 +48,8 @@ input, textarea { font-family: inherit; color: inherit; }
   max-width: 480px;
   margin: 0 auto;
   min-height: 100dvh;
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-top:    max(var(--safe-top,    0px), env(safe-area-inset-top,    0px));
+  padding-bottom: max(var(--safe-bottom, 0px), env(safe-area-inset-bottom, 0px));
 }
 
 

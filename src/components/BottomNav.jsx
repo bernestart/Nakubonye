@@ -51,16 +51,14 @@ export default function BottomNav() {
         transform: 'translateX(-50%)',
         width: '100%',
         maxWidth: 480,
-        background: 'rgba(11,11,20,0.92)',
-        backdropFilter: 'blur(20px) saturate(140%)',
-        WebkitBackdropFilter: 'blur(20px) saturate(140%)',
+        background: '#1A0A38',
         borderTop: '1px solid rgba(255,255,255,0.06)',
         zIndex: 40,
       }}
     >
       <div
         className="grid grid-cols-6"
-        style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 8px)' }}
+        style={{ paddingBottom: 'max(var(--safe-bottom, 0px), env(safe-area-inset-bottom, 0px), 8px)' }}
       >
         {items.map(({ to, label, Icon }) => (
           <NavLink
