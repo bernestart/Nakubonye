@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Link2, MessageCircle, Send, Bookmark, X } from "lucide-react"
+import { Link2, MessageCircle, Send, Bookmark, X, Share2 } from "lucide-react"
+import { shareContent } from "../lib/share"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
@@ -87,6 +88,17 @@ export default function ShareSheet({ post, source = "community", onClose, onShar
     onClose?.()
   }
 
+  async function shareExternal() {
+    tap("light")
+    const url = window.location.origin + "/post/" + source + "/" + post.id
+    const title = post?.author_display_name ? post.author_display_name + " on Nakubonye" : "Post on Nakubonye"
+    const text = (post?.content || "").slice(0, 120)
+    onClose?.()
+    try {
+      await shareContent({ title, text, url })
+    } catch {}
+  }
+
   if (!canReshare) {
     return (
       <div className="fixed inset-0 z-[500] flex items-end" onClick={onClose}>
@@ -141,6 +153,14 @@ export default function ShareSheet({ post, source = "community", onClose, onShar
         >
           <MessageCircle size={20} strokeWidth={1.9} className="text-cream" />
           <span className="text-cream text-[15px] font-medium flex-1">Send in Messenger</span>
+        </button>
+
+        <button
+          onClick={shareExternal}
+          className="w-full flex items-center gap-4 px-4 py-3.5 text-left active:bg-white/[0.04]"
+        >
+          <Share2 size={20} strokeWidth={1.9} className="text-cream" />
+          <span className="text-cream text-[15px] font-medium flex-1">Share externally</span>
         </button>
 
         <button

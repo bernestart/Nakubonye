@@ -1,4 +1,23 @@
-export function tap(intensity = 'light') {
+import { Capacitor } from '@capacitor/core'
+import { Haptics, ImpactStyle } from '@capacitor/haptics'
+
+export async function tap(intensity = 'light') {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      if (intensity === 'match') {
+        await Haptics.impact({ style: ImpactStyle.Medium })
+        setTimeout(() => Haptics.impact({ style: ImpactStyle.Heavy }).catch(() => {}), 120)
+        setTimeout(() => Haptics.impact({ style: ImpactStyle.Medium }).catch(() => {}), 260)
+      } else {
+        const style =
+          intensity === 'heavy' ? ImpactStyle.Heavy :
+          intensity === 'medium' ? ImpactStyle.Medium :
+          ImpactStyle.Light
+        await Haptics.impact({ style })
+      }
+      return
+    } catch {}
+  }
   if (typeof navigator === 'undefined') return
   if (!('vibrate' in navigator)) return
   try {
