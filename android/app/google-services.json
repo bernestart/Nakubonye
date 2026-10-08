@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "343434658624",
+    "project_id": "nakubonye",
+    "storage_bucket": "nakubonye.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:343434658624:android:5ec939a804e6cf17e170a5",
+        "android_client_info": {
+          "package_name": "com.nakubonye.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDD6FJhy28CFmEEucLvpB-OlQSyHTPrmJ0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
