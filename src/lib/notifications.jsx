@@ -9,6 +9,25 @@ export function NotificationsProvider({ children }) {
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)
 
+  // In-app banner (shown when a push arrives while the app is in foreground)
+  const [banner, setBanner] = useState(null)
+
+  useEffect(() => {
+    function onPush(e) {
+      const n = e?.detail
+      if (!n) return
+      let data = n.data || {}
+      if (typeof data === "string") {
+        try { data = JSON.parse(data) } catch { data = {} }
+      }
+      setBanner({ title: n.title || "", body: n.body || "", data })
+    }
+    window.addEventListener("nk-push-received", onPush)
+    return () => window.removeEventListener("nk-push-received", onPush)
+  }, [])
+
+  const dismissBanner = useCallback(() => setBanner(null), [])
+
   const refresh = useCallback(async () => {
     if (!session?.user?.id) {
       setUnreadCount(0)
@@ -60,7 +79,7 @@ export function NotificationsProvider({ children }) {
   }, [session?.user?.id])
 
   return (
-    <NotifCtx.Provider value={{ unreadCount, loading, refresh }}>
+    <NotifCtx.Provider value={{ unreadCount, loading, refresh, banner, dismissBanner }}>
       {children}
     </NotifCtx.Provider>
   )

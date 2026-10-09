@@ -8,6 +8,7 @@ import { usePresence } from './lib/usePresence'
 import MaintenanceScreen from './components/MaintenanceScreen'
 import GlobalMatchCelebration from './components/GlobalMatchCelebration'
 import GlobalEventPopup from './components/GlobalEventPopup'
+import InAppNotificationBanner from './components/InAppNotificationBanner'
 import { WalletProvider } from './lib/wallet'
 import { VoiceCallProvider } from './lib/voiceCall'
 import { NotificationsProvider } from './lib/notifications'
@@ -225,6 +226,7 @@ export default function App() {
       <PresenceKeeper />
       <WalletProvider>
       <NotificationsProvider>
+        <InAppNotificationBanner />
       <GlobalMatchCelebration />
       <GlobalEventPopup />
       <VoiceCallProvider>

@@ -69,6 +69,9 @@ async function setupPush() {
 
     PushNotifications.addListener('pushNotificationReceived', (n) => {
       console.log('[Push] received:', n)
+      try {
+        window.dispatchEvent(new CustomEvent('nk-push-received', { detail: n }))
+      } catch (e) { console.warn('[Push] dispatch failed', e) }
     })
 
     PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
