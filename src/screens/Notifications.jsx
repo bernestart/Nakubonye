@@ -146,18 +146,28 @@ export default function Notifications() {
 
   async function openNotification(n) {
     tap("light")
-    // Mark as read
     if (!n.read_at) {
       await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", n.id)
       setItems((prev) => prev.map((x) => x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x))
     }
-    // Navigate
-    if (n.ref_type === "post" && n.ref_id) nav("/feed")
-    else if (n.ref_type === "reel" && n.ref_id) nav("/reels")
-    else if (n.ref_type === "match" && n.actor_id) nav("/messages/" + n.actor_id)
-    else if (n.ref_type === "profile" && n.actor_id) nav("/profile/" + n.actor_id)
-    else if (n.ref_type === "security") nav("/settings/security")
-    else if (n.actor_id) nav("/profile/" + n.actor_id)
+    const t = n.type || ""
+    const actorId = n.actor_id
+    if (t === "match") { nav(actorId ? "/messages/" + actorId : "/matches"); return }
+    if (t === "follow" || t === "like") { nav(actorId ? "/profile/" + actorId : "/notifications"); return }
+    if (t === "like_post" || t === "comment_post") {
+      if (n.ref_id) nav("/post/personal/" + n.ref_id)
+      else nav("/notifications")
+      return
+    }
+    if (t === "reel_like" || t === "reel_comment" || t === "reel_comment_reply") {
+      if (n.ref_id) nav("/reels?id=" + n.ref_id)
+      else nav("/reels")
+      return
+    }
+    if (t === "mention") { nav("/stories"); return }
+    if (t === "new_login") { nav("/settings/security"); return }
+    if (actorId) nav("/profile/" + actorId)
+    else nav("/notifications")
   }
 
   async function markGroupRead(group) {

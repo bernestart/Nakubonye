@@ -91,3 +91,14 @@ input, textarea { font-family: inherit; color: inherit; }
   animation: shimmer 1.4s ease-in-out infinite;
   border-radius: 6px;
 }
+
+/* Comment deep-link highlight — flashes briefly when a notification opens a specific comment */
+.nk-comment-highlight {
+  animation: nk-comment-pulse 2.4s ease-out;
+  border-radius: 12px;
+}
+@keyframes nk-comment-pulse {
+  0%   { background: rgba(168, 85, 247, 0.28); }
+  40%  { background: rgba(168, 85, 247, 0.18); }
+  100% { background: transparent; }
+}

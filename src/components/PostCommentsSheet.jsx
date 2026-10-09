@@ -7,7 +7,7 @@ import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 
-export default function PostCommentsSheet({ postId, source = "community", onClose, onCountChange }) {
+export default function PostCommentsSheet({ postId, source = "community", onClose, onCountChange, initialCommentId = null }) {
   const { session } = useAuth()
   const myId = session?.user?.id
   const table      = source === "personal" ? "user_post_comments" : "community_post_comments"
@@ -33,6 +33,20 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
   const onCountChangeRef = useRef(onCountChange)
 
   useEffect(() => { onCountChangeRef.current = onCountChange }, [onCountChange])
+
+  // Deep-link: scroll to + highlight the target comment
+  useEffect(() => {
+    if (!initialCommentId || loading) return
+    const t = setTimeout(() => {
+      const el = document.getElementById("comment-" + initialCommentId)
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" })
+        el.classList.add("nk-comment-highlight")
+        setTimeout(() => el.classList.remove("nk-comment-highlight"), 2400)
+      }
+    }, 350)
+    return () => clearTimeout(t)
+  }, [initialCommentId, loading, comments.length])
 
   useEffect(() => {
     if (!postId) return
@@ -300,7 +314,7 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
                 const name = prof?.display_name || prof?.username || "Someone"
                 const mine = root.user_id === myId
                 return (
-                  <div key={root.id}>
+                  <div key={root.id} id={"comment-" + root.id}>
                     {renderComment(root, prof, photoPath, name, mine, false)}
                     {replies.length > 0 && (
                       <div className="flex flex-col gap-3 mt-3 pl-11">
@@ -309,7 +323,7 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
                           const ph2 = photos.get(rep.user_id)
                           const n2 = p2?.display_name || p2?.username || "Someone"
                           const mine2 = rep.user_id === myId
-                          return <div key={rep.id}>{renderComment(rep, p2, ph2, n2, mine2, true)}</div>
+                          return <div key={rep.id} id={"comment-" + rep.id}>{renderComment(rep, p2, ph2, n2, mine2, true)}</div>
                         })}
                       </div>
                     )}

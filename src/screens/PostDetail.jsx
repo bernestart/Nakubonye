@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { ArrowLeft, Heart, MessageCircle, Share2, MoreVertical } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
@@ -14,6 +14,8 @@ import BrandGlow from "../components/BrandGlow"
 
 export default function PostDetail() {
   const { source, id } = useParams()
+  const [searchParams] = useSearchParams()
+  const initialCommentId = searchParams.get("comment") || null
   const nav = useNavigate()
   const { session } = useAuth()
   const myId = session?.user?.id
@@ -33,6 +35,12 @@ export default function PostDetail() {
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [actionsOpen, setActionsOpen] = useState(false)
   const [galleryIdx, setGalleryIdx] = useState(0)
+
+  // Deep-link: auto-open comment sheet when ?comment= is present and post loaded
+  useEffect(() => {
+    if (!post) return
+    if (initialCommentId) setCommentsOpen(true)
+  }, [post, initialCommentId])
 
   useEffect(() => {
     if (!id || !source) return
@@ -392,6 +400,7 @@ export default function PostDetail() {
         <PostCommentsSheet
           postId={post.id}
           source={post._source}
+          initialCommentId={initialCommentId}
           onClose={() => setCommentsOpen(false)}
           onCountChange={(n) => setCommentCount(n)}
         />

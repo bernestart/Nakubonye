@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, MessageCircle, Heart, UserPlus, Sparkles } from "lucide-react"
-import { useNotifications } from "../lib/notifications"
+import { useNotifications, routeFor } from "../lib/notifications"
 import { tap } from "../lib/haptic"
 
 const ICON_FOR = {
@@ -10,16 +10,6 @@ const ICON_FOR = {
   like:    Heart,
   match:   Sparkles,
   follow:  UserPlus,
-}
-
-function routeFor(notif) {
-  const data = notif?.data || {}
-  const t = data.type || "default"
-  if (t === "message" && data.conversation_id) return "/messages/" + data.conversation_id
-  if (t === "like"    && data.actor_id)        return "/profile/"  + data.actor_id
-  if (t === "match"   && data.actor_id)        return "/messages/" + data.actor_id
-  if (t === "follow"  && data.actor_id)        return "/profile/"  + data.actor_id
-  return "/notifications"
 }
 
 export default function InAppNotificationBanner() {

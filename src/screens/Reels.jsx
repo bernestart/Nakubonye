@@ -501,6 +501,20 @@ export default function Reels() {
 
   useEffect(() => { setReelProgress(0) }, [currentIdx])
 
+  // Deep-link: jump to reel from ?id= and open comments from ?comment=
+  useEffect(() => {
+    const urlId = searchParams.get("id")
+    const urlComment = searchParams.get("comment")
+    if (!urlId || reels.length === 0) return
+    const idx = reels.findIndex((r) => String(r.id) === String(urlId))
+    if (idx >= 0 && idx !== currentIdx) setCurrentIdx(idx)
+    if (urlComment) {
+      const t = setTimeout(() => setCommentsFor(Number(urlId)), 300)
+      return () => clearTimeout(t)
+    }
+    // eslint-disable-next-line
+  }, [reels.length, searchParams])
+
   // Re-apply muted to all videos when toggle changes
   useEffect(() => {
     videoRefs.current.forEach((v) => { if (v) v.muted = muted })
@@ -1230,6 +1244,7 @@ export default function Reels() {
       {commentsFor && (
         <ReelComments
           reelId={commentsFor}
+          initialCommentId={searchParams.get("comment") || null}
           onClose={() => setCommentsFor(null)}
           onCountChange={(n) => {
             setCommentCounts((prev) => {
