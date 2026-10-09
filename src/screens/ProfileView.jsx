@@ -65,6 +65,7 @@ export default function ProfileView() {
   const [canSeeCommunities, setCanSeeCommunities] = useState(true)
   const [isMatch, setIsMatch] = useState(false)
   const [myLike, setMyLike] = useState(false)
+  const [theyLikedMe, setTheyLikedMe] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('all')
@@ -401,12 +402,14 @@ export default function ProfileView() {
     if (!isMe) {
       const lo = myId < userId ? myId : userId
       const hi = myId < userId ? userId : myId
-      const [{ data: match }, { data: like }] = await Promise.all([
+      const [{ data: match }, { data: myLikeRow }, { data: theirLikeRow }] = await Promise.all([
         supabase.from('matches').select('id').eq('user_one_id', lo).eq('user_two_id', hi).maybeSingle(),
         supabase.from('likes').select('id').eq('user_id', myId).eq('liked_user_id', userId).maybeSingle(),
+        supabase.from('likes').select('id').eq('user_id', userId).eq('liked_user_id', myId).maybeSingle(),
       ])
       setIsMatch(!!match)
-      setMyLike(!!like)
+      setMyLike(!!myLikeRow)
+      setTheyLikedMe(!!theirLikeRow)
     }
 
     setLoading(false)
@@ -421,6 +424,26 @@ export default function ProfileView() {
     setBusy(false)
     if (err) { setError(err.message); return }
     setMyLike(true)
+  }
+
+  async function handleLikeBack() {
+    if (busy || myLike || isMe) return
+    setBusy(true); tap('medium')
+    const { data, error: err } = await supabase.rpc('like_user', { target_user_id: userId })
+    setBusy(false)
+    if (err) { setError(err.message); return }
+    if (data?.denied) { setError(data.reason || 'Request not allowed'); return }
+    setMyLike(true)
+    if (data?.matched) setIsMatch(true)
+  }
+
+  async function handleDecline() {
+    if (busy || isMe) return
+    setBusy(true); tap('light')
+    const { error: err } = await supabase.rpc('decline_like', { target_user_id: userId })
+    setBusy(false)
+    if (err) { setError(err.message); return }
+    setTheyLikedMe(false)
   }
 
   // Fetch connections when the Connections tab is active
@@ -516,9 +539,9 @@ export default function ProfileView() {
   const canViewContent = isMe || canView
 
   const tabs = [
-    { id: 'all',    label: 'All' },
-    { id: 'photos', label: 'Photos' },
-    { id: 'reels',  label: 'Reels' },
+    { id: 'all',         label: 'All' },
+    { id: 'photos',      label: 'Photos' },
+    { id: 'reels',       label: 'Reels' },
   ]
 
   return (
@@ -614,11 +637,11 @@ export default function ProfileView() {
         <div className="flex items-center justify-center gap-2 mt-3 text-[13.5px]">
           {canSeeFollowerCounts ? (
             <>
-              <button onClick={() => { tap('light'); nav(`/user/${userId}/followers`) }} className="text-cream font-bold active:opacity-70">
+              <button onClick={() => { tap('light'); nav(`/user/${userId}/connections?tab=followers`) }} className="text-cream font-bold active:opacity-70">
                 {followersCount} follower{followersCount === 1 ? "" : "s"}
               </button>
               <span className="text-muted">·</span>
-              <button onClick={() => { tap('light'); nav(`/user/${userId}/following`) }} className="text-cream font-bold active:opacity-70">
+              <button onClick={() => { tap('light'); nav(`/user/${userId}/connections?tab=following`) }} className="text-cream font-bold active:opacity-70">
                 {followingCount} following
               </button>
               <span className="text-muted">·</span>
@@ -660,6 +683,10 @@ export default function ProfileView() {
           </div>
         )}
 
+        {!isMe && theyLikedMe && !myLike && (
+          <p className="text-[12px] text-cream/60 mt-3 px-4">Sent you a match request</p>
+        )}
+
         {!isMe && (
           <div className="flex items-center gap-2 mt-4 px-4">
             <div className="flex-1">
@@ -671,9 +698,25 @@ export default function ProfileView() {
                 className="flex-1 h-9 rounded-full text-white font-bold text-[13px]"
                 style={{ background: 'linear-gradient(135deg, #EC4899 0%, #A855F7 100%)' }}
               >Message</button>
+            ) : theyLikedMe && !myLike ? (
+              <>
+                <button
+                  onClick={handleDecline}
+                  disabled={busy}
+                  className="h-9 px-3 rounded-full bg-white/[0.06] border border-white/10 text-cream font-bold text-[12.5px] shrink-0 disabled:opacity-50"
+                >Decline</button>
+                <button
+                  onClick={handleLikeBack}
+                  disabled={busy}
+                  className="flex-1 h-9 rounded-full text-white font-bold text-[13px] flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  style={{ background: 'linear-gradient(135deg, #EC4899 0%, #A855F7 100%)' }}
+                >
+                  <Heart size={14} strokeWidth={2.6} fill="currentColor" /> Confirm
+                </button>
+              </>
             ) : myLike ? (
               <button disabled className="flex-1 h-9 rounded-full bg-white/[0.06] border border-white/10 text-white/60 font-semibold text-[13px]">
-                Like sent ✓
+                Requested
               </button>
             ) : (
               <>
@@ -687,7 +730,7 @@ export default function ProfileView() {
                   className="flex-1 h-9 rounded-full text-white font-bold text-[13px] flex items-center justify-center gap-1.5 disabled:opacity-50"
                   style={{ background: 'linear-gradient(135deg, #EC4899 0%, #A855F7 100%)' }}
                 >
-                  <Heart size={14} strokeWidth={2.6} fill="currentColor" /> Like
+                  <Heart size={14} strokeWidth={2.6} fill="currentColor" /> Request Match
                 </button>
               </>
             )}

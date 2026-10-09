@@ -91,7 +91,7 @@ export default function ProfileFriendsStrip({ userId, isMe = false }) {
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-cream font-extrabold text-[17px]">Connections</h2>
         <button
-          onClick={() => { tap("light"); nav("/user/" + userId + "/following") }}
+          onClick={() => { tap("light"); nav("/user/" + userId + "/connections") }}
           className="text-blue-400 text-[14px] font-bold"
         >
           See all

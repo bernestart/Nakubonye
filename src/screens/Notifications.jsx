@@ -237,7 +237,7 @@ export default function Notifications() {
             </div>
             <p className="text-cream font-bold text-[15px] mb-1">No notifications yet</p>
             <p className="text-muted text-[13px] max-w-[260px] mx-auto leading-relaxed">
-              Likes, comments, matches, and follows will appear here.
+              Requests, comments, matches, and follows will appear here.
             </p>
           </div>
         ) : (

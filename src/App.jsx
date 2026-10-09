@@ -240,6 +240,7 @@ export default function App() {
         <Route path="/feed" element={<Guard><Feed /></Guard>} />
         <Route path="/post/:source/:id" element={<Guard><PostDetail /></Guard>} />
         <Route path="/reels" element={<Guard><Reels /></Guard>} />
+        <Route path="/user/:userId/connections" element={<Guard><FollowList /></Guard>} />
         <Route path="/user/:userId/followers" element={<Guard><FollowList /></Guard>} />
         <Route path="/user/:userId/following" element={<Guard><FollowList /></Guard>} />
         <Route path="/create" element={<Guard><Create /></Guard>} />
