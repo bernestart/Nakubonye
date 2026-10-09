@@ -7,11 +7,25 @@ import PollMessage from "../components/PollMessage"
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
-import { Capacitor } from '@capacitor/core'
+
 import { Camera as NativeCamera, CameraResultType, CameraSource } from '@capacitor/camera'
 import { publicPhotoUrl } from '../lib/photo'
 import { tap } from '../lib/haptic'
 import { useVoiceCall } from '../lib/voiceCall'
+
+import { Capacitor } from '@capacitor/core'
+import { PrivacyScreen } from '@capacitor-community/privacy-screen'
+
+// Serialized privacy-screen toggle — one native call at a time to avoid the
+// Android race that can leave FLAG_SECURE stuck after disable().
+let __privacyOp = Promise.resolve()
+function setPrivacyScreen(on) {
+  __privacyOp = __privacyOp
+    .then(() => (on ? PrivacyScreen.enable() : PrivacyScreen.disable()))
+    .catch(() => {})
+  return __privacyOp
+}
+
 import { isOnline } from '../lib/usePresence'
 import ReportModal from '../components/ReportModal'
 import BrandGlow from '../components/BrandGlow'
@@ -69,6 +83,16 @@ export default function Chat() {
   const [disappearingTimer, setDisappearingTimer] = useState(null)
   const [viewOnce, setViewOnce] = useState(false)
   const [viewOnceActive, setViewOnceActive] = useState(null)
+
+  // View-once only: enable FLAG_SECURE while the modal is open, disable on close.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
+    setPrivacyScreen(!!viewOnceActive)
+  }, [viewOnceActive])
+
+  // NOTE: native FLAG_SECURE toggling was removed — @capacitor-community/
+  // privacy-screen left FLAG_SECURE stuck ON across the app after view-once
+  // closed. View-once is now protected by the full-screen overlay only.
   const [timerSheetOpen, setTimerSheetOpen] = useState(false)
   const [other, setOther] = useState(null)
   const [messages, setMessages] = useState([])
@@ -268,9 +292,19 @@ export default function Chat() {
     setConversationId(convId)
     setOther((cur) => cur ? { ...cur, isDirect } : cur)
 
+    // Load disappearing timer from conversation so it persists across sessions
+    try {
+      const { data: convRow } = await supabase
+        .from("conversations")
+        .select("disappearing_timer_seconds")
+        .eq("id", convId)
+        .maybeSingle()
+      if (convRow) setDisappearingTimer(convRow.disappearing_timer_seconds || null)
+    } catch (e) { console.warn("load disappearing timer failed", e) }
+
     const { data: msgs, error: msgErr } = await supabase
       .from('messages')
-      .select('id, sender_id, content, created_at, edited_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata, expires_at')
+      .select('id, sender_id, content, created_at, edited_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata, expires_at, view_once, viewed_by')
       .eq('conversation_id', convId)
       .order('created_at', { ascending: true }).limit(200)
     if (msgErr) { setError(msgErr.message); setLoading(false); return }
@@ -598,12 +632,14 @@ export default function Chat() {
     const { data: pub } = supabase.storage.from('chat-media').getPublicUrl(path)
     const payload = { conversation_id: conversationId, sender_id: myId, content: '', media_url: pub?.publicUrl || null, media_type: 'audio/webm', media_name: `Voice · ${seconds}s` }
     if (replyingTo?.id) payload.reply_to_id = replyingTo.id
+    if (viewOnce) payload.view_once = true
     setReplyingTo(null)
+    setViewOnce(false)
 
     const { data: inserted, error: sendErr } = await supabase
       .from('messages')
       .insert(payload)
-      .select('id, sender_id, content, created_at, edited_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata')
+      .select('id, sender_id, content, created_at, edited_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata, view_once, viewed_by')
       .single()
 
     if (sendErr) {
@@ -643,7 +679,7 @@ export default function Chat() {
     const { data: inserted, error: err } = await supabase
       .from("messages")
       .insert(payload)
-      .select("id, sender_id, content, created_at, edited_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata")
+      .select("id, sender_id, content, created_at, edited_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata, view_once, viewed_by")
       .single()
     if (!err && inserted) {
       setMessages((cur) => cur.some((x) => x.id === inserted.id) ? cur : [...cur, inserted])
@@ -725,7 +761,7 @@ export default function Chat() {
     const { data: inserted, error: sendErr } = await supabase
       .from('messages')
       .insert(payload)
-      .select('id, sender_id, content, created_at, edited_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata')
+      .select('id, sender_id, content, created_at, edited_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata, view_once, viewed_by')
       .single()
 
     if (sendErr) {

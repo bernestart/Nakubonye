@@ -17,6 +17,12 @@ export default function DeleteAccountModal({ open, onClose, onDeleted }) {
     if (!ready || !session?.user?.id) return
     setBusy(true); setError('')
 
+    // Release FCM token BEFORE deleting the auth user (auth.uid() must be valid)
+    try {
+      const { detachDeviceToken } = await import('../lib/deviceToken.js')
+      await detachDeviceToken()
+    } catch (e) { console.warn('detach failed', e) }
+
     const { error: err } = await supabase.rpc('delete_my_account')
 
     if (err) {

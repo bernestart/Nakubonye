@@ -23,7 +23,6 @@ import ResetPassword from './screens/ResetPassword'
 import Onboarding from './screens/Onboarding'
 import OnboardingSuggestions from './screens/OnboardingSuggestions'
 import Discover from './screens/Discover'
-import Stories from './screens/Stories'
 import Filters from './screens/Filters'
 import Terms from './screens/Terms'
 import About from './screens/About'
@@ -145,7 +144,12 @@ function BannedScreen({ reason }) {
           +257 65 39 40 84
         </a>
         <button
-          onClick={async () => { const { supabase } = await import('./lib/supabase'); await supabase.auth.signOut() }}
+          onClick={async () => {
+            const { supabase } = await import('./lib/supabase')
+            const { detachDeviceToken } = await import('./lib/deviceToken.js')
+            await detachDeviceToken()
+            await supabase.auth.signOut()
+          }}
           className="block w-full mt-8 h-11 rounded-full bg-white/[0.06] border border-white/12 text-cream font-semibold text-[14px]"
         >
           Sign out
@@ -250,7 +254,6 @@ export default function App() {
         <Route path="/online" element={<Guard><Online /></Guard>} />
         <Route path="/roadmap" element={<Roadmap />} />
         <Route path="/discover" element={<Guard><Discover /></Guard>} />
-        <Route path="/stories" element={<Guard><Stories /></Guard>} />
         <Route path="/filters" element={<Guard><Filters /></Guard>} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/about" element={<About />} />

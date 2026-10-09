@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@capacitor-community/camera-preview": "^8.0.2",
+    "@capacitor-community/privacy-screen": "^8.0.0",
     "@capacitor/android": "^8.5.2",
     "@capacitor/camera": "^8.2.5",
     "@capacitor/core": "^8.5.2",

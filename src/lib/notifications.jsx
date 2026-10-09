@@ -165,7 +165,7 @@ export function routeFor(notif) {
     return parts.length ? "/reels?" + parts.join("&") : "/reels"
   }
   if (t === "mention" || t === "story_mention") {
-    return "/stories"
+    return "/feed"
   }
   if (t === "new_login" || t === "security") {
     return "/settings/security"

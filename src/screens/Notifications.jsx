@@ -164,7 +164,7 @@ export default function Notifications() {
       else nav("/reels")
       return
     }
-    if (t === "mention") { nav("/stories"); return }
+    if (t === "mention") { nav("/feed"); return }
     if (t === "new_login") { nav("/settings/security"); return }
     if (actorId) nav("/profile/" + actorId)
     else nav("/notifications")

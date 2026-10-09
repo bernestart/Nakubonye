@@ -3,6 +3,7 @@ import { createPortal } from "react-dom"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "../lib/auth"
 import { supabase } from "../lib/supabase"
+import { findOrCreateConversation } from "../lib/conversations"
 import { tap } from "../lib/haptic"
 import { publicPhotoUrl } from "../lib/photo"
 import { X, Send, Heart, MoreVertical, Eye, Volume2, VolumeX, Trash2, Star } from "lucide-react"
@@ -20,6 +21,9 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
   const [progress, setProgress] = useState(0)
   const [paused, setPaused] = useState(false)
   const [reply, setReply] = useState("")
+  const [toast, setToast] = useState(null)
+  const [heartBurst, setHeartBurst] = useState(null)
+  const [sending, setSending] = useState(false)
   const [reactionOpen, setReactionOpen] = useState(false)
   const [viewersOpen, setViewersOpen] = useState(false)
   const [viewers, setViewers] = useState([])
@@ -97,6 +101,10 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
   const touchStartY = useRef(0)
   const touchStartTimeRef = useRef(0)
   const closingRef = useRef(false)
+  const lastTapRef = useRef(0)
+  const singleTapTimerRef = useRef(null)
+  const toastTimerRef = useRef(null)
+  const burstTimerRef = useRef(null)
 
   const group = groups[groupIdx]
   const story = group?.stories?.[storyIdx]
@@ -227,6 +235,7 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
 
   // ==== Gesture handling ====
   function onTouchStart(e) {
+    if (e.target && e.target.closest && e.target.closest('[data-nk-tap-ignore]')) return
     touchStartY.current = e.touches[0].clientY
     touchStartTimeRef.current = Date.now()
     pressFiredRef.current = false
@@ -242,14 +251,45 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
     // no-op — drag-to-close removed
   }
 
-  function onTouchEnd(e, tapAction) {
+  function onTouchEnd(e) {
     clearTimeout(longPressTimer.current)
+    if (e.target && e.target.closest && e.target.closest('[data-nk-tap-ignore]')) {
+      pressFiredRef.current = false
+      return
+    }
     if (pressFiredRef.current) {
       resumeNow()
       pressFiredRef.current = false
       return
     }
-    if (tapAction) tapAction()
+    const now = Date.now()
+    const isDoubleTap = (now - lastTapRef.current) < 260
+    lastTapRef.current = now
+    if (isDoubleTap) {
+      lastTapRef.current = 0
+      clearTimeout(singleTapTimerRef.current)
+      if (!isMine && group?.user_id && story?.id) sendReaction("❤️")
+      return
+    }
+    const x = e.changedTouches?.[0]?.clientX ?? e.clientX ?? 0
+    const w = (typeof window !== 'undefined' ? window.innerWidth : 400)
+    clearTimeout(singleTapTimerRef.current)
+    singleTapTimerRef.current = setTimeout(() => {
+      if (x < w / 3) back()
+      else advance()
+    }, 260)
+  }
+
+  function showToast(text, userId) {
+    setToast({ text, userId })
+    clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToast(null), 2600)
+  }
+
+  function burstHeart() {
+    setHeartBurst(Date.now())
+    clearTimeout(burstTimerRef.current)
+    burstTimerRef.current = setTimeout(() => setHeartBurst(null), 900)
   }
 
   async function canReply() {
@@ -267,36 +307,69 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
 
   async function sendReply() {
     const body = reply.trim()
-    if (!body || !group?.user_id) return
+    if (!body || !group?.user_id || !story?.id || sending) return
     const ok = await canReply()
     if (!ok) { alert("This user isn't accepting story replies"); return }
-    nav("/messages/" + group.user_id, {
-      state: {
-        prefill: body,
-        storyReply: {
+
+    setSending(true)
+    const convId = await findOrCreateConversation(group.user_id)
+    if (!convId) { setSending(false); alert("Could not open chat"); return }
+
+    const { data: sess } = await supabase.auth.getSession()
+    const myId = sess?.session?.user?.id
+    if (!myId) { setSending(false); return }
+
+    const { error: sendErr } = await supabase.from("messages").insert({
+      conversation_id: convId,
+      sender_id: myId,
+      content: body,
+      metadata: {
+        story_reply: {
           story_id: story.id,
           media_url: story.media_url,
           media_type: story.media_type,
         },
       },
     })
+    setSending(false)
+    if (sendErr) { alert("Send failed: " + sendErr.message); return }
+
+    setReply("")
+    tap("medium")
+    showToast("Sent to " + (group.display_name?.split(" ")[0] || "them"), group.user_id)
   }
 
   async function sendReaction(emoji) {
     setReactionOpen(false)
-    if (!group?.user_id) return
+    if (!group?.user_id || !story?.id) return
     const ok = await canReply()
     if (!ok) { alert("This user isn't accepting story replies"); return }
-    nav("/messages/" + group.user_id, {
-      state: {
-        prefill: emoji,
-        storyReply: {
+
+    if (emoji === "❤️") burstHeart()
+
+    const convId = await findOrCreateConversation(group.user_id)
+    if (!convId) { alert("Could not open chat"); return }
+
+    const { data: sess } = await supabase.auth.getSession()
+    const myId = sess?.session?.user?.id
+    if (!myId) return
+
+    const { error: sendErr } = await supabase.from("messages").insert({
+      conversation_id: convId,
+      sender_id: myId,
+      content: emoji,
+      metadata: {
+        story_reply: {
           story_id: story.id,
           media_url: story.media_url,
           media_type: story.media_type,
         },
       },
     })
+    if (sendErr) { alert("Send failed: " + sendErr.message); return }
+
+    tap("medium")
+    showToast("Sent to " + (group.display_name?.split(" ")[0] || "them"), group.user_id)
   }
 
   async function deleteStory() {
@@ -362,7 +435,7 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
       className="fixed inset-0 z-[220] bg-black select-none overflow-hidden"
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
-      onTouchEnd={(e) => onTouchEnd(e, null)}
+      onTouchEnd={onTouchEnd}
     >
       {/* Media */}
       <div className="absolute inset-0 grid place-items-center bg-black">
@@ -404,6 +477,7 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
 
       {/* Header — auto-hides when paused (WhatsApp behavior) */}
       <div
+        data-nk-tap-ignore
         className="absolute top-6 left-3 right-3 flex items-center gap-3 z-20"
         style={{
           opacity: paused ? 0 : 1,
@@ -454,7 +528,7 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
       )}
 
       {/* Bottom — reply bar (own story shows viewers button instead) */}
-      <div className="absolute bottom-4 left-3 right-3 z-30 flex items-center gap-2"
+      <div data-nk-tap-ignore className="absolute bottom-4 left-3 right-3 z-30 flex items-center gap-2"
            style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
         {isMine ? (
           <button
@@ -466,6 +540,13 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
           </button>
         ) : (
           <>
+            <button
+              onClick={() => setReactionOpen((o) => !o)}
+              className="w-10 h-10 rounded-full grid place-items-center shrink-0 bg-black/35 backdrop-blur-sm border border-white/15"
+              aria-label="Reactions"
+            >
+              <span className="text-[18px]">😊</span>
+            </button>
             <input
               value={reply}
               onChange={(e) => setReply(e.target.value.slice(0, 200))}
@@ -478,29 +559,21 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
             {reply.trim() ? (
               <button
                 onClick={sendReply}
-                className="w-11 h-11 rounded-full grid place-items-center shrink-0"
+                disabled={sending}
+                className="w-11 h-11 rounded-full grid place-items-center shrink-0 disabled:opacity-60"
                 style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
                 aria-label="Send reply"
               >
                 <Send size={18} strokeWidth={2.6} className="text-white" />
               </button>
             ) : (
-              <>
-                <button
-                  onClick={() => setReactionOpen((o) => !o)}
-                  className="w-10 h-10 rounded-full grid place-items-center shrink-0 bg-black/35 backdrop-blur-sm border border-white/15"
-                  aria-label="Reactions"
-                >
-                  <span className="text-[18px]">😊</span>
-                </button>
-                <button
-                  onClick={() => sendReaction("❤️")}
-                  className="w-10 h-10 rounded-full grid place-items-center shrink-0 bg-black/35 backdrop-blur-sm border border-white/15"
-                  aria-label="Like story"
-                >
-                  <Heart size={19} fill="#EC4899" color="#EC4899" />
-                </button>
-              </>
+              <button
+                onClick={() => sendReaction("❤️")}
+                className="w-10 h-10 rounded-full grid place-items-center shrink-0 bg-black/35 backdrop-blur-sm border border-white/15"
+                aria-label="Like story"
+              >
+                <Heart size={19} fill="#EC4899" color="#EC4899" />
+              </button>
             )}
           </>
         )}
@@ -508,7 +581,8 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
 
       {/* Reaction picker */}
       {reactionOpen && !isMine && (
-        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30 flex gap-0.5 p-1.5 rounded-full bg-black/70 backdrop-blur-md border border-white/12 shadow-2xl"
+        <div data-nk-tap-ignore
+             className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30 flex gap-0.5 p-1.5 rounded-full bg-black/70 backdrop-blur-md border border-white/12 shadow-2xl"
              onClick={(e) => e.stopPropagation()}>
           {REACTIONS.map((e) => (
             <button
@@ -522,25 +596,7 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
         </div>
       )}
 
-      {/* Tap zones (behind the reply bar) */}
-      <button
-        onClick={() => {}}
-        onMouseDown={onTouchStart}
-        onMouseUp={(e) => onTouchEnd(e, back)}
-        onTouchStart={onTouchStart}
-        onTouchEnd={(e) => onTouchEnd(e, back)}
-        aria-label="Previous"
-        className="absolute left-0 top-0 bottom-0 w-1/3 z-10"
-      />
-      <button
-        onClick={() => {}}
-        onMouseDown={onTouchStart}
-        onMouseUp={(e) => onTouchEnd(e, advance)}
-        onTouchStart={onTouchStart}
-        onTouchEnd={(e) => onTouchEnd(e, advance)}
-        aria-label="Next"
-        className="absolute right-0 top-0 bottom-0 w-2/3 z-10"
-      />
+      {/* Tap zones removed — outer wrapper handles single-tap & double-tap */}
 
 
       {/* Viewers sheet (own story) */}
@@ -697,6 +753,33 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
           </div>
         </div>
       )}
+
+    {/* Heart burst animation */}
+    {heartBurst && (
+      <div className="absolute inset-0 grid place-items-center z-40 pointer-events-none">
+        <Heart size={140} fill="#EC4899" color="#EC4899"
+          style={{ animation: "nk-heart-burst 900ms cubic-bezier(0.22, 1, 0.36, 1) forwards" }} />
+      </div>
+    )}
+
+    {/* Sent confirmation toast */}
+    {toast && (
+      <div
+        className="absolute left-1/2 z-40 flex items-center gap-2 px-4 h-11 rounded-full bg-black/80 backdrop-blur-md border border-white/15 text-white text-[13px] font-semibold shadow-2xl"
+        style={{
+          bottom: "calc(env(safe-area-inset-bottom) + 76px)",
+          animation: "nk-toast-in 220ms ease-out forwards",
+        }}
+      >
+        <span>{toast.text} 💜</span>
+        <button
+          onClick={() => { onClose?.(); nav("/messages/" + toast.userId) }}
+          className="text-purple-300 font-bold ml-1"
+        >
+          View
+        </button>
+      </div>
+    )}
 
     </div>,
     document.body

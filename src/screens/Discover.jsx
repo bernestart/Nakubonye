@@ -305,7 +305,7 @@ export default function Discover() {
               card={current}
               onPass={handlePass}
               onLike={handleLike}
-              onWatchStory={() => { tap('light'); nav('/stories') }}
+              onWatchStory={() => { tap('light'); nav('/feed') }}
               disabled={busy}
             />
           ) : (

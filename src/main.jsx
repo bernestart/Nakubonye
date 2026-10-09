@@ -12,6 +12,8 @@ import { LocalNotifications } from '@capacitor/local-notifications'
 import { supabase } from './lib/supabase'
 import { shareContent } from './lib/share.js'
 import { syncMissedNotifications, markPushReceived, markNotifSeen } from './lib/notifSync.js'
+import { cacheFcmToken, bindDeviceToken } from './lib/deviceToken.js'
+import { PrivacyScreen } from '@capacitor-community/privacy-screen'
 
 // ---------- Push tap buffer (survives async setup) ----------
 // Android cold-starts the app on tap. setupPush() awaits auth before
@@ -92,6 +94,7 @@ async function setupPush() {
 
     PushNotifications.addListener('registration', async (token) => {
       console.log('[Push] FCM token received:', token.value.slice(0, 20) + '…')
+      cacheFcmToken(token.value)
       const { data: { user: freshUser } } = await supabase.auth.getUser()
       if (!freshUser) { console.log('[Push] no user — skipping token save'); return }
       const { error } = await supabase
@@ -144,6 +147,9 @@ async function setupPush() {
 
   // Trigger the token registration
   await PushNotifications.register()
+  // Cached-token rebind: on multi-user devices FCM may not re-fire the
+  // 'registration' event when a token is already cached. Bind explicitly.
+  await bindDeviceToken()
 }
 
 // Bootstrap push: once now (if already logged in), and on every sign-in
@@ -165,15 +171,17 @@ if (Capacitor.isNativePlatform()) {
       setTimeout(() => { syncMissedNotifications().catch(() => {}) }, 2000)
     }
     if (event === 'SIGNED_OUT') {
-      // Release this device's token so the logged-out user stops receiving
-      supabase.rpc('deactivate_my_device_token')
-        .then(({ error }) => {
-          if (error) console.warn('[Push] deactivate RPC failed:', error)
-          else console.log('[Push] token released on sign-out')
-        })
-        .catch(e => console.warn('[Push] deactivate failed', e))
+      // NOTE: device token detach happens BEFORE signOut() in logout
+      // handlers. Calling it here is too late — auth.uid() is already null
+      // and the RPC silently no-ops.
     }
   })
+}
+
+// Cold-start safety: force FLAG_SECURE off so a stuck enable from a prior
+// session can't block screenshots everywhere in the app.
+if (Capacitor.isNativePlatform()) {
+  PrivacyScreen.disable().catch(() => {})
 }
 
 // ---------- Native system bars ----------

@@ -102,3 +102,14 @@ input, textarea { font-family: inherit; color: inherit; }
   40%  { background: rgba(168, 85, 247, 0.18); }
   100% { background: transparent; }
 }
+
+@keyframes nk-heart-burst {
+  0%   { opacity: 0; transform: scale(0.4) translateY(0); }
+  20%  { opacity: 1; transform: scale(1.15) translateY(-14px); }
+  60%  { opacity: 1; transform: scale(1.25) translateY(-42px); }
+  100% { opacity: 0; transform: scale(1.4) translateY(-90px); }
+}
+@keyframes nk-toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}

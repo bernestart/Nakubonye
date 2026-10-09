@@ -236,6 +236,8 @@ export default function ProfileSettings() {
           <button
             onClick={async () => {
               tap('light')
+              const { detachDeviceToken } = await import('../lib/deviceToken.js')
+              await detachDeviceToken()
               await supabase.auth.signOut()
               nav('/', { replace: true })
             }}

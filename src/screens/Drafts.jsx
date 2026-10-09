@@ -46,7 +46,6 @@ export default function Drafts() {
     const q = new URLSearchParams({ draft: d.id }).toString()
     if (d.kind === "post")  nav("/create?"  + q)
     if (d.kind === "reel")  nav("/reels?compose=" + d.id)
-    if (d.kind === "story") nav("/stories?compose=" + d.id)
   }
 
   return (
