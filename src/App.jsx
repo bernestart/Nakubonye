@@ -101,6 +101,7 @@ import CommunityView from './screens/CommunityView'
 import EditCommunity from './screens/EditCommunity'
 import JoinCommunity from './screens/JoinCommunity'
 import Notifications from './screens/Notifications'
+import CreatorMode from './screens/CreatorMode'
 import DeleteAccountModal from './components/DeleteAccountModal'
 import CallOverlay from './components/CallOverlay'
 
@@ -311,6 +312,7 @@ export default function App() {
         <Route path="/settings/your-data" element={<Guard><YourData /></Guard>} />
         <Route path="/settings/blocking-muted" element={<Guard><BlockingMuted /></Guard>} />
         <Route path="/settings/content-audience" element={<Guard><ContentAudience /></Guard>} />
+        <Route path="/settings/creator" element={<Guard><CreatorMode /></Guard>} />
         <Route path="/settings/pending-tags" element={<Guard><PendingTags /></Guard>} />
         <Route path="/safety"   element={<Guard><SafetyCenter /></Guard>} />
         <Route path="/blocked"  element={<Guard><BlockedList /></Guard>} />

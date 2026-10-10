@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { tap } from '../lib/haptic'
-import { ArrowLeft, ChevronRight, ChevronDown, LogOut, Bell, Gift, Crown, Wallet as WalletIcon, UserX, Shield, ShieldCheck, Info, FileText, Eye, Zap, Key, Users, User, Plus, Bookmark, LayoutGrid, Play, Heart, Store, Briefcase, Calendar, Clock, Camera, Star, Layers, WifiOff, Coins, UserCircle, MessageCircle, Globe, Activity, Ban, Download } from 'lucide-react'
+import { ArrowLeft, ChevronRight, ChevronDown, LogOut, Bell, Gift, Crown, Wallet as WalletIcon, UserX, Shield, ShieldCheck, Info, FileText, Eye, Zap, Key, Users, User, Plus, Bookmark, LayoutGrid, Play, Heart, Store, Briefcase, Calendar, Clock, Camera, Star, Layers, WifiOff, Coins, UserCircle, MessageCircle, Globe, Activity, Ban, Download, Sparkles } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
@@ -103,6 +103,16 @@ export default function ProfileSettings() {
 
         {/* Standalone rows above grid — Facebook pattern */}
         <div className="flex flex-col gap-1.5 mb-4">
+          <button
+            onClick={() => { tap('light'); nav('/settings/creator') }}
+            className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
+          >
+            <span className="shrink-0 text-purple-300">
+              <Sparkles size={18} />
+            </span>
+            <span className="flex-1 text-cream text-[15px] font-medium">Creator mode</span>
+            <ChevronRight size={18} className="text-muted shrink-0" />
+          </button>
           <button
             onClick={() => { tap('light'); setComposerOpen(true) }}
             className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
