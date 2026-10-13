@@ -38,6 +38,7 @@ export default function Memories() {
         .select("id, user_id, content, image_path, image_paths, created_at")
         .eq("user_id", myId)
         .lt("created_at", new Date(thisYear, 0, 1).toISOString())
+        .lte("publish_at", new Date().toISOString())
         .limit(300),
       supabase.from("community_posts")
         .select("id, author_id, community_id, content, image_path, image_paths, created_at")

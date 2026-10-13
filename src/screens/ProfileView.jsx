@@ -175,7 +175,7 @@ export default function ProfileView() {
       supabase.from('reels').select('id, user_id, video_url, thumbnail_url, caption, created_at, allow_comments, clips, trim_start, trim_end, mirrored, filter_id, text_overlays, sticker_overlays, view_count, location')
         .eq('user_id', userId).eq('is_active', true).order('created_at', { ascending: false }).limit(30),
       supabase.from('user_posts').select('id, content, image_path, created_at, audience, user_id')
-        .eq('user_id', userId).eq('is_active', true).order('created_at', { ascending: false }).limit(60),
+        .eq('user_id', userId).eq('is_active', true).lte('publish_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(60),
       supabase.from('community_posts').select('id, content, image_path, created_at, pinned_until, community_id, author_id')
         .eq('author_id', userId).order('created_at', { ascending: false }).limit(60),
       supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', userId),

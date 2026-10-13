@@ -214,9 +214,10 @@ export default function Feed() {
 
     const { data: personalRows } = await supabase
       .from("user_posts")
-      .select("id, user_id, content, image_path, image_paths, audience, created_at")
+      .select("id, user_id, content, image_path, image_paths, audience, created_at, location_text, feeling_text, publish_at")
       .in("user_id", allowedUserIds)
       .eq("is_active", true)
+      .lte("publish_at", new Date().toISOString())
       .order("created_at", { ascending: false })
       .limit(20)
     const personalPosts = (personalRows || [])
@@ -657,10 +658,11 @@ export default function Feed() {
 
     const { data: personalRows } = await supabase
       .from("user_posts")
-      .select("id, user_id, content, image_path, image_paths, audience, created_at")
+      .select("id, user_id, content, image_path, image_paths, audience, created_at, location_text, feeling_text, publish_at")
       .in("user_id", allowedUserIds)
       .eq("is_active", true)
       .lt("created_at", cursor)
+      .lte("publish_at", new Date().toISOString())
       .order("created_at", { ascending: false })
       .limit(20)
     const personalPosts = (personalRows || [])
@@ -1084,12 +1086,16 @@ export default function Feed() {
 
   useEffect(() => {
     if (!myId) return
+    const debounced = () => {
+      if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current)
+      realtimeDebounceRef.current = setTimeout(() => load(), 800)
+    }
     const ch = supabase
       .channel("feed-realtime-" + myId)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "community_posts" }, () => {
-        if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current)
-        realtimeDebounceRef.current = setTimeout(() => load(), 800)
-      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "community_posts" }, debounced)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_posts" }, debounced)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "user_posts" }, debounced)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "reels" }, debounced)
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [myId, load])
@@ -1596,6 +1602,12 @@ export default function Feed() {
                     </p>
                     <p className="text-subtle text-[11px]">
                       {new Date(p.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      {(p.location_text || p.feeling_text) && (
+                        <span className="text-muted text-[11px] ml-1.5">
+                          {p.feeling_text && <>· feeling {p.feeling_text}</>}
+                          {p.location_text && <> · 📍 {p.location_text}</>}
+                        </span>
+                      )}
                     </p>
                   </div>
                   {p.author_id !== myId && (

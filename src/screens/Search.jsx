@@ -107,7 +107,7 @@ export default function Search() {
       upRes, cpRes, rRes, cRes, lRes, sRes,
     ] = await Promise.all([
       postPersonalIds.length > 0
-        ? supabase.from("user_posts").select("id, user_id, content, image_path, created_at").in("id", postPersonalIds)
+        ? supabase.from("user_posts").select("id, user_id, content, image_path, created_at").in("id", postPersonalIds).lte("publish_at", new Date().toISOString())
         : Promise.resolve({ data: [] }),
       postCommunityIds.length > 0
         ? supabase.from("community_posts").select("id, author_id, community_id, content, image_path, created_at").in("id", postCommunityIds)
@@ -203,7 +203,7 @@ export default function Search() {
     try {
       const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
       const [rp, rcp] = await Promise.all([
-        supabase.from('user_posts').select('content').gt('created_at', since).limit(200),
+        supabase.from('user_posts').select('content').gt('created_at', since).lte('publish_at', new Date().toISOString()).limit(200),
         supabase.from('community_posts').select('content').gt('created_at', since).limit(200),
       ])
       const stop = new Set(['the','a','an','and','or','to','of','in','is','it','this','that','for','on','with','i','you','my','me','we','be','are','was','has','have','do','does','so','at','as','but','not','from','by','can','no','yes','all','if','just','like','get','got','out','up','about','what','when','how'])

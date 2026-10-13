@@ -1,17 +1,19 @@
 import { useNavigate } from 'react-router-dom'
 import { tap } from '../lib/haptic'
-import { ArrowLeft, ChevronRight, ChevronDown, LogOut, Bell, Gift, Crown, Wallet as WalletIcon, UserX, Shield, ShieldCheck, Info, FileText, Eye, Zap, Key, Users, User, Plus, Bookmark, LayoutGrid, Play, Heart, Store, Briefcase, Calendar, Clock, Camera, Star, Layers, WifiOff, Coins, UserCircle, MessageCircle, Globe, Activity, Ban, Download, Sparkles } from 'lucide-react'
+import { ArrowLeft, ChevronRight, ChevronDown, LogOut, Bell, Gift, Crown, Wallet as WalletIcon, UserX, Shield, ShieldCheck, Info, FileText, Eye, Zap, Key, Users, User, Plus, Bookmark, LayoutGrid, Play, Heart, Store, Briefcase, Calendar, Clock, Camera, Star, Layers, WifiOff, Coins, UserCircle, MessageCircle, Globe, Activity, Ban, Download, Sparkles, Share2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import StoryComposer from '../components/StoryComposer'
 import BrandGlow from '../components/BrandGlow'
+import ShareProfileSheet from '../components/ShareProfileSheet'
 import BottomNav from '../components/BottomNav'
 
 export default function ProfileSettings() {
   const nav = useNavigate()
   const { profile, session } = useAuth()
   const [composerOpen, setComposerOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const [hasStory, setHasStory] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [supportOpen, setSupportOpen] = useState(false)
@@ -41,6 +43,13 @@ export default function ProfileSettings() {
       background: '#0B0B14', overflow: 'hidden',
     }}>
       <BrandGlow />
+
+      <ShareProfileSheet
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        username={profile?.username}
+        displayName={profile?.display_name}
+      />
 
       {composerOpen && (
         <StoryComposer
@@ -133,6 +142,17 @@ export default function ProfileSettings() {
             <span className="flex-1 text-cream text-[15px] font-medium">Invite friends</span>
             <ChevronRight size={18} className="text-muted shrink-0" />
           </button>
+          <button
+            onClick={() => { tap('light'); setShareOpen(true) }}
+            className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
+          >
+            <span className="shrink-0 text-purple-300">
+              <Share2 size={18} />
+            </span>
+            <span className="flex-1 text-cream text-[15px] font-medium">Share profile</span>
+            <ChevronRight size={18} className="text-muted shrink-0" />
+          </button>
+
           <button
             onClick={() => { tap('light'); nav('/saved') }}
             className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"

@@ -53,6 +53,7 @@ export default function PostDetail() {
           const { data } = await supabase
             .from("user_posts")
             .select("id, user_id, content, image_path, image_paths, audience, created_at")
+            .lte("publish_at", new Date().toISOString())
             .eq("id", id).maybeSingle()
           row = data ? { ...data, _source: "personal", author_id: data.user_id } : null
         } else if (source === "community") {

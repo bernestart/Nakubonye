@@ -45,6 +45,7 @@ export default function Saved() {
         const { data } = await supabase.from("user_posts")
           .select("id, user_id, content, image_path, created_at")
           .in("id", personalIds)
+          .lte("publish_at", new Date().toISOString())
         postRows.push(...(data || []).map((r) => ({ ...r, _source: "personal", author_id: r.user_id })))
       }
       if (communityIds.length > 0) {

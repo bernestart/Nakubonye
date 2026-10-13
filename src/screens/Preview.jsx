@@ -65,7 +65,7 @@ export default function Preview() {
         .eq('user_id', myId).eq('is_active', true).order('created_at', { ascending: false }).limit(30),
       supabase.from('reel_saves').select('reel_id').eq('user_id', myId),
       supabase.from('user_posts').select('id, content, image_path, created_at')
-        .eq('user_id', myId).eq('is_active', true).order('created_at', { ascending: false }).limit(30),
+        .eq('user_id', myId).eq('is_active', true).lte('publish_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(30),
       supabase.from('community_posts').select('id, content, image_path, community_id, created_at')
         .eq('author_id', myId).order('created_at', { ascending: false }).limit(30),
       supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', myId),
