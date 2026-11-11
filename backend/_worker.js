@@ -11,7 +11,6 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // Helper function to query Neon securely
     async function queryDatabase(sqlQuery, params = []) {
       const dbUrl = new URL(env.DATABASE_URL);
       const endpoint = `https://${dbUrl.hostname}/sql`;
@@ -29,36 +28,51 @@ export default {
     }
 
     try {
-      // 🚦 ROUTER: Directs traffic based on the URL path
+      // --- MICROSERVICE: POSTS (FEED) ---
       
-      // 1. Route: /api/profiles (Fetch users)
-      if (path === "/api/profiles") {
-        const data = await queryDatabase("SELECT id, username, display_name, bio, avatar_url FROM profiles LIMIT 10;");
+      // 1. CREATE A POST (POST request)
+      if (path === "/api/posts" && request.method === "POST") {
+        const body = await request.json();
+        
+        // Insert into the database. Notice we use $1, $2 to prevent SQL injection!
+        const insertQuery = `
+          INSERT INTO user_posts (user_id, content, audience) 
+          VALUES ($1, $2, 'public') 
+          RETURNING id, content, created_at;
+        `;
+        
+        // Using a dummy UUID for testing, later this will be the logged-in user's ID
+        const dummyUserId = "00000000-0000-0000-0000-000000000000"; 
+        
+        const data = await queryDatabase(insertQuery, [dummyUserId, body.content]);
+        
+        return new Response(JSON.stringify({ 
+          success: true, 
+          message: "Post created successfully", 
+          data: data.rows[0] 
+        }), { headers: { ...cors, "Content-Type": "application/json" } });
+      }
+
+      // 2. GET THE FEED (GET request)
+      if (path === "/api/posts" && request.method === "GET") {
+        const data = await queryDatabase(`
+          SELECT id, content, created_at 
+          FROM user_posts 
+          WHERE is_active = true 
+          ORDER BY created_at DESC LIMIT 50;
+        `);
         return new Response(JSON.stringify({ success: true, data: data.rows }), {
           headers: { ...cors, "Content-Type": "application/json" }
         });
       }
 
-      // 2. Route: /api/posts (Fetch feed)
-      if (path === "/api/posts") {
-        const data = await queryDatabase("SELECT id, content, image_path, created_at FROM user_posts ORDER BY created_at DESC LIMIT 20;");
-        return new Response(JSON.stringify({ success: true, data: data.rows }), {
-          headers: { ...cors, "Content-Type": "application/json" }
-        });
-      }
-
-      // 3. Default Route: Health Check
-      return new Response(JSON.stringify({ 
-        success: true, 
-        message: "Nakubonye API Gateway is Live. Try /api/profiles or /api/posts" 
-      }), {
-        headers: { ...cors, "Content-Type": "application/json" }
+      return new Response(JSON.stringify({ success: false, error: "Route not found" }), {
+        status: 404, headers: cors
       });
 
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), {
-        status: 500,
-        headers: { ...cors, "Content-Type": "application/json" }
+        status: 500, headers: { ...cors, "Content-Type": "application/json" }
       });
     }
   }
