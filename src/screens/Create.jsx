@@ -27,7 +27,7 @@ export default function Create() {
       margin: "0 auto", maxWidth: 480,
       display: "flex", flexDirection: "column",
       background: "#0B0B14", overflow: "hidden",
-      paddingTop: "env(safe-area-inset-top)",
+      paddingTop: "var(--safe-top, 32px)",
     }}>
       <BrandGlow />
       <header className="shrink-0 h-12 px-3 flex items-center gap-2 border-b border-white/8">

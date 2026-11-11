@@ -1,12 +1,19 @@
+import { useGesture } from "@use-gesture/react"
 import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "../lib/auth"
 import { supabase } from "../lib/supabase"
+import { Camera as NativeCamera, CameraResultType, CameraSource } from "@capacitor/camera"
+import { Capacitor } from "@capacitor/core"
 import { findOrCreateConversation } from "../lib/conversations"
 import { tap } from "../lib/haptic"
 import { publicPhotoUrl } from "../lib/photo"
-import { X, Send, Heart, MoreVertical, Eye, Volume2, VolumeX, Trash2, Star } from "lucide-react"
+import { X, Send, Heart, MoreVertical, Eye, Volume2, VolumeX, Trash2, Star, Camera } from "lucide-react"
+import StoryMusicPlayer from "./stories/StoryMusicPlayer"
+import StoryLinkSticker from "./stories/StoryLinkSticker"
+import StoryPollSticker from "./stories/StoryPollSticker"
+import StoryQuestionSticker from "./stories/StoryQuestionSticker"
 
 const REACTIONS = ["❤️", "😂", "😍", "👍", "🔥", "😮", "😢", "🙏"]
 const IMAGE_DURATION = 5000
@@ -29,63 +36,6 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
   const [viewers, setViewers] = useState([])
   const [viewersLoading, setViewersLoading] = useState(false)
   const [muted, setMuted] = useState(false)
-  async function loadHighlights() {
-    if (!myId) return
-    try {
-      const { data } = await supabase
-        .from("story_highlights")
-        .select("id, title, cover_story_id, created_at")
-        .eq("user_id", myId)
-        .order("created_at", { ascending: false })
-      setMyHighlights(data || [])
-    } catch (e) { console.warn("load highlights failed", e) }
-  }
-
-  async function addToHighlight(highlightId) {
-    if (!story?.id || !highlightId) return
-    try {
-      // Prevent duplicate
-      const { data: exists } = await supabase
-        .from("story_highlight_items")
-        .select("story_id")
-        .eq("highlight_id", highlightId)
-        .eq("story_id", story.id)
-        .maybeSingle()
-      if (!exists) {
-        const { error } = await supabase.from("story_highlight_items").insert({
-          highlight_id: highlightId,
-          story_id: story.id,
-          display_order: 0,
-        })
-        if (error) throw error
-      }
-      setHighlightPickerOpen(false)
-      setMenuOpen(false)
-      alert("Added to highlight")
-    } catch (e) {
-      console.warn("add to highlight failed", e)
-      alert("Failed: " + (e.message || e))
-    }
-  }
-
-  async function createHighlightAndAdd() {
-    const title = newHighlightTitle.trim()
-    if (!title || !myId) return
-    try {
-      const { data: h, error } = await supabase
-        .from("story_highlights")
-        .insert({ user_id: myId, title, cover_story_id: story?.id || null })
-        .select("id")
-        .single()
-      if (error) throw error
-      if (h?.id) await addToHighlight(h.id)
-      setNewHighlightTitle("")
-    } catch (e) {
-      console.warn("create highlight failed", e)
-      alert("Failed: " + (e.message || e))
-    }
-  }
-
   const [menuOpen, setMenuOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [highlightPickerOpen, setHighlightPickerOpen] = useState(false)
@@ -99,6 +49,7 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
   const longPressTimer = useRef(null)
   const pressFiredRef = useRef(false)
   const touchStartY = useRef(0)
+  const touchStartX = useRef(null)
   const touchStartTimeRef = useRef(0)
   const closingRef = useRef(false)
   const lastTapRef = useRef(0)
@@ -111,30 +62,55 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
   const isMine = group?.user_id === myId
   const avatar = group?.avatar_path ? publicPhotoUrl(group.avatar_path) : null
 
-  // ==== Load viewers on own story ====
+  async function loadHighlights() {
+    if (!myId) return
+    try {
+      const { data } = await supabase.from("story_highlights").select("id, title, cover_story_id, created_at").eq("user_id", myId).order("created_at", { ascending: false })
+      setMyHighlights(data || [])
+    } catch (e) { console.warn("load highlights failed", e) }
+  }
+
+  async function addToHighlight(highlightId) {
+    if (!story?.id || !highlightId) return
+    try {
+      const { data: exists } = await supabase.from("story_highlight_items").select("story_id").eq("highlight_id", highlightId).eq("story_id", story.id).maybeSingle()
+      if (!exists) {
+        const { error } = await supabase.from("story_highlight_items").insert({ highlight_id: highlightId, story_id: story.id, display_order: 0 })
+        if (error) throw error
+      }
+      setHighlightPickerOpen(false)
+      setMenuOpen(false)
+      alert("Added to highlight")
+    } catch (e) { console.warn("add to highlight failed", e); alert("Failed: " + (e.message || e)) }
+  }
+
+  async function createHighlightAndAdd() {
+    const title = newHighlightTitle.trim()
+    if (!title || !myId) return
+    try {
+      const { data: h, error } = await supabase.from("story_highlights").insert({ user_id: myId, title, cover_story_id: story?.id || null }).select("id").single()
+      if (error) throw error
+      if (h?.id) await addToHighlight(h.id)
+      setNewHighlightTitle("")
+    } catch (e) { console.warn("create highlight failed", e); alert("Failed: " + (e.message || e)) }
+  }
+
   useEffect(() => {
     if (!isMine || !story) return
     let cancelled = false
     setViewersLoading(true)
     ;(async () => {
-      const { data: rows } = await supabase
-        .from("story_views")
-        .select("user_id, viewed_at")
-        .eq("story_id", story.id)
-        .order("viewed_at", { ascending: false })
-        .limit(100)
+      const { data: rows } = await supabase.from("story_views").select("user_id, viewed_at").eq("story_id", story.id).order("viewed_at", { ascending: false }).limit(100)
       if (cancelled || !rows) { setViewersLoading(false); return }
       const ids = [...new Set(rows.map((r) => r.user_id))]
       if (ids.length === 0) { setViewers([]); setViewersLoading(false); return }
       const { data: profs } = await supabase.from("profiles").select("id, display_name, username").in("id", ids)
-      const { data: ph } = await supabase.from("profile_photos").select("user_id, storage_path, is_primary, display_order").in("user_id", ids)
-        .order("is_primary", { ascending: false }).order("display_order", { ascending: true })
+      const { data: ph } = await supabase.from("profile_photos").select("user_id, storage_path, is_primary, display_order").in("user_id", ids).order("is_primary", { ascending: false }).order("display_order", { ascending: true })
       const pMap = new Map((profs || []).map((p) => [p.id, p]))
       const phMap = new Map()
       ;(ph || []).forEach((p) => { if (!phMap.has(p.user_id)) phMap.set(p.user_id, p.storage_path) })
       setViewers(rows.map((r) => ({
-        user_id: r.user_id,
-        viewed_at: r.viewed_at,
+        user_id: r.user_id, viewed_at: r.viewed_at,
         display_name: pMap.get(r.user_id)?.display_name,
         username: pMap.get(r.user_id)?.username,
         photo_url: publicPhotoUrl(phMap.get(r.user_id)),
@@ -144,7 +120,6 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
     return () => { cancelled = true }
   }, [isMine, story?.id])
 
-  // ==== Progress timer ====
   useEffect(() => {
     if (!story) return
     onViewed?.(group.user_id, story.id)
@@ -154,7 +129,6 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
     pausedRef.current = false
     setPaused(false)
     setReactionOpen(false)
-
     const DURATION = story.media_type === "video" ? null : IMAGE_DURATION
     let rafId
     if (DURATION != null) {
@@ -170,11 +144,9 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
       rafId = requestAnimationFrame(tick)
       return () => cancelAnimationFrame(rafId)
     }
-    // Video: progress synced by onTimeUpdate
     return () => cancelAnimationFrame(rafId)
   }, [groupIdx, storyIdx, story?.id])
 
-  // ==== Video ref play/pause ====
   useEffect(() => {
     const v = videoRef.current
     if (!v || !story || story.media_type !== "video") return
@@ -182,10 +154,8 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
     else v.play().catch(() => {})
   }, [paused, story?.id, storyIdx, groupIdx])
 
-  // ==== Preload next story ====
   useEffect(() => {
-    const next = group?.stories?.[storyIdx + 1]
-      || groups[groupIdx + 1]?.stories?.[0]
+    const next = group?.stories?.[storyIdx + 1] || groups[groupIdx + 1]?.stories?.[0]
     if (!next) return
     const img = new Image()
     if (next.media_type === "image") img.src = next.media_url
@@ -195,27 +165,17 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
     setProgress(0)
     accumulatedRef.current = 0
     startRef.current = Date.now()
-    if (storyIdx < (group?.stories?.length || 0) - 1) {
-      setStoryIdx(storyIdx + 1)
-    } else if (groupIdx < groups.length - 1) {
-      setGroupIdx(groupIdx + 1)
-      setStoryIdx(0)
-    } else {
-      onClose?.()
-    }
+    if (storyIdx < (group?.stories?.length || 0) - 1) setStoryIdx(storyIdx + 1)
+    else if (groupIdx < groups.length - 1) { setGroupIdx(groupIdx + 1); setStoryIdx(0) }
+    else onClose?.()
   }
 
   function back() {
     setProgress(0)
     accumulatedRef.current = 0
     startRef.current = Date.now()
-    if (storyIdx > 0) {
-      setStoryIdx(storyIdx - 1)
-    } else if (groupIdx > 0) {
-      const prev = groups[groupIdx - 1]
-      setGroupIdx(groupIdx - 1)
-      setStoryIdx(Math.max(0, (prev?.stories?.length || 1) - 1))
-    }
+    if (storyIdx > 0) setStoryIdx(storyIdx - 1)
+    else if (groupIdx > 0) { const prev = groups[groupIdx - 1]; setGroupIdx(groupIdx - 1); setStoryIdx(Math.max(0, (prev?.stories?.length || 1) - 1)) }
   }
 
   function pauseNow() {
@@ -225,6 +185,7 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
     setPaused(true)
     try { videoRef.current?.pause() } catch {}
   }
+
   function resumeNow() {
     if (!pausedRef.current) return
     startRef.current = Date.now()
@@ -233,35 +194,27 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
     try { videoRef.current?.play() } catch {}
   }
 
-  // ==== Gesture handling ====
   function onTouchStart(e) {
-    if (e.target && e.target.closest && e.target.closest('[data-nk-tap-ignore]')) return
+    if (e.target && e.target.closest && e.target.closest('[data-nk-tap-ignore]')) { touchStartX.current = null; return }
+    touchStartX.current = e.touches[0].clientX
     touchStartY.current = e.touches[0].clientY
     touchStartTimeRef.current = Date.now()
     pressFiredRef.current = false
     closingRef.current = false
     clearTimeout(longPressTimer.current)
-    longPressTimer.current = setTimeout(() => {
-      pressFiredRef.current = true
-      pauseNow()
-    }, 220)
+    longPressTimer.current = setTimeout(() => { pressFiredRef.current = true; pauseNow() }, 220)
   }
 
-  function onTouchMove() {
-    // no-op — drag-to-close removed
-  }
+  function onTouchMove() {}
 
   function onTouchEnd(e) {
     clearTimeout(longPressTimer.current)
     if (e.target && e.target.closest && e.target.closest('[data-nk-tap-ignore]')) {
       pressFiredRef.current = false
+      touchStartX.current = null
       return
     }
-    if (pressFiredRef.current) {
-      resumeNow()
-      pressFiredRef.current = false
-      return
-    }
+    if (pressFiredRef.current) { resumeNow(); pressFiredRef.current = false; touchStartX.current = null; return }
     const now = Date.now()
     const isDoubleTap = (now - lastTapRef.current) < 260
     lastTapRef.current = now
@@ -269,40 +222,76 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
       lastTapRef.current = 0
       clearTimeout(singleTapTimerRef.current)
       if (!isMine && group?.user_id && story?.id) sendReaction("❤️")
+      touchStartX.current = null
       return
     }
-    const x = e.changedTouches?.[0]?.clientX ?? e.clientX ?? 0
+    const endX = e.changedTouches?.[0]?.clientX ?? e.clientX ?? 0
+    const endY = e.changedTouches?.[0]?.clientY ?? e.clientY ?? 0
+    const startX = touchStartX.current
+    const startY = touchStartY.current
+    touchStartX.current = null
+    if (startX !== null && startX !== undefined) {
+      const dx = endX - startX
+      const dy = endY - startY
+      if (Math.abs(dx) > 60 && Math.abs(dy) < 80) {
+        clearTimeout(singleTapTimerRef.current)
+        setProgress(0); accumulatedRef.current = 0; startRef.current = Date.now()
+        if (dx < 0) {
+          if (groupIdx < groups.length - 1) { setGroupIdx(groupIdx + 1); setStoryIdx(0) }
+          else onClose?.()
+        } else {
+          if (groupIdx > 0) { setGroupIdx(groupIdx - 1); setStoryIdx(0) }
+        }
+        return
+      }
+    }
     const w = (typeof window !== 'undefined' ? window.innerWidth : 400)
     clearTimeout(singleTapTimerRef.current)
     singleTapTimerRef.current = setTimeout(() => {
-      if (x < w / 3) back()
+      if (endX < w / 3) back()
       else advance()
     }, 260)
   }
 
-  function showToast(text, userId) {
-    setToast({ text, userId })
-    clearTimeout(toastTimerRef.current)
-    toastTimerRef.current = setTimeout(() => setToast(null), 2600)
-  }
-
-  function burstHeart() {
-    setHeartBurst(Date.now())
-    clearTimeout(burstTimerRef.current)
-    burstTimerRef.current = setTimeout(() => setHeartBurst(null), 900)
-  }
+  function showToast(text, userId) { setToast({ text, userId }); clearTimeout(toastTimerRef.current); toastTimerRef.current = setTimeout(() => setToast(null), 2600) }
+  function burstHeart() { setHeartBurst(Date.now()); clearTimeout(burstTimerRef.current); burstTimerRef.current = setTimeout(() => setHeartBurst(null), 900) }
 
   async function canReply() {
     if (!group?.user_id) return false
     const { data: session } = await supabase.auth.getSession()
-    const myId = session?.session?.user?.id
-    if (!myId) return false
-    const { data: allowed, error } = await supabase.rpc('can_story_reply', {
-      sender: myId,
-      recipient: group.user_id,
-    })
-    if (error) return true // fail-open on error
+    const replySenderId = session?.session?.user?.id
+    if (!replySenderId) return false
+    const { data: allowed, error } = await supabase.rpc('can_story_reply', { sender: replySenderId, recipient: group.user_id })
+    if (error) return true
     return allowed !== false
+  }
+
+  async function sendMediaReply() {
+    if (!group?.user_id || !story?.id || sending) return
+    const ok = await canReply()
+    if (!ok) { alert("This user isn't accepting story replies"); return }
+    try {
+      const shot = await NativeCamera.getPhoto({ quality: 80, resultType: CameraResultType.Uri, source: Capacitor.isNativePlatform() ? CameraSource.Camera : CameraSource.Prompt })
+      const res = await fetch(shot.webPath)
+      const blob = await res.blob()
+      setSending(true)
+      const convId = await findOrCreateConversation(group.user_id)
+      if (!convId) { setSending(false); alert("Could not open chat"); return }
+      const { data: sess } = await supabase.auth.getSession()
+      const senderId = sess?.session?.user?.id
+      if (!senderId) { setSending(false); return }
+      const path = `story-replies/${senderId}/${crypto.randomUUID()}.jpg`
+      const { error: upErr } = await supabase.storage.from("chat-media").upload(path, blob, { contentType: "image/jpeg" })
+      if (upErr) throw upErr
+      const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
+      const { error: sendErr } = await supabase.from("messages").insert({
+        conversation_id: convId, sender_id: senderId, content: "📷 Photo reply to story", media_url: pub?.publicUrl, media_type: "image/jpeg",
+        metadata: { story_reply: { story_id: story.id, media_url: story.media_url, media_type: story.media_type } },
+      })
+      setSending(false)
+      if (sendErr) { alert("Send failed: " + sendErr.message); return }
+      tap("medium"); showToast("Sent to " + (group.display_name?.split(" ")[0] || "them"), group.user_id)
+    } catch (e) { setSending(false); if (e && e.message && !/cancel/i.test(e.message)) { console.warn(e); alert("Camera error: " + e.message) } }
   }
 
   async function sendReply() {
@@ -310,33 +299,19 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
     if (!body || !group?.user_id || !story?.id || sending) return
     const ok = await canReply()
     if (!ok) { alert("This user isn't accepting story replies"); return }
-
     setSending(true)
     const convId = await findOrCreateConversation(group.user_id)
     if (!convId) { setSending(false); alert("Could not open chat"); return }
-
     const { data: sess } = await supabase.auth.getSession()
-    const myId = sess?.session?.user?.id
-    if (!myId) { setSending(false); return }
-
+    const senderId = sess?.session?.user?.id
+    if (!senderId) { setSending(false); return }
     const { error: sendErr } = await supabase.from("messages").insert({
-      conversation_id: convId,
-      sender_id: myId,
-      content: body,
-      metadata: {
-        story_reply: {
-          story_id: story.id,
-          media_url: story.media_url,
-          media_type: story.media_type,
-        },
-      },
+      conversation_id: convId, sender_id: senderId, content: body,
+      metadata: { story_reply: { story_id: story.id, media_url: story.media_url, media_type: story.media_type } },
     })
     setSending(false)
     if (sendErr) { alert("Send failed: " + sendErr.message); return }
-
-    setReply("")
-    tap("medium")
-    showToast("Sent to " + (group.display_name?.split(" ")[0] || "them"), group.user_id)
+    setReply(""); tap("medium"); showToast("Sent to " + (group.display_name?.split(" ")[0] || "them"), group.user_id)
   }
 
   async function sendReaction(emoji) {
@@ -344,311 +319,148 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
     if (!group?.user_id || !story?.id) return
     const ok = await canReply()
     if (!ok) { alert("This user isn't accepting story replies"); return }
-
     if (emoji === "❤️") burstHeart()
-
     const convId = await findOrCreateConversation(group.user_id)
     if (!convId) { alert("Could not open chat"); return }
-
     const { data: sess } = await supabase.auth.getSession()
-    const myId = sess?.session?.user?.id
-    if (!myId) return
-
+    const senderId = sess?.session?.user?.id
+    if (!senderId) return
     const { error: sendErr } = await supabase.from("messages").insert({
-      conversation_id: convId,
-      sender_id: myId,
-      content: emoji,
-      metadata: {
-        story_reply: {
-          story_id: story.id,
-          media_url: story.media_url,
-          media_type: story.media_type,
-        },
-      },
+      conversation_id: convId, sender_id: senderId, content: emoji,
+      metadata: { story_reply: { story_id: story.id, media_url: story.media_url, media_type: story.media_type } },
     })
     if (sendErr) { alert("Send failed: " + sendErr.message); return }
-
-    tap("medium")
-    showToast("Sent to " + (group.display_name?.split(" ")[0] || "them"), group.user_id)
+    tap("medium"); showToast("Sent to " + (group.display_name?.split(" ")[0] || "them"), group.user_id)
   }
 
   async function deleteStory() {
     if (!story || !isMine || deleting) return
     if (!confirm("Delete this story?")) return
-    setDeleting(true)
-    tap("light")
+    setDeleting(true); tap("light")
     try {
-      // Delete storage object (best-effort)
       try {
         const url = story.media_url || ""
-        const bucket = "stories"
+        const bucket = "chat-media"
         const marker = "/object/public/" + bucket + "/"
         const idx = url.indexOf(marker)
-        if (idx !== -1) {
-          const path = url.slice(idx + marker.length)
-          await supabase.storage.from(bucket).remove([path])
-        }
+        if (idx !== -1) await supabase.storage.from(bucket).remove([url.slice(idx + marker.length)])
       } catch (e) { console.warn("storage delete failed", e) }
-
       const { error } = await supabase.from("stories").delete().eq("id", story.id).eq("user_id", myId)
       if (error) throw error
-
-      setDeleting(false)
-      setMenuOpen(false)
-
-      // If there are more stories in this group, go next
+      setDeleting(false); setMenuOpen(false)
       const list = group?.stories || []
       if (list.length > 1) {
-        // Parent re-fetch on close is cleaner
-        onViewed?.(story.id)
-        // If the deleted story was the current, move to next or close
-        if (storyIdx < list.length - 1) {
-          setStoryIdx(storyIdx + 1)
-          setProgress(0)
-          startRef.current = Date.now()
-          accumulatedRef.current = 0
-        } else if (list.length === 1) {
-          close()
-        } else {
-          setStoryIdx(0)
-          setProgress(0)
-        }
-      } else {
-        close()
-      }
-    } catch (e) {
-      console.warn("delete story failed", e)
-      setDeleting(false)
-    }
+        onViewed?.(group.user_id, story.id)
+        if (storyIdx < list.length - 1) { setStoryIdx(storyIdx + 1); setProgress(0); startRef.current = Date.now(); accumulatedRef.current = 0 }
+        else close()
+      } else close()
+    } catch (e) { console.warn("delete story failed", e); setDeleting(false) }
   }
 
-  function close() {
-    onClose?.()
-  }
-
+  function close() { onClose?.() }
   if (!story) return null
-
   const groupStories = group?.stories || []
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-[220] bg-black select-none overflow-hidden"
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
-    >
-      {/* Media */}
+    <div className="fixed inset-0 z-[220] bg-black select-none overflow-hidden" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
       <div className="absolute inset-0 grid place-items-center bg-black">
-        {story.media_type === "video" ? (
-          <video
-            ref={videoRef}
-            src={story.media_url}
-            autoPlay
-            playsInline
-            muted={muted}
-            preload="auto"
-            onTimeUpdate={(e) => {
-              const v = e.target
-              if (v.duration > 0) setProgress(v.currentTime / v.duration)
-            }}
-            onEnded={advance}
-            className="max-w-full max-h-full object-contain"
-          />
-        ) : (
-          <img src={story.media_url} alt="" className="max-w-full max-h-full object-contain" />
-        )}
+        <div 
+          className="relative w-full h-full flex items-center justify-center"
+          onPointerDown={() => setPaused(true)}
+          onPointerUp={() => setPaused(false)}
+          onPointerLeave={() => setPaused(false)}
+          onTouchStart={() => setPaused(true)}
+          onTouchEnd={() => setPaused(false)}
+        >
+          {story.media_type === "video" ? (
+            <video ref={videoRef} src={story.media_url} autoPlay playsInline muted={muted} preload="auto" onTimeUpdate={(e) => { const v = e.target; if (v.duration > 0) setProgress(v.currentTime / v.duration) }} onEnded={advance} className="max-w-full max-h-full object-contain pointer-events-none" />
+          ) : (
+            <img src={story.media_url} alt="" className="max-w-full max-h-full object-contain pointer-events-none" />
+          )}
+        </div>
       </div>
 
-      {/* Progress bars */}
-      <div className="absolute top-3 left-3 right-3 flex gap-1 z-20"
-           style={{ paddingTop: "env(safe-area-inset-top)" }}>
+      <div className="absolute top-3 left-3 right-3 flex gap-1 z-20" style={{ paddingTop: "var(--safe-top, 32px)" }}>
         {groupStories.map((s, i) => (
           <div key={s.id} className="flex-1 h-[3px] rounded-full bg-white/25 overflow-hidden">
-            <div
-              className="h-full bg-white"
-              style={{
-                width: i < storyIdx ? "100%" : i === storyIdx ? `${progress * 100}%` : "0%",
-                transition: i === storyIdx ? "none" : "width 180ms linear",
-              }}
-            />
+            <div className="h-full bg-white" style={{ width: i < storyIdx ? "100%" : i === storyIdx ? `${progress * 100}%` : "0%", transition: i === storyIdx ? "none" : "width 180ms linear" }} />
           </div>
         ))}
       </div>
 
-      {/* Header — auto-hides when paused (WhatsApp behavior) */}
-      <div
-        data-nk-tap-ignore
-        className="absolute top-6 left-3 right-3 flex items-center gap-3 z-20"
-        style={{
-          opacity: paused ? 0 : 1,
-          transition: "opacity 200ms",
-          pointerEvents: paused ? "none" : "auto",
-        }}
-      >
-        <div className="w-9 h-9 rounded-full overflow-hidden bg-elevated border border-white/15">
-          {avatar ? <img src={avatar} alt="" className="w-full h-full object-cover" /> : null}
-        </div>
+      <div data-nk-tap-ignore className="absolute top-6 left-3 right-3 flex items-center gap-3 z-20" style={{ opacity: paused ? 0 : 1, transition: "opacity 200ms", pointerEvents: paused ? "none" : "auto" }}>
+        <div className="w-9 h-9 rounded-full overflow-hidden bg-elevated border border-white/15">{avatar ? <img src={avatar} alt="" className="w-full h-full object-cover" /> : null}</div>
         <div className="flex-1 min-w-0">
           <p className="text-white font-bold text-[14px] truncate">{group.display_name}</p>
-          <p className="text-white/60 text-[11px]">
-            {new Date(story.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-          </p>
+          <p className="text-white/60 text-[11px]">{new Date(story.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
         </div>
         {story.media_type === "video" && (
-          <button
-            onClick={() => setMuted((m) => !m)}
-            className="w-8 h-8 rounded-full grid place-items-center text-white"
-            aria-label="Toggle sound"
-          >
+          <button onClick={() => setMuted((m) => !m)} className="w-8 h-8 rounded-full grid place-items-center text-white" aria-label="Toggle sound">
             {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
           </button>
         )}
         {isMine && (
-          <button
-            onClick={() => { tap("light"); setMenuOpen(true) }}
-            className="w-8 h-8 rounded-full grid place-items-center text-white"
-            aria-label="Story options"
-          >
-            <MoreVertical size={18} />
-          </button>
+          <button onClick={() => { tap("light"); setMenuOpen(true) }} className="w-8 h-8 rounded-full grid place-items-center text-white" aria-label="Story options"><MoreVertical size={18} /></button>
         )}
-        <button onClick={close} className="w-9 h-9 grid place-items-center text-white" aria-label="Close">
-          <X size={22} />
-        </button>
+        <button onClick={close} className="w-9 h-9 grid place-items-center text-white" aria-label="Close"><X size={22} /></button>
       </div>
 
-      {/* Caption — plain text with shadow */}
       {story.caption && !paused && (
         <div className="absolute bottom-32 left-4 right-4 z-20 pointer-events-none">
-          <p className="text-white text-[15px] font-medium leading-snug"
-             style={{ textShadow: "0 2px 8px rgba(0,0,0,0.9), 0 0 1px rgba(0,0,0,0.9)" }}>
-            {story.caption}
-          </p>
+          <p className="text-white text-[15px] font-medium leading-snug" style={{ textShadow: "0 2px 8px rgba(0,0,0,0.9), 0 0 1px rgba(0,0,0,0.9)" }}>{story.caption}</p>
         </div>
       )}
 
-      {/* Bottom — reply bar (own story shows viewers button instead) */}
-      <div data-nk-tap-ignore className="absolute bottom-4 left-3 right-3 z-30 flex items-center gap-2"
-           style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+      <StoryMusicPlayer track={story.metadata?.music || story.music_track} playing={!paused} />
+      
+      {/* INTERACTIVE METADATA RENDERERS */}
+      <StoryPollSticker poll={story.metadata?.poll} storyId={story.id} myId={myId} />
+      <StoryQuestionSticker question={story.metadata?.question} storyId={story.id} myId={myId} />
+      
+      <StoryLinkSticker url={story.link_url} onOpen={(url) => { tap("light"); window.open(url, "_blank") }} />
+
+      <div data-nk-tap-ignore className="absolute bottom-4 left-3 right-3 z-30 flex items-center gap-2" style={{ paddingBottom: "max(12px, var(--safe-bottom, 8px))" }}>
         {isMine ? (
-          <button
-            onClick={() => setViewersOpen(true)}
-            className="flex items-center gap-2 h-10 rounded-full bg-black/35 backdrop-blur-sm border border-white/15 px-3.5 text-white font-bold text-[13px]"
-          >
-            <Eye size={16} />
-            Seen by {viewers.length || 0}
+          <button onClick={() => setViewersOpen(true)} className="flex items-center gap-2 h-10 rounded-full bg-black/35 backdrop-blur-sm border border-white/15 px-3.5 text-white font-bold text-[13px]">
+            <Eye size={16} /> Seen by {viewers.length || 0}
           </button>
         ) : (
           <>
-            <button
-              onClick={() => setReactionOpen((o) => !o)}
-              className="w-10 h-10 rounded-full grid place-items-center shrink-0 bg-black/35 backdrop-blur-sm border border-white/15"
-              aria-label="Reactions"
-            >
-              <span className="text-[18px]">😊</span>
-            </button>
-            <input
-              value={reply}
-              onChange={(e) => setReply(e.target.value.slice(0, 200))}
-              onKeyDown={(e) => { if (e.key === "Enter") sendReply() }}
-              onFocus={pauseNow}
-              onBlur={resumeNow}
-              placeholder={"Reply to " + (group?.display_name?.split(" ")[0] || "them") + "…"}
-              className="flex-1 h-10 rounded-full bg-black/35 backdrop-blur-sm border border-white/15 px-4 text-white text-[13.5px] placeholder:text-white/65 focus:outline-none focus:bg-black/50 focus:border-white/30"
-            />
+            <button onClick={() => setReactionOpen((o) => !o)} className="w-10 h-10 rounded-full grid place-items-center shrink-0 bg-black/35 backdrop-blur-sm border border-white/15" aria-label="Reactions"><span className="text-[18px]">😊</span></button>
+            <button onClick={sendMediaReply} disabled={sending} className="w-10 h-10 rounded-full grid place-items-center shrink-0 bg-black/35 backdrop-blur-sm border border-white/15 active:scale-95 disabled:opacity-50" aria-label="Send photo reply"><Camera size={18} className="text-white" /></button>
+            <input value={reply} onChange={(e) => setReply(e.target.value.slice(0, 200))} onKeyDown={(e) => { if (e.key === "Enter") sendReply() }} onFocus={pauseNow} onBlur={resumeNow} placeholder={"Reply to " + (group?.display_name?.split(" ")[0] || "them") + "…"} className="flex-1 h-10 rounded-full bg-black/35 backdrop-blur-sm border border-white/15 px-4 text-white text-[13.5px] placeholder:text-white/65 focus:outline-none focus:bg-black/50 focus:border-white/30" />
             {reply.trim() ? (
-              <button
-                onClick={sendReply}
-                disabled={sending}
-                className="w-11 h-11 rounded-full grid place-items-center shrink-0 disabled:opacity-60"
-                style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
-                aria-label="Send reply"
-              >
-                <Send size={18} strokeWidth={2.6} className="text-white" />
-              </button>
+              <button onClick={sendReply} disabled={sending} className="w-11 h-11 rounded-full grid place-items-center shrink-0 disabled:opacity-60" style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }} aria-label="Send reply"><Send size={18} strokeWidth={2.6} className="text-white" /></button>
             ) : (
-              <button
-                onClick={() => sendReaction("❤️")}
-                className="w-10 h-10 rounded-full grid place-items-center shrink-0 bg-black/35 backdrop-blur-sm border border-white/15"
-                aria-label="Like story"
-              >
-                <Heart size={19} fill="#EC4899" color="#EC4899" />
-              </button>
+              <button onClick={() => sendReaction("❤️")} className="w-10 h-10 rounded-full grid place-items-center shrink-0 bg-black/35 backdrop-blur-sm border border-white/15" aria-label="Like story"><Heart size={19} fill="#EC4899" color="#EC4899" /></button>
             )}
           </>
         )}
       </div>
 
-      {/* Reaction picker */}
       {reactionOpen && !isMine && (
-        <div data-nk-tap-ignore
-             className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30 flex gap-0.5 p-1.5 rounded-full bg-black/70 backdrop-blur-md border border-white/12 shadow-2xl"
-             onClick={(e) => e.stopPropagation()}>
-          {REACTIONS.map((e) => (
-            <button
-              key={e}
-              onClick={() => sendReaction(e)}
-              className="w-9 h-9 rounded-full grid place-items-center text-[20px] active:scale-90 transition-transform"
-            >
-              {e}
-            </button>
-          ))}
+        <div data-nk-tap-ignore className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30 flex gap-0.5 p-1.5 rounded-full bg-black/70 backdrop-blur-md border border-white/12 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          {REACTIONS.map((e) => (<button key={e} onClick={() => sendReaction(e)} className="w-9 h-9 rounded-full grid place-items-center text-[20px] active:scale-90 transition-transform">{e}</button>))}
         </div>
       )}
 
-      {/* Tap zones removed — outer wrapper handles single-tap & double-tap */}
-
-
-      {/* Viewers sheet (own story) */}
       {viewersOpen && (
         <div className="fixed inset-0 z-[300] flex items-end" onClick={() => setViewersOpen(false)}>
           <div className="absolute inset-0 bg-black/60" />
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 flex flex-col"
-            style={{ maxHeight: "75dvh" }}
-          >
+          <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 flex flex-col" style={{ maxHeight: "75dvh" }}>
             <div className="shrink-0 px-5 pt-3 pb-3 border-b border-white/8">
               <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-3" />
-              <div className="flex items-center justify-between">
-                <h3 className="text-cream font-extrabold text-[16px]">
-                  Seen by {viewers.length}
-                </h3>
-                <button onClick={() => setViewersOpen(false)} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Close">
-                  <X size={18} />
-                </button>
-              </div>
+              <div className="flex items-center justify-between"><h3 className="text-cream font-extrabold text-[16px]">Seen by {viewers.length}</h3><button onClick={() => setViewersOpen(false)} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Close"><X size={18} /></button></div>
             </div>
             <div className="flex-1 overflow-y-auto px-3 py-3">
-              {viewersLoading ? (
-                <p className="text-subtle text-[12.5px] text-center py-10">Loading…</p>
-              ) : viewers.length === 0 ? (
-                <p className="text-subtle text-[12.5px] text-center py-10">No views yet</p>
-              ) : (
+              {viewersLoading ? <p className="text-subtle text-[12.5px] text-center py-10">Loading…</p> : viewers.length === 0 ? <p className="text-subtle text-[12.5px] text-center py-10">No views yet</p> : (
                 <div className="flex flex-col gap-1">
                   {viewers.map((v) => (
-                    <button
-                      key={v.user_id + v.viewed_at}
-                      onClick={() => { setViewersOpen(false); onClose?.(); nav("/messages/" + v.user_id) }}
-                      className="flex items-center gap-3 p-3 rounded-2xl text-left active:scale-[0.98] transition-transform"
-                    >
+                    <button key={v.user_id + v.viewed_at} onClick={() => { setViewersOpen(false); onClose?.(); nav("/messages/" + v.user_id) }} className="flex items-center gap-3 p-3 rounded-2xl text-left active:scale-[0.98] transition-transform">
                       <span className="w-11 h-11 rounded-full overflow-hidden bg-elevated border border-white/8 shrink-0">
-                        {v.photo_url ? (
-                          <img src={v.photo_url} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="w-full h-full grid place-items-center text-purple-400 font-black text-sm">
-                            {(v.display_name || "?")[0]}
-                          </span>
-                        )}
+                        {v.photo_url ? <img src={v.photo_url} alt="" className="w-full h-full object-cover" /> : <span className="w-full h-full grid place-items-center text-purple-400 font-black text-sm">{(v.display_name || "?")[0]}</span>}
                       </span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-cream font-semibold text-[13.5px] truncate">
-                          {v.display_name || v.username || "Someone"}
-                        </p>
-                        <p className="text-muted text-[12px]">
-                          {new Date(v.viewed_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                        </p>
-                      </div>
+                      <div className="flex-1 min-w-0"><p className="text-cream font-semibold text-[13.5px] truncate">{v.display_name || v.username || "Someone"}</p><p className="text-muted text-[12px]">{new Date(v.viewed_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p></div>
                     </button>
                   ))}
                 </div>
@@ -657,94 +469,39 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
           </div>
         </div>
       )}
-      {/* Owner menu — delete story */}
-      {menuOpen && (
-        <div
-          className="absolute inset-0 z-[300] flex items-end"
-          onClick={(e) => { e.stopPropagation(); setMenuOpen(false) }}
-        >
-          <div className="absolute inset-0 bg-black/60" />
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
-          >
-            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
-            <button
-              onClick={() => { tap("light"); loadHighlights(); setHighlightPickerOpen(true); setMenuOpen(false) }}
-              className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left"
-            >
-              <span className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 grid place-items-center">
-                <Star size={17} color="#C084FC" />
-              </span>
-              <span className="text-cream font-semibold text-[14.5px]">Add to highlight</span>
-            </button>
 
-            <button
-              onClick={deleteStory}
-              disabled={deleting}
-              className="flex items-center gap-3 p-4 rounded-2xl bg-red-500/8 border border-red-500/25 text-left disabled:opacity-50"
-            >
-              <span className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 grid place-items-center">
-                <Trash2 size={17} color="#F87171" />
-              </span>
-              <span className="text-cream font-semibold text-[14.5px]">
-                {deleting ? "Deleting…" : "Delete story"}
-              </span>
+      {menuOpen && (
+        <div className="absolute inset-0 z-[300] flex items-end" onClick={(e) => { e.stopPropagation(); setMenuOpen(false) }}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2" style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}>
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
+            <button onClick={() => { tap("light"); loadHighlights(); setHighlightPickerOpen(true); setMenuOpen(false) }} className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left">
+              <span className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 grid place-items-center"><Star size={17} color="#C084FC" /></span><span className="text-cream font-semibold text-[14.5px]">Add to highlight</span>
             </button>
-            <button
-              onClick={() => setMenuOpen(false)}
-              className="w-full h-11 mt-2 text-muted font-semibold text-[13.5px]"
-            >Cancel</button>
+            <button onClick={deleteStory} disabled={deleting} className="flex items-center gap-3 p-4 rounded-2xl bg-red-500/8 border border-red-500/25 text-left disabled:opacity-50">
+              <span className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 grid place-items-center"><Trash2 size={17} color="#F87171" /></span><span className="text-cream font-semibold text-[14.5px]">{deleting ? "Deleting…" : "Delete story"}</span>
+            </button>
+            <button onClick={() => setMenuOpen(false)} className="w-full h-11 mt-2 text-muted font-semibold text-[13.5px]">Cancel</button>
           </div>
         </div>
       )}
 
       {highlightPickerOpen && (
-        <div
-          className="absolute inset-0 z-[400] flex items-end"
-          onClick={(e) => { e.stopPropagation(); setHighlightPickerOpen(false) }}
-        >
+        <div className="absolute inset-0 z-[400] flex items-end" onClick={(e) => { e.stopPropagation(); setHighlightPickerOpen(false) }}>
           <div className="absolute inset-0 bg-black/60" />
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-3"
-            style={{ maxHeight: "75dvh", paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
-          >
-            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-1" />
-            <h3 className="text-cream font-extrabold text-[16px] mb-1">Add to highlight</h3>
-
+          <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-3" style={{ maxHeight: "75dvh", paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}>
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-1" /><h3 className="text-cream font-extrabold text-[16px] mb-1">Add to highlight</h3>
             <div className="flex gap-2">
-              <input
-                value={newHighlightTitle}
-                onChange={(e) => setNewHighlightTitle(e.target.value.slice(0, 40))}
-                placeholder="New highlight name…"
-                className="flex-1 h-11 rounded-full bg-white/[0.06] border border-white/10 px-4 text-cream text-[14px] placeholder:text-muted focus:outline-none focus:border-purple-500"
-              />
-              <button
-                onClick={createHighlightAndAdd}
-                disabled={!newHighlightTitle.trim()}
-                className="h-11 px-4 rounded-full text-white font-bold text-[13px] disabled:opacity-40"
-                style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
-              >
-                Create
-              </button>
+              <input value={newHighlightTitle} onChange={(e) => setNewHighlightTitle(e.target.value.slice(0, 40))} placeholder="New highlight name…" className="flex-1 h-11 rounded-full bg-white/[0.06] border border-white/10 px-4 text-cream text-[14px] placeholder:text-muted focus:outline-none focus:border-purple-500" />
+              <button onClick={createHighlightAndAdd} disabled={!newHighlightTitle.trim()} className="h-11 px-4 rounded-full text-white font-bold text-[13px] disabled:opacity-40" style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}>Create</button>
             </div>
-
             {myHighlights.length > 0 && (
               <>
                 <p className="text-muted text-[11px] font-bold uppercase tracking-wide mt-2">Your highlights</p>
                 <div className="flex flex-col gap-1 max-h-[40vh] overflow-y-auto">
                   {myHighlights.map((h) => (
-                    <button
-                      key={h.id}
-                      onClick={() => addToHighlight(h.id)}
-                      className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/8 text-left active:opacity-80"
-                    >
-                      <span className="w-10 h-10 rounded-full bg-purple-600 grid place-items-center text-white font-black text-[14px]">
-                        {h.title[0]?.toUpperCase()}
-                      </span>
-                      <span className="flex-1 text-cream font-semibold text-[14px] truncate">{h.title}</span>
+                    <button key={h.id} onClick={() => addToHighlight(h.id)} className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03] border border-white/8 text-left active:opacity-80">
+                      <span className="w-10 h-10 rounded-full bg-purple-600 grid place-items-center text-white font-black text-[14px]">{h.title[0]?.toUpperCase()}</span><span className="flex-1 text-cream font-semibold text-[14px] truncate">{h.title}</span>
                     </button>
                   ))}
                 </div>
@@ -754,33 +511,18 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
         </div>
       )}
 
-    {/* Heart burst animation */}
-    {heartBurst && (
-      <div className="absolute inset-0 grid place-items-center z-40 pointer-events-none">
-        <Heart size={140} fill="#EC4899" color="#EC4899"
-          style={{ animation: "nk-heart-burst 900ms cubic-bezier(0.22, 1, 0.36, 1) forwards" }} />
-      </div>
-    )}
+      {heartBurst && (
+        <div className="absolute inset-0 grid place-items-center z-40 pointer-events-none">
+          <Heart size={140} fill="#EC4899" color="#EC4899" style={{ animation: "nk-heart-burst 900ms cubic-bezier(0.22, 1, 0.36, 1) forwards" }} />
+        </div>
+      )}
 
-    {/* Sent confirmation toast */}
-    {toast && (
-      <div
-        className="absolute left-1/2 z-40 flex items-center gap-2 px-4 h-11 rounded-full bg-black/80 backdrop-blur-md border border-white/15 text-white text-[13px] font-semibold shadow-2xl"
-        style={{
-          bottom: "calc(env(safe-area-inset-bottom) + 76px)",
-          animation: "nk-toast-in 220ms ease-out forwards",
-        }}
-      >
-        <span>{toast.text} 💜</span>
-        <button
-          onClick={() => { onClose?.(); nav("/messages/" + toast.userId) }}
-          className="text-purple-300 font-bold ml-1"
-        >
-          View
-        </button>
-      </div>
-    )}
-
+      {toast && (
+        <div className="absolute left-1/2 z-40 flex items-center gap-2 px-4 h-11 rounded-full bg-black/80 backdrop-blur-md border border-white/15 text-white text-[13px] font-semibold shadow-2xl" style={{ bottom: "calc(var(--safe-bottom, 8px) + 76px)", animation: "nk-toast-in 220ms ease-out forwards" }}>
+          <span>{toast.text} 💜</span>
+          <button onClick={() => { onClose?.(); nav("/messages/" + toast.userId) }} className="text-purple-300 font-bold ml-1">View</button>
+        </div>
+      )}
     </div>,
     document.body
   )

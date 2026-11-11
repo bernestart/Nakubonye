@@ -2,7 +2,7 @@ import ProfileHighlights from '../components/ProfileHighlights'
 import ProfileEditSheet from '../components/ProfileEditSheet'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Pencil, MoreVertical, MapPin, Edit, Share2, ArrowLeft } from 'lucide-react'
+import { Search, Pencil, MoreVertical, MapPin, Edit, Share2, ArrowLeft, Sparkles } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { useNotifications } from '../lib/notifications'
@@ -26,7 +26,7 @@ import ProfileAbout from '../components/ProfileAbout'
 export default function Preview() {
   const { unreadCount } = useNotifications()
   const nav = useNavigate()
-  const { session, profile: authProfile } = useAuth()
+  const { session, profile: authProfile, refreshProfile } = useAuth()
   const [profileLocal, setProfile] = useState(null)
   const profile = profileLocal ?? authProfile
   const myId = session?.user?.id
@@ -38,15 +38,27 @@ export default function Preview() {
   const [reels, setReels] = useState([])
   const [savedReels, setSavedReels] = useState([])
   const [myPosts, setMyPosts] = useState([])
-  const [followersCount, setFollowersCount] = useState(0)
-  const [followingCount, setFollowingCount] = useState(0)
-  const [matchesCount, setMatchesCount] = useState(0)
+  const [followersCount, setFollowersCount] = useState(null)
+  const [followingCount, setFollowingCount] = useState(null)
+  const [matchesCount, setMatchesCount] = useState(null)
   const [activeTab, setActiveTab] = useState("all")
   const [reactionCounts, setReactionCounts] = useState(new Map())
   const [myReactions, setMyReactions] = useState(new Set())
   const [myReactionTypes, setMyReactionTypes] = useState(new Map())
   const [commentCounts, setCommentCounts] = useState(new Map())
   const [menuOpen, setMenuOpen] = useState(false)
+
+  async function handleToggleCreatorMode() {
+    if (!myId) return;
+    const isCurrentlyCreator = profile?.account_type === 'creator';
+    const newState = !isCurrentlyCreator;
+    const { error } = await supabase.rpc('toggle_creator_mode', { p_enable: newState });
+    if (error) {
+      alert("Failed to toggle Creator Mode: " + error.message);
+      return;
+    }
+    await refreshProfile();
+  }
   const [editSheetKind, setEditSheetKind] = useState(null)
   const [playingReel, setPlayingReel] = useState(null)
   const [viewingPhoto, setViewingPhoto] = useState(null)
@@ -155,6 +167,11 @@ export default function Preview() {
   }, [myId])
 
   useEffect(() => { load() }, [load])
+  useEffect(() => {
+    if (!myId) return
+    refreshProfile()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myId])
 
   async function share() {
     tap('light')
@@ -284,11 +301,11 @@ export default function Preview() {
         {/* Stats */}
         <div className="flex items-center justify-center gap-2 mt-3 text-[13.5px]">
           <button onClick={() => { tap('light'); nav(`/user/${myId}/followers`) }} className="text-cream font-bold active:opacity-70">
-            {followersCount} follower{followersCount === 1 ? "" : "s"}
+            {followersCount ?? '—'} {(myId && true) ? `follower${followersCount === 1 ? "" : "s"}` : `match${followersCount === 1 ? "" : "s"}`}
           </button>
           <span className="text-muted">·</span>
           <button onClick={() => { tap('light'); nav(`/user/${myId}/following`) }} className="text-cream font-bold active:opacity-70">
-            {followingCount} following
+            {followingCount ?? '—'} following
           </button>
           <span className="text-muted">·</span>
           <span className="text-cream font-bold">{myPosts.length} post{myPosts.length === 1 ? "" : "s"}</span>
@@ -311,7 +328,16 @@ export default function Preview() {
         )}
 
         {/* Own action buttons */}
-        <div className="flex items-center gap-2 mt-4 px-4">
+        <div className="flex flex-col gap-2 mt-4 px-4">
+          {profile?.account_type === 'creator' && (
+            <button
+              onClick={() => { tap('light'); nav('/creator-dashboard') }}
+              className="w-full h-10 rounded-full bg-gradient-to-r from-purple-600 to-pink-500 text-white font-bold text-[13px] flex items-center justify-center gap-2 shadow-lg shadow-purple-500/30 active:scale-[0.98] transition-transform"
+            >
+              <Sparkles size={16} /> Creator Dashboard
+            </button>
+          )}
+          <div className="flex items-center gap-2">
           <button
             onClick={() => { tap('light'); nav('/me/edit') }}
             className="flex-1 h-9 rounded-full bg-white/[0.08] border border-white/12 text-cream font-bold text-[13px] flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform"
@@ -324,6 +350,7 @@ export default function Preview() {
           >
             <Share2 size={14} /> {copied ? 'Copied' : 'Share'}
           </button>
+          </div>
         </div>
 
         {/* Highlights */}
@@ -474,7 +501,9 @@ export default function Preview() {
         />
       )}
 
-      <ProfileMenuSheet
+      <ProfileMenuSheet 
+        accountType={profile?.account_type ?? null}
+        onToggleCreatorMode={handleToggleCreatorMode}
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         isMe={true}

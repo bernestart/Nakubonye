@@ -106,7 +106,7 @@ export default function ShareSheet({ post, source = "community", onClose, onShar
         <div
           onClick={(e) => e.stopPropagation()}
           className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] p-5"
-          style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+          style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
         >
           <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-3" />
           <p className="text-cream font-bold text-[15px] mb-1">This post can't be shared</p>
@@ -123,7 +123,7 @@ export default function ShareSheet({ post, source = "community", onClose, onShar
       <div
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] pb-2"
-        style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+        style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
       >
         <div className="pt-3 pb-2 flex justify-center">
           <span className="w-10 h-1 rounded-full bg-white/20" />

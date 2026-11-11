@@ -100,7 +100,7 @@ export default function ChatSearchSheet({ source, targetId, onClose, onJump }) {
 
   return (
     <div className="fixed inset-0 z-[500] flex flex-col bg-[#0B0B14]" onClick={(e) => e.stopPropagation()}>
-      <div className="shrink-0 flex items-center gap-2 px-3 h-14 border-b border-white/8" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+      <div className="shrink-0 flex items-center gap-2 px-3 h-14 border-b border-white/8" style={{ paddingTop: "var(--safe-top, 32px)" }}>
         <button onClick={onClose} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Back">
           <X size={20} />
         </button>

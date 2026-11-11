@@ -7,6 +7,7 @@ import { publicPhotoUrl, calcAge } from '../lib/photo'
 import { tap } from '../lib/haptic'
 import BrandGlow from '../components/BrandGlow'
 import ReportModal from '../components/ReportModal'
+import { Suspense } from 'react'
 import CommunityFeed from '../components/CommunityFeed'
 import CommunityChat from '../components/CommunityChat'
 import CommunityEvents from '../components/CommunityEvents'
@@ -218,7 +219,7 @@ export default function CommunityView() {
     }}>
       <BrandGlow variant="default" />
 
-      <header style={{ height: 52, flexShrink: 0 }} className="px-3 flex items-center gap-2">
+      <header style={{ minHeight: 'calc(64px + var(--safe-top, 32px))', flexShrink: 0, paddingTop: 'var(--safe-top, 32px)' }} className="px-3 flex items-center gap-2">
         <button onClick={() => nav(-1)} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Back">
           <ArrowLeft size={20} strokeWidth={2.3} />
         </button>
@@ -240,7 +241,7 @@ export default function CommunityView() {
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             <p className="text-cream font-bold text-[15px] mb-2 truncate">{community?.name}</p>
@@ -460,11 +461,11 @@ export default function CommunityView() {
             </div>
 
             {tab === 'feed' ? (
-              <FeedErrorBoundary><CommunityFeed communityId={community.id} isMember={joined} /></FeedErrorBoundary>
+              <FeedErrorBoundary><Suspense fallback={<div className="p-8 text-center text-muted">Loading feed...</div>}><CommunityFeed communityId={community.id} isMember={joined} /></Suspense></FeedErrorBoundary>
             ) : tab === 'chat' ? (
-              <CommunityChat communityId={community.id} isMember={joined} communityName={community.name} />
+              <Suspense fallback={<div className="p-8 text-center text-muted">Loading chat...</div>}><CommunityChat communityId={community.id} isMember={joined} communityName={community.name} /></Suspense>
             ) : tab === 'events' ? (
-              <CommunityEvents communityId={community.id} isMember={joined} />
+              <Suspense fallback={<div className="p-8 text-center text-muted">Loading events...</div>}><CommunityEvents communityId={community.id} isMember={joined} /></Suspense>
             ) : (
               <>
                 <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-3">
@@ -559,7 +560,7 @@ export default function CommunityView() {
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             <p className="text-cream font-bold text-[14.5px] mb-2 truncate">

@@ -174,7 +174,7 @@ export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
       voiceoverRecorderRef.current = rec
       rec.ondataavailable = (e) => { if (e.data.size > 0) voiceoverChunksRef.current.push(e.data) }
       rec.onstop = () => {
-        const blob = new Blob(voiceoverChunksRef.current, { type: "audio/webm" })
+        const blob = new Blob(voiceoverChunksRef.current, { type: MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" : "audio/webm" })
         if (voiceoverUrl) { try { URL.revokeObjectURL(voiceoverUrl) } catch {} }
         setVoiceoverBlob(blob)
         setVoiceoverUrl(URL.createObjectURL(blob))
@@ -722,7 +722,7 @@ export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
       </div>
 
       {/* Bottom tools */}
-      <div className="flex items-center justify-around px-2 py-3 mb-2" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+      <div className="flex items-center justify-around px-2 py-3 mb-2" style={{ paddingBottom: "max(12px, var(--safe-bottom, 8px))" }}>
         <button
           onClick={() => { fileRef.current.dataset.mode = "add"; fileRef.current.click() }}
           className="flex flex-col items-center gap-1 text-white"
@@ -783,7 +783,7 @@ export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-3"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto" />
             <h3 className="text-cream font-extrabold text-[16px]">{editingTextId ? "Edit text" : "Add text"}</h3>
@@ -848,7 +848,7 @@ export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
           <div className="absolute inset-0 bg-black/60" />
           <div onClick={(e) => e.stopPropagation()}
                className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5"
-               style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
+               style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}>
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-4" />
             <h3 className="text-cream font-extrabold text-[16px] mb-4">Crop aspect ratio</h3>
             <div className="grid grid-cols-4 gap-3">
@@ -872,7 +872,7 @@ export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
           <div className="absolute inset-0 bg-black/60" />
           <div onClick={(e) => e.stopPropagation()}
                className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5"
-               style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
+               style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}>
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-4" />
             <h3 className="text-cream font-extrabold text-[16px] mb-4">Playback speed</h3>
             <div className="grid grid-cols-3 gap-2">
@@ -898,7 +898,7 @@ export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
           <div className="absolute inset-0 bg-black/60" />
           <div onClick={(e) => e.stopPropagation()}
                className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-3"
-               style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
+               style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}>
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto" />
             <h3 className="text-cream font-extrabold text-[16px]">Add sticker</h3>
             <div className="flex flex-wrap gap-2 justify-center">
@@ -941,7 +941,7 @@ export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
           <div className="absolute inset-0 bg-black/60" />
           <div onClick={(e) => e.stopPropagation()}
                className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5"
-               style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
+               style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}>
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-4" />
             <h3 className="text-cream font-extrabold text-[16px] mb-4">Effects</h3>
             <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
@@ -965,7 +965,7 @@ export default function ReelTrim({ src, initialFile, onCancel, onDone }) {
           <div className="absolute inset-0 bg-black/60" />
           <div onClick={(e) => e.stopPropagation()}
                className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 flex flex-col"
-               style={{ maxHeight: "80dvh", paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
+               style={{ maxHeight: "80dvh", paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}>
             <div className="pt-3 pb-2 shrink-0">
               <div className="w-10 h-1 rounded-full bg-white/20 mx-auto" />
             </div>

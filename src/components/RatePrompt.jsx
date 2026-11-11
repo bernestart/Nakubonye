@@ -43,7 +43,7 @@ export default function RatePrompt({ onClose }) {
       <div
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-4"
-        style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+        style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
       >
         <div className="flex items-center justify-between">
           <h3 className="text-cream font-extrabold text-[16px]">

@@ -28,6 +28,11 @@
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
+:root {
+  --safe-top: 32px;
+  --safe-bottom: 8px;
+}
+
 html, body, #root { height: 100%; }
 
 body {
@@ -112,4 +117,30 @@ input, textarea { font-family: inherit; color: inherit; }
 @keyframes nk-toast-in {
   from { opacity: 0; transform: translateX(-50%) translateY(12px); }
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* Facebook Blue Ring - Unseen */
+.story-ring-fb-unseen { background: #1877F2; padding: 2.5px; border-radius: 50%; display: inline-flex; }
+/* Muted Grey Ring - Seen */
+.story-ring-fb-seen { background: rgba(255, 255, 255, 0.2); padding: 2.5px; border-radius: 50%; display: inline-flex; }
+/* Green Ring - Inner Circle */
+.story-ring-inner { background: linear-gradient(135deg, #10B981 0%, #34D399 100%); padding: 2.5px; border-radius: 50%; display: inline-flex; }
+/* Base Container */
+.story-ring-base { padding: 2.5px; border-radius: 50%; display: inline-flex; transition: background 0.3s ease; }
+
+
+/* 🛡️ Native Polish: Prevent Android WebView zoom on inputs */
+input, textarea, select { font-size: 16px !important; }
+
+
+/* --- Global Safe Area Fixes (Capacitor Edge-to-Edge) --- */
+.safe-area-pt { padding-top: env(safe-area-inset-top, 24px); }
+.safe-area-pb { padding-bottom: env(safe-area-inset-bottom, 16px); }
+.safe-area-mt { margin-top: env(safe-area-inset-top, 24px); }
+.safe-area-mb { margin-bottom: env(safe-area-inset-bottom, 16px); }
+.safe-area-py { padding-top: env(safe-area-inset-top, 24px); padding-bottom: env(safe-area-inset-bottom, 16px); }
+
+/* Specific fix for fixed headers */
+header.fixed-header {
+  padding-top: env(safe-area-inset-top, 24px) !important;
 }

@@ -172,7 +172,7 @@ export default function PhotoViewer({ photo, currentUserId, onClose }) {
 
       <div
         className="absolute bottom-0 left-0 right-0 p-4 flex items-center gap-2 justify-center"
-        style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+        style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
         onClick={(e) => e.stopPropagation()}
       >
         {isOwner && (

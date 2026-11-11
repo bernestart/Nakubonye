@@ -23,7 +23,7 @@ function Row({ icon: Icon, label, onClick, danger = false }) {
   )
 }
 
-export default function ProfileMenuSheet({ open, onClose, isMe, userId, person, onReport, onBlock }) {
+export default function ProfileMenuSheet({ open, onClose, isMe, userId, person, onReport, onBlock, accountType}) {
   const { session } = useAuth()
   const myId = session?.user?.id
   const [storyHidden, setStoryHidden] = useState(false)
@@ -82,7 +82,7 @@ export default function ProfileMenuSheet({ open, onClose, isMe, userId, person, 
       <div
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] flex flex-col"
-        style={{ maxHeight: "85dvh", paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+        style={{ maxHeight: "85dvh", paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
       >
         <div className="shrink-0 pt-3 pb-2 flex justify-center">
           <span className="w-10 h-1 rounded-full bg-white/20" />
@@ -92,6 +92,11 @@ export default function ProfileMenuSheet({ open, onClose, isMe, userId, person, 
           {isMe ? (
             <>
               <Row icon={Megaphone}    label="Boost a post"                onClick={() => go("/boost")} />
+              <Row 
+                icon={Sparkles} 
+                label={accountType === 'creator' ? "Turn off Creator Mode" : "Turn on Creator Mode"} 
+                onClick={() => { tap('light'); nav('/settings/creator'); onClose(); }} 
+              />
               <Row icon={Smile}        label="Profile status"              onClick={() => go("/me/edit")} />
               <Row icon={Archive}      label="Archive"                     onClick={() => go("/story-archive")} />
               <Row icon={ScrollText}   label="Activity log"                onClick={() => go("/notifications")} />

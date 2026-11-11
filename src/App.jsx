@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
+import { useSafeArea } from './lib/useSafeArea'
 import { AuthProvider, useAuth } from './lib/auth'
 import { SettingsProvider } from './lib/settings.jsx'
 import RatePrompt from './components/RatePrompt'
@@ -49,6 +50,7 @@ import Reels from './screens/Reels'
 import FollowList from './screens/FollowList'
 import Create from './screens/Create'
 import Search from './screens/Search'
+import HashtagPage from './screens/HashtagPage'
 import Online from './screens/Online'
 import AdminVerifications from './screens/AdminVerifications'
 import Likes from './screens/Likes'
@@ -102,6 +104,7 @@ import EditCommunity from './screens/EditCommunity'
 import JoinCommunity from './screens/JoinCommunity'
 import Notifications from './screens/Notifications'
 import CreatorMode from './screens/CreatorMode'
+import CreatorDashboardScreen from './screens/CreatorDashboardScreen'
 import DeleteAccountModal from './components/DeleteAccountModal'
 import CallOverlay from './components/CallOverlay'
 
@@ -225,6 +228,7 @@ function PresenceKeeper() {
 }
 
 export default function App() {
+  useSafeArea();
   return (
     <AuthProvider>
       <SettingsProvider>
@@ -252,6 +256,7 @@ export default function App() {
         <Route path="/user/:userId/following" element={<Guard><FollowList /></Guard>} />
         <Route path="/create" element={<Guard><Create /></Guard>} />
         <Route path="/search" element={<Guard><Search /></Guard>} />
+        <Route path="/hashtag/:tag" element={<Guard><HashtagPage /></Guard>} />
         <Route path="/online" element={<Guard><Online /></Guard>} />
         <Route path="/roadmap" element={<Roadmap />} />
         <Route path="/discover" element={<Guard><Discover /></Guard>} />
@@ -312,6 +317,7 @@ export default function App() {
         <Route path="/settings/your-data" element={<Guard><YourData /></Guard>} />
         <Route path="/settings/blocking-muted" element={<Guard><BlockingMuted /></Guard>} />
         <Route path="/settings/content-audience" element={<Guard><ContentAudience /></Guard>} />
+        <Route path="/creator-dashboard" element={<Guard><CreatorDashboardScreen /></Guard>} />
         <Route path="/settings/creator" element={<Guard><CreatorMode /></Guard>} />
         <Route path="/settings/pending-tags" element={<Guard><PendingTags /></Guard>} />
         <Route path="/safety"   element={<Guard><SafetyCenter /></Guard>} />

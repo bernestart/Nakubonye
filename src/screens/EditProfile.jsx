@@ -467,7 +467,7 @@ export default function EditProfile() {
 
       {/* Top bar — X + title + Save */}
       <header className="shrink-0 flex items-center gap-2 px-3 h-14 border-b border-white/6 bg-[#0B0B14]"
-              style={{ paddingTop: "env(safe-area-inset-top)" }}>
+              style={{ paddingTop: "var(--safe-top, 32px)" }}>
         <button
           onClick={() => nav(-1)}
           className="w-9 h-9 rounded-full grid place-items-center text-cream shrink-0"
@@ -1265,7 +1265,7 @@ export default function EditProfile() {
       </div>
 
       {/* Bottom safe area padding */}
-      <div className="shrink-0" style={{ height: 'max(12px, env(safe-area-inset-bottom))' }} />
+      <div className="shrink-0" style={{ height: 'max(12px, var(--safe-bottom, 8px))' }} />
     </div>
   )
 }

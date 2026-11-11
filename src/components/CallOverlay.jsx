@@ -190,7 +190,7 @@ export default function CallOverlay() {
         {/* Control bar */}
         <div
           className="absolute bottom-0 left-0 right-0 pt-4 flex items-center justify-center gap-5"
-          style={{ paddingBottom: 'max(24px, env(safe-area-inset-bottom))', background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)' }}
+          style={{ paddingBottom: 'max(24px, var(--safe-bottom, 8px))', background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)' }}
         >
           <ControlBtn onClick={toggleMute} label={muted ? 'Unmute' : 'Mute'}>
             {muted ? <MicOff size={22} /> : <Mic size={22} />}
@@ -272,7 +272,7 @@ export default function CallOverlay() {
         {/* Bottom pill — mute, camera-off toggle, red end */}
         <div
           className="absolute bottom-0 left-0 right-0 flex justify-center"
-          style={{ paddingBottom: 'max(28px, env(safe-area-inset-bottom))' }}
+          style={{ paddingBottom: 'max(28px, var(--safe-bottom, 8px))' }}
         >
           <div className="flex items-center gap-3 px-3 py-3 rounded-full bg-black/55  border border-white/10">
             <button

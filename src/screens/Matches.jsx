@@ -295,7 +295,7 @@ export default function Matches() {
       }}
     >
       <BrandGlow />
-      <AppHeader />
+      
 
       <button
         onClick={() => { tap('light'); load() }}
@@ -406,7 +406,7 @@ export default function Matches() {
                         )}
                       </p>
                       <p className="text-muted text-[11.5px] mt-0.5 truncate">
-                        {u.mutuals > 0 ? `${u.mutuals} mutual connection${u.mutuals === 1 ? '' : 's'}` : (u.city || 'Suggested for you')}
+                        {u.mutuals > 0 ? `${u.mutuals} mutual ${u.account_type === 'creator' ? 'follower' : 'match'}${u.mutuals === 1 ? '' : 's'}` : (u.city || 'Suggested for you')}
                       </p>
                     </button>
                     <div className="flex items-center gap-2 mt-2">
@@ -458,7 +458,7 @@ export default function Matches() {
                             {m.age ? `, ${m.age}` : ''}
                           </p>
                           <p className="text-muted text-[11.5px] mt-0.5 truncate">
-                            {mc > 0 ? `${mc} mutual connection${mc === 1 ? '' : 's'}` : (m.city ? `📍 ${m.city}` : 'Matched')}
+                            {mc > 0 ? `${mc} mutual ${m.account_type === 'creator' ? 'follower' : 'match'}${mc === 1 ? '' : 's'}` : (m.city ? `📍 ${m.city}` : 'Matched')}
                           </p>
                         </button>
                         {ts && <span className="text-muted text-[11px] shrink-0 mt-1">{timeAgo(ts)}</span>}

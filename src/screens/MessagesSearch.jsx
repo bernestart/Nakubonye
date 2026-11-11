@@ -147,7 +147,7 @@ export default function MessagesSearch() {
   return (
     <div style={{ position: "fixed", inset: 0, margin: "0 auto", maxWidth: 480, display: "flex", flexDirection: "column", background: "#0B0B14", overflow: "hidden" }}>
       <BrandGlow />
-      <header className="shrink-0 flex items-center gap-2 px-3 h-14 border-b border-white/8" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+      <header className="shrink-0 flex items-center gap-2 px-3 h-14 border-b border-white/8" style={{ paddingTop: "var(--safe-top, 32px)" }}>
         <button onClick={() => nav(-1)} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Back">
           <ArrowLeft size={20} strokeWidth={2.3} />
         </button>

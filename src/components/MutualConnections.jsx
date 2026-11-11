@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 
-export default function MutualConnections({ userId, myId }) {
+export default function MutualConnections({ userId, myId, accountType }) {
   const nav = useNavigate()
   const [loading, setLoading] = useState(true)
   const [mutuals, setMutuals] = useState([])
@@ -108,7 +108,7 @@ export default function MutualConnections({ userId, myId }) {
               {mutuals.length > 2 ? ` + ${mutuals.length - 2} more` : ""}
             </p>
             <p className="text-muted text-[11px]">
-              {mutuals.length} mutual connection{mutuals.length === 1 ? "" : "s"}
+              {mutuals.length} mutual ${accountType === 'creator' ? 'follower' : 'match'}{mutuals.length === 1 ? "" : "s"}
             </p>
           </div>
         </button>

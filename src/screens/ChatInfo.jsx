@@ -361,7 +361,7 @@ export default function ChatInfo() {
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-4"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-3" />
             <p className="text-cream font-bold text-[15px] mb-3">Quick reaction</p>
@@ -389,7 +389,7 @@ export default function ChatInfo() {
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-3" />
             <p className="text-cream font-bold text-[15px] mb-3">Nickname</p>
@@ -426,7 +426,7 @@ export default function ChatInfo() {
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 flex flex-col"
-            style={{ maxHeight: "85dvh", paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ maxHeight: "85dvh", paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="p-4 shrink-0 border-b border-white/8">
               <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-3" />

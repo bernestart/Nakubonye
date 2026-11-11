@@ -236,7 +236,7 @@ export default function Invite() {
           <div
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-[480px] mx-auto bg-surface rounded-t-[28px] border-t border-white/10 p-5"
-            style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}
+            style={{ paddingBottom: 'max(20px, var(--safe-bottom, 8px))' }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-4" />
             <h3 className="text-cream font-extrabold text-[17px] mb-2">Enter your friend's code</h3>

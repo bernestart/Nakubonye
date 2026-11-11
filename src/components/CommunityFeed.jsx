@@ -6,6 +6,8 @@ import { useAuth } from '../lib/auth'
 import { publicPhotoUrl } from '../lib/photo'
 import { tap } from '../lib/haptic'
 import ResharedPost from './ResharedPost'
+import ProfilePostCard from './ProfilePostCard'
+import PostComposer from './PostComposer'
 
 export default function CommunityFeed({ communityId, isMember }) {
 
@@ -17,9 +19,11 @@ export default function CommunityFeed({ communityId, isMember }) {
   const [posts, setPosts] = useState([])
   const [mutedIds, setMutedIds] = useState(new Set())
   const [text, setText] = useState('')
+  const [composerOpen, setComposerOpen] = useState(false)
   const [isAnnouncement, setIsAnnouncement] = useState(false)
   const [announcementTitle, setAnnouncementTitle] = useState('')
   const [myRole, setMyRole] = useState(null)
+  const [actionPost, setActionPost] = useState(null)
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -186,12 +190,21 @@ export default function CommunityFeed({ communityId, isMember }) {
   async function deletePost(postId) {
     if (!confirm('Delete this post?')) return
     tap('light')
-    const { error: err } = await supabase
-      .from('community_posts')
-      .delete()
-      .eq('id', postId)
-      .eq('author_id', session.user.id)
+    
+    // Build query
+    let query = supabase.from('community_posts').delete().eq('id', postId)
+    
+    // If the user is NOT an admin/mod, restrict the delete to their own post
+    const isModerator = ['owner', 'admin', 'moderator'].includes(myRole)
+    if (!isModerator) {
+      query = query.eq('author_id', session.user.id)
+    }
+
+    const { error: err } = await query
     if (err) { setError(err.message); return }
+    
+    // Remove from UI
+    setPosts(prev => prev.filter(p => p.id !== postId))
   }
   async function toggleReaction(postId, emoji) {
     if (!session?.user?.id) return
@@ -266,96 +279,63 @@ export default function CommunityFeed({ communityId, isMember }) {
         </div>
         <p className="text-cream font-semibold text-[14.5px] mb-1">Join to see posts</p>
         <p className="text-muted text-[12.5px]">Only members can see what's shared here.</p>
-      </div>
-    )
-  }
+        {composerOpen && (
+        <PostComposer
+          communityId={communityId}
+          onClose={() => setComposerOpen(false)}
+          onDone={() => { setComposerOpen(false); load(); }}
+        />
+      )}
+    </div>
+  )
+}
 
 
   return (
     <div className="flex flex-col gap-4">
+      {/* ADMIN MODERATION BOTTOM SHEET */}
+      {actionPost && (
+        <div className="fixed inset-0 z-[150] flex items-end bg-black/60" onClick={() => setActionPost(null)}>
+          <div className="w-full bg-[#0B0B14] rounded-t-3xl border-t border-white/10 p-4" onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-4" />
+            
+            {/* Show Delete if Admin OR if it's their own post */}
+            {(['owner', 'admin', 'moderator'].includes(myRole) || actionPost.author_id === session.user.id) && (
+               <button 
+                 onClick={() => { setActionPost(null); deletePost(actionPost.id); }} 
+                 className="w-full text-left p-4 rounded-xl text-red-400 font-bold hover:bg-white/5 flex items-center gap-3 active:bg-white/10"
+               >
+                 <Trash2 size={20} /> Delete Post
+               </button>
+            )}
+            
+            <button onClick={() => setActionPost(null)} className="w-full text-center p-4 text-muted font-bold mt-2 active:opacity-50">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       {error && (
         <div className="text-danger text-[12.5px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5">
           {error}
         </div>
       )}
 
-      {/* Composer */}
-      <div className="rounded-2xl bg-white/[0.04] border border-white/8 p-3">
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value.slice(0, 500))}
-          rows={2}
-          placeholder="Share something with the community…"
-          className="w-full bg-transparent border-0 text-cream text-[14px] placeholder:text-subtle focus:outline-none resize-none"
+      {/* Composer — triggers universal PostComposer */}
+      {composerOpen ? (
+        <PostComposer
+          communityId={communityId}
+          onClose={() => setComposerOpen(false)}
+          onDone={() => { setComposerOpen(false); load(); }}
         />
-
-        {imagePreview && (
-          <div className="relative w-fit mt-2">
-            <img src={imagePreview} alt="" className="rounded-xl max-h-32" />
-            <button
-              onClick={clearImage}
-              className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-obsidian border border-white/20 grid place-items-center"
-              aria-label="Remove"
-            >
-              <X size={13} strokeWidth={2.6} className="text-cream" />
-            </button>
-          </div>
-        )}
-
-        {(myRole === 'owner' || myRole === 'admin') && (
-          <div className="mt-2 pt-2 border-t border-white/6">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isAnnouncement}
-                onChange={(e) => setIsAnnouncement(e.target.checked)}
-                className="w-4 h-4 accent-purple-500"
-              />
-              <span className="text-cream text-[12.5px] font-semibold">📢 Post as announcement</span>
-            </label>
-            {isAnnouncement && (
-              <input
-                value={announcementTitle}
-                onChange={(e) => setAnnouncementTitle(e.target.value.slice(0, 80))}
-                placeholder="Announcement title (optional)"
-                className="mt-2 w-full h-9 rounded-lg bg-white/[0.04] border border-white/8 px-3 text-cream text-[12.5px] placeholder:text-muted focus:outline-none focus:border-purple-500"
-              />
-            )}
-          </div>
-        )}
-
-        <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/6">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            hidden
-            onChange={pickImage}
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="w-9 h-9 rounded-full grid place-items-center text-muted hover:text-cream"
-            aria-label="Add image"
-          >
-            <ImagePlus size={18} strokeWidth={2.2} />
-          </button>
-
-          <div className="flex items-center gap-2">
-            <span className="text-subtle text-[11px]">{text.length}/500</span>
-            <button
-              onClick={submit}
-              disabled={submitting || (!text.trim() && !imageFile)}
-              className="h-9 px-4 rounded-full text-white font-bold text-[13px] disabled:opacity-40 flex items-center gap-1.5"
-              style={{
-                background: 'linear-gradient(135deg, #A855F7 0%, #EC4899 100%)',
-              }}
-            >
-              <Send size={13} strokeWidth={2.5} />
-              {submitting ? 'Posting…' : 'Post'}
-            </button>
-          </div>
-        </div>
-      </div>
+      ) : (
+        <button
+          onClick={() => setComposerOpen(true)}
+          className="w-full rounded-2xl bg-white/[0.04] border border-white/8 p-4 text-left text-muted text-[14px] hover:bg-white/[0.06] active:bg-white/[0.08]"
+        >
+          Share something with the community…
+        </button>
+      )}
 
       {/* Posts */}
       {loading ? (
@@ -373,145 +353,39 @@ export default function CommunityFeed({ communityId, isMember }) {
         <div className="flex flex-col gap-3">
           {posts.map((post) => {
             const mine = post.author_id === session.user.id
+            const postReacts = reactions[post.id] || []
+            const myReact = postReacts.find(r => r.user_id === session.user.id)?.reaction
             const isAnn = !!post.is_announcement
+            
             return (
-              <div
-                key={post.id}
-                className="rounded-2xl bg-white/[0.04] border border-white/8 p-3"
-                style={isAnn ? { borderColor: 'rgba(236,72,153,0.4)', background: 'rgba(236,72,153,0.06)' } : undefined}
-              >
+              <div key={post.id} className={isAnn ? "rounded-2xl border border-pink-500/40 bg-pink-500/10 p-2 mb-2" : "mb-2"}>
                 {isAnn && (
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="px-2 h-6 rounded-full bg-pink-500/25 border border-pink-500/50 text-pink-200 text-[10.5px] font-black tracking-wider flex items-center gap-1">
-                      📢 ANNOUNCEMENT
-                    </span>
+                  <div className="px-2 pt-2 flex items-center gap-2">
+                    <span className="px-2 h-6 rounded-full bg-pink-500/25 border border-pink-500/50 text-pink-200 text-[10.5px] font-black tracking-wider flex items-center gap-1">📢 ANNOUNCEMENT</span>
                   </div>
                 )}
-                {isAnn && post.announcement_title && (
-                  <p className="text-cream font-black text-[15px] mb-2">{post.announcement_title}</p>
-                )}
-                <div className="flex items-start gap-3 mb-2">
-                  <button
-                    onClick={() => { tap('light'); nav('/profile/' + post.author_id) }}
-                    className="shrink-0"
-                  >
-                    <div className="w-10 h-10 rounded-full overflow-hidden bg-elevated border border-white/8">
-                      {post.author_photo ? (
-                        <img src={post.author_photo} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full grid place-items-center text-base font-black text-purple-400">
-                          {post.author_name[0]}
-                        </div>
-                      )}
-                    </div>
-                  </button>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-cream text-[13.5px] font-semibold truncate flex items-center gap-1.5">
-                      {post.author_name}
-                      {post.author_verified && <span className="text-purple-400 text-[11px]">✓</span>}
-                    </p>
-                    <p className="text-subtle text-[11px]">
-                      {new Date(post.created_at).toLocaleString([], {
-                        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-                      })}
-                    </p>
-                  </div>
-                  {post.pinned && (
-                    <div className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9.5px] font-black tracking-wide">
-                      PINNED
-                    </div>
-                  )}
-                  {mine && !post.pinned && (
-                    <button
-                      onClick={() => pinCommunityPost(post.id)}
-                      className="w-8 h-8 rounded-full grid place-items-center text-muted hover:text-amber-400"
-                      aria-label="Pin post"
-                    >
-                      <Pin size={15} strokeWidth={2.2} />
-                    </button>
-                  )}
-                  {mine && (
-                    <button
-                      onClick={() => deletePost(post.id)}
-                      className="w-8 h-8 rounded-full grid place-items-center text-muted hover:text-danger"
-                      aria-label="Delete post"
-                    >
-                      <Trash2 size={15} strokeWidth={2.2} />
-                    </button>
-                  )}
-                </div>
-
-                {post.content && (
-                  <p className="text-cream/92 text-[14px] leading-[1.5] break-words whitespace-pre-wrap">
-                    {post.content}
-                  </p>
-                )}
-
-                {post.reshared_from_type && post.reshared_include_original && post.reshared_from_snapshot && (
-                  <div className="mt-2">
-                    <ResharedPost snapshot={{ ...post.reshared_from_snapshot, id: post.reshared_from_id, type: post.reshared_from_type }} />
-                  </div>
-                )}
-
-                {post.image_url && (
-                  <div className="mt-2 rounded-xl overflow-hidden border border-white/8">
-                    <img
-                      src={post.image_url}
-                      alt=""
-                      className="block w-full h-auto max-h-[420px] object-cover"
-                      loading="lazy"
-                    />
-                  </div>
-                )}
-
-                {/* Reactions */}
-                <div className="mt-3 pt-2 border-t border-white/6 flex items-center gap-1.5 flex-wrap">
-                  {Object.entries(
-                    (reactions[post.id] || []).reduce((acc, r) => {
-                      acc[r.reaction] = (acc[r.reaction] || 0) + 1
-                      return acc
-                    }, {})
-                  ).map(([emoji, count]) => {
-                    const mine = (reactions[post.id] || []).find(
-                      (r) => r.user_id === session.user.id
-                    )?.reaction === emoji
-                    return (
-                      <button
-                        key={emoji}
-                        onClick={() => toggleReaction(post.id, emoji)}
-                        className={`text-[12px] px-2 py-0.5 rounded-full border transition-colors ${
-                          mine
-                            ? 'bg-purple-500/20 border-purple-400/40'
-                            : 'bg-white/[0.04] border-white/10'
-                        }`}
-                      >
-                        {emoji} {count > 1 ? count : ''}
-                      </button>
-                    )
-                  })}
-
-                  <button
-                    onClick={() => { tap('light'); setPickerFor(pickerFor === post.id ? null : post.id) }}
-                    className="w-7 h-7 rounded-full grid place-items-center bg-white/[0.04] border border-white/10 text-muted hover:text-cream"
-                    aria-label="Add reaction"
-                  >
-                    <Smile size={13} strokeWidth={2.3} />
-                  </button>
-
-                  {pickerFor === post.id && (
-                    <div className="flex gap-1 p-1 rounded-full bg-elevated border border-white/10 ml-1">
-                      {['❤️','😂','😍','👍','🔥','😮','😢','😡'].map((emoji) => (
-                        <button
-                          key={emoji}
-                          onClick={() => toggleReaction(post.id, emoji)}
-                          className="w-7 h-7 rounded-full grid place-items-center text-base hover:bg-white/10"
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <ProfilePostCard
+                  post={{
+                    ...post,
+                    _source: "community",
+                    author_id: post.author_id,
+                    content: post.content,
+                    image_paths: post.image_paths || (post.image_path ? [post.image_path] : []),
+                    audience: "public"
+                  }}
+                  authorProfile={{ id: post.author_id, display_name: post.author_name, is_verified: post.author_verified }}
+                  authorPhoto={post.author_photo}
+                  isMe={mine}
+                  onOpenMenu={(p) => { tap("light"); setActionPost(post); }}
+                  onHide={(p) => { setMutedIds(prev => new Set(prev).add(p.author_id)) }}
+                  reactionCount={postReacts.length}
+                  liked={!!myReact}
+                  reactionEmoji={myReact || "❤️"}
+                  commentCount={post.comment_count || 0}
+                  shareCount={0}
+                  onToggleLike={() => toggleReaction(post.id, myReact || "❤️")}
+                  onOpenReposts={() => {}}
+                />
               </div>
             )
           })}

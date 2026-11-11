@@ -107,7 +107,7 @@ export function AuthProvider({ children }) {
     ;(async () => {
       const { data } = await supabase
         .from('profiles')
-        .select('id, username, display_name, date_of_birth, gender, bio, city, country, is_verified, is_active, is_admin, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children, hide_online_status, hide_age, incognito_mode, only_matches_can_message, is_banned, banned_reason, cover_photo_path')
+        .select('id, username, display_name, date_of_birth, gender, bio, city, country, is_verified, is_active, is_admin, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children, hide_online_status, hide_age, incognito_mode, only_matches_can_message, is_banned, banned_reason, cover_photo_path, account_type, category_label')
         .eq('id', session.user.id)
         .single()
 
@@ -118,7 +118,7 @@ export function AuthProvider({ children }) {
         await new Promise((r) => setTimeout(r, 700))
         const retry = await supabase
           .from('profiles')
-          .select('id, username, display_name, date_of_birth, gender, bio, city, country, is_verified, is_active, is_admin, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children, hide_online_status, hide_age, incognito_mode, only_matches_can_message, is_banned, banned_reason, cover_photo_path')
+          .select('id, username, display_name, date_of_birth, gender, bio, city, country, is_verified, is_active, is_admin, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children, hide_online_status, hide_age, incognito_mode, only_matches_can_message, is_banned, banned_reason, cover_photo_path, account_type, category_label')
           .eq('id', session.user.id)
           .single()
         if (!cancelled) {
@@ -139,7 +139,7 @@ export function AuthProvider({ children }) {
     if (!session?.user?.id) return null
     const { data } = await supabase
       .from('profiles')
-      .select('id, username, display_name, date_of_birth, gender, bio, city, country, is_verified, is_active, is_admin, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children, hide_online_status, hide_age, incognito_mode, only_matches_can_message, is_banned, banned_reason, cover_photo_path')
+      .select('id, username, display_name, date_of_birth, gender, bio, city, country, is_verified, is_active, is_admin, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children, hide_online_status, hide_age, incognito_mode, only_matches_can_message, is_banned, banned_reason, cover_photo_path, account_type, category_label')
       .eq('id', session.user.id)
       .single()
     if (data) setProfile(data)

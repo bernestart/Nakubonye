@@ -25,7 +25,9 @@ export function NotificationsProvider({ children }) {
       setBanner({ title: n.title || "", body: n.body || "", data })
     }
     window.addEventListener("nk-push-received", onPush)
-    return () => window.removeEventListener("nk-push-received", onPush)
+    
+  
+  return () => window.removeEventListener("nk-push-received", onPush)
   }, [])
 
   useEffect(() => {
@@ -88,7 +90,7 @@ export function NotificationsProvider({ children }) {
     const uid = session.user.id
     const ch = supabase
       .channel('notif-' + uid)
-      .on('postgres_changes',
+      .on('broadcast', { event: '*' },
         { event: 'INSERT', schema: 'public', table: 'notifications', filter: 'user_id=eq.' + uid },
         (payload) => {
           // Only bump if the new row is unread
@@ -96,7 +98,7 @@ export function NotificationsProvider({ children }) {
             setUnreadCount((c) => c + 1)
           }
         })
-      .on('postgres_changes',
+      .on('broadcast', { event: '*' },
         { event: 'UPDATE', schema: 'public', table: 'notifications', filter: 'user_id=eq.' + uid },
         (payload) => {
           const wasUnread = payload?.old && !payload.old.read_at
@@ -104,7 +106,7 @@ export function NotificationsProvider({ children }) {
           if (wasUnread && !isUnread) setUnreadCount((c) => Math.max(0, c - 1))
           else if (!wasUnread && isUnread) setUnreadCount((c) => c + 1)
         })
-      .on('postgres_changes',
+      .on('broadcast', { event: '*' },
         { event: 'DELETE', schema: 'public', table: 'notifications', filter: 'user_id=eq.' + uid },
         (payload) => {
           if (payload?.old && !payload.old.read_at) {
@@ -115,8 +117,20 @@ export function NotificationsProvider({ children }) {
     return () => { supabase.removeChannel(ch) }
   }, [session?.user?.id])
 
+  const resetBadge = async () => {
+    setUnreadCount(0);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('user_id', user.id)
+        .eq('read', false);
+    }
+  };
+
   return (
-    <NotifCtx.Provider value={{ unreadCount, loading, refresh, banner, dismissBanner }}>
+    <NotifCtx.Provider value={{ unreadCount, setUnreadCount, resetBadge, loading, refresh, banner, dismissBanner }}>
       {children}
     </NotifCtx.Provider>
   )

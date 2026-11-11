@@ -336,7 +336,7 @@ export default function ReelComments({ reelId, onClose, onCountChange, initialCo
           </div>
         )}
 
-        <div className="px-3 py-3 border-t border-white/8 shrink-0" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+        <div className="px-3 py-3 border-t border-white/8 shrink-0" style={{ paddingBottom: "max(12px, var(--safe-bottom, 8px))" }}>
 
           {mentionResults.length > 0 && mentionQuery !== null && (
             <div className="mb-2 max-h-40 overflow-y-auto rounded-2xl bg-elevated border border-white/10">

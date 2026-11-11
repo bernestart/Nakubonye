@@ -28,7 +28,7 @@ export default function MessagePopover({
         transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
         onClick={(e) => e.stopPropagation()}
         className="fixed left-0 right-0 bottom-0 z-[401] mx-auto w-full max-w-[480px] bg-[#0B0B14] rounded-t-[24px] border-t border-white/10"
-        style={{ paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}
+        style={{ paddingBottom: "max(16px, var(--safe-bottom, 8px))" }}
       >
         <div className="pt-3 pb-1.5">
           <div className="w-10 h-1 rounded-full bg-white/20 mx-auto" />
@@ -111,7 +111,7 @@ export default function MessagePopover({
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-4"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-3" />
             <div className="flex items-center justify-between mb-3">

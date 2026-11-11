@@ -145,7 +145,7 @@ export default function GroupMembers() {
           <div className="absolute inset-0 bg-black/60" />
           <div onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}>
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             <p className="text-cream font-bold text-[15px] mb-2 truncate">
               {profiles.get(menuFor.user_id)?.display_name || "Member"}

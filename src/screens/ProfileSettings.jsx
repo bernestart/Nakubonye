@@ -81,7 +81,6 @@ export default function ProfileSettings() {
             type="button"
             onClick={(e) => { e.stopPropagation(); setComposerOpen(true) }}
             className="relative shrink-0"
-            aria-label="Add to your story"
           >
             <span
               className="block rounded-full p-[2px]"
@@ -110,123 +109,27 @@ export default function ProfileSettings() {
           <ChevronRight size={18} className="text-subtle shrink-0" />
         </button>
 
-        {/* Standalone rows above grid — Facebook pattern */}
-        <div className="flex flex-col gap-1.5 mb-4">
-          <button
-            onClick={() => { tap('light'); nav('/settings/creator') }}
-            className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
-          >
-            <span className="shrink-0 text-purple-300">
-              <Sparkles size={18} />
-            </span>
-            <span className="flex-1 text-cream text-[15px] font-medium">Creator mode</span>
-            <ChevronRight size={18} className="text-muted shrink-0" />
-          </button>
-          <button
-            onClick={() => { tap('light'); setComposerOpen(true) }}
-            className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
-          >
-            <span className="shrink-0 text-cream">
-              <Plus size={18} />
-            </span>
-            <span className="flex-1 text-cream text-[15px] font-medium">Add to your story</span>
-            <ChevronRight size={18} className="text-muted shrink-0" />
-          </button>
-          <button
-            onClick={() => { tap('light'); nav('/invite') }}
-            className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
-          >
-            <span className="shrink-0 text-cream">
-              <Gift size={18} />
-            </span>
-            <span className="flex-1 text-cream text-[15px] font-medium">Invite friends</span>
-            <ChevronRight size={18} className="text-muted shrink-0" />
-          </button>
-          <button
-            onClick={() => { tap('light'); setShareOpen(true) }}
-            className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
-          >
-            <span className="shrink-0 text-purple-300">
-              <Share2 size={18} />
-            </span>
-            <span className="flex-1 text-cream text-[15px] font-medium">Share profile</span>
-            <ChevronRight size={18} className="text-muted shrink-0" />
-          </button>
-
-          <button
-            onClick={() => { tap('light'); nav('/saved') }}
-            className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
-          >
-            <span className="shrink-0 text-cream">
-              <Bookmark size={18} />
-            </span>
-            <span className="flex-1 text-cream text-[15px] font-medium">Saved</span>
-            <ChevronRight size={18} className="text-muted shrink-0" />
-          </button>
-          <button
-            onClick={() => { tap('light'); nav('/story-archive') }}
-            className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
-          >
-            <span className="shrink-0 text-cream">
-              <Clock size={18} />
-            </span>
-            <span className="flex-1 text-cream text-[15px] font-medium">Story archive</span>
-            <ChevronRight size={18} className="text-muted shrink-0" />
-          </button>
-          <button
-            onClick={() => { tap('light'); nav('/memories') }}
-            className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
-          >
-            <span className="shrink-0 text-cream">
-              <Camera size={18} />
-            </span>
-            <span className="flex-1 text-cream text-[15px] font-medium">Memories</span>
-            <ChevronRight size={18} className="text-muted shrink-0" />
-          </button>
-          <button
-            onClick={() => { tap('light'); nav('/drafts') }}
-            className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
-          >
-            <span className="shrink-0 text-cream">
-              <FileText size={18} />
-            </span>
-            <span className="flex-1 text-cream text-[15px] font-medium">Drafts</span>
-            <ChevronRight size={18} className="text-muted shrink-0" />
-          </button>
-          <button
-            onClick={() => { tap('light'); nav('/offline-reels') }}
-            className="w-full flex items-center gap-4 px-4 py-3.5 text-left border-b border-white/6 active:bg-white/[0.03]"
-          >
-            <span className="shrink-0 text-cream">
-              <WifiOff size={18} />
-            </span>
-            <span className="flex-1 text-cream text-[15px] font-medium">Offline reels</span>
-            <ChevronRight size={18} className="text-muted shrink-0" />
-          </button>
-        </div>
-
         {/* Feature tile grid — NO label */}
         <div className="flex flex-col mb-5">
           <FeatureTile icon={<Bookmark size={20} />} label="Saved" to="/saved" nav={nav} />
-          <FeatureTile icon={<LayoutGrid size={20} />} label="Posts" to="/me/preview" nav={nav} />
-          <FeatureTile icon={<Play size={20} />} label="Reels" to="/reels" nav={nav} />
           <FeatureTile icon={<Heart size={20} />} label="Matches" to="/matches" nav={nav} />
           <FeatureTile icon={<Users size={20} />} label="Communities" to="/communities" nav={nav} />
-          <FeatureTile icon={<ShieldCheck size={20} />} label="Get verified" to="/verify" nav={nav} />
-          <FeatureTile icon={<Coins size={20} />} label="Monetization" to="/monetization" nav={nav} />
-          <FeatureTile icon={<Layers size={20} />} label="Audiences" to="/circles" nav={nav} />
           <FeatureTile icon={<Store size={20} />} label="Marketplace" to="/marketplace" nav={nav} />
           <FeatureTile icon={<Briefcase size={20} />} label="Services" to="/services" nav={nav} />
         </div>
 
         {/* Collapsible — Settings & privacy (Facebook-style hierarchy) */}
         <Collapsible
-          icon={<Key size={18} />}
+          icon={<Key size={18} />
+              }
           label="Settings & privacy"
           open={settingsOpen}
           onToggle={() => { tap('light'); setSettingsOpen((v) => !v) }}
         >
           <MenuRow icon={<User size={18} />} label="Account" to="/settings/account" nav={nav} />
+          <MenuRow icon={<ShieldCheck size={18} />} label="Get verified" to="/verify" nav={nav} />
+          
+          
           <MenuRow icon={<Shield size={18} />} label="Privacy" to="/settings/privacy" nav={nav} />
           <MenuRow icon={<Globe size={18} />} label="Content & audience" to="/settings/content-audience" nav={nav} />
           <MenuRow icon={<Ban size={18} />} label="Blocking & muting" to="/settings/blocking-muted" nav={nav} />

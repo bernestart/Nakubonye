@@ -1,5 +1,6 @@
 import { useState } from "react"
-import { BellOff, X, Pencil, Users, Trash2, Flag, EyeOff, Link2, Bookmark , Clock , UserMinus } from "lucide-react"
+import PostInsights from "./PostInsights"
+import { BellOff, X, Pencil, Users, Trash2, Flag, EyeOff, Link2, Bookmark , Clock , UserMinus , BarChart2 } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
@@ -13,7 +14,8 @@ const AUDIENCES = [
 export default function PostActionsSheet({ post, onClose, onDeleted, onUpdated, initialSaved = false, onSaved }) {
   const { session } = useAuth()
   const myId = session?.user?.id
-  const [screen, setScreen] = useState("menu") // menu | edit | audience
+  const [screen, setScreen] = useState("menu")
+  const [insightsOpen, setInsightsOpen] = useState(false) // menu | edit | audience
   const [saved, setSaved] = useState(initialSaved)
   const [content, setContent] = useState(post.content || "")
   const [busy, setBusy] = useState(false)
@@ -180,12 +182,15 @@ export default function PostActionsSheet({ post, onClose, onDeleted, onUpdated, 
   }
 
   return (
+      <>
+      {insightsOpen && <PostInsights post={post} onClose={() => setInsightsOpen(false)} />}
+      return (
     <div className="fixed inset-0 z-[400] flex items-end" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60" />
       <div
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5"
-        style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+        style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
       >
         <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-4" />
 
@@ -193,6 +198,21 @@ export default function PostActionsSheet({ post, onClose, onDeleted, onUpdated, 
           <>
             <h3 className="text-cream font-extrabold text-[17px] mb-4">Post options</h3>
             <div className="flex flex-col gap-2">
+              {isMine && isPersonal && (
+                <button
+                  onClick={() => setInsightsOpen(true)}
+                  className="flex items-center gap-3 p-4 rounded-2xl bg-white/[0.04] border border-white/8 text-left"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 grid place-items-center">
+                    <BarChart2 size={17} className="text-purple-300" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-cream font-semibold text-[14.5px]">View insights</p>
+                    <p className="text-muted text-[12px]">See reach and engagement</p>
+                  </div>
+                </button>
+              )}
+
               {isMine && isPersonal && (
                 <button
                   onClick={() => setScreen("edit")}
@@ -462,5 +482,6 @@ export default function PostActionsSheet({ post, onClose, onDeleted, onUpdated, 
         )}
       </div>
     </div>
-  )
-}
+      </>
+    )
+  }

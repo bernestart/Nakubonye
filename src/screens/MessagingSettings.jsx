@@ -21,8 +21,9 @@ export default function MessagingSettings() {
   const [newMsgOpen, setNewMsgOpen] = useState(false)
 
   const load = useCallback(async () => {
-    if (!myId) return
+    if (!myId) { setLoading(false); return }
     setLoading(true)
+    try {
     const [reqRes, convArch, grpArch, settingsRes] = await Promise.all([
       supabase.from("message_requests").select("id", { count: "exact", head: true }).eq("recipient_id", myId).eq("status", "pending"),
       supabase.from("conversation_archives").select("conversation_id", { count: "exact" }).eq("user_id", myId),
@@ -33,6 +34,10 @@ export default function MessagingSettings() {
     setArchiveCount((convArch.data?.length || 0) + (grpArch.data?.length || 0))
     setActiveStatus(settingsRes.data?.show_activity_status !== false)
     setLoading(false)
+    } catch (e) {
+      console.error('MessagingSettings load error:', e)
+      setLoading(false)
+    }
   }, [myId])
 
   useEffect(() => { load() }, [load])

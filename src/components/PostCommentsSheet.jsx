@@ -1,5 +1,6 @@
+import { motion } from "framer-motion"
+import { Send, X, Heart, Pencil, CornerDownRight, Pin, Play, Pause, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react"
-import { X, Send, Trash2, Heart, Pencil, CornerDownRight, Pin } from "lucide-react"
 import VerifiedBadge from "./VerifiedBadge"
 import { supabase } from "../lib/supabase"
 import { loadBlockedIds } from "../lib/blocks"
@@ -7,7 +8,10 @@ import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 
+
 export default function PostCommentsSheet({ postId, source = "community", onClose, onCountChange, initialCommentId = null }) {
+  const onCountChangeRef = useRef(onCountChange);
+  useEffect(() => { onCountChangeRef.current = onCountChange }, [onCountChange]);
   const { session } = useAuth()
   const myId = session?.user?.id
   const table      = source === "personal" ? "user_post_comments" : "community_post_comments"
@@ -22,6 +26,13 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
   const [mentionResults, setMentionResults] = useState([])
   const [mentionQuery, setMentionQuery] = useState(null)
   const [busy, setBusy] = useState(false)
+
+
+  
+  // Keep parent count in sync with actual non-deleted comments
+  useEffect(() => {
+    try { onCountChangeRef.current?.(comments.filter(c => !c.deleted_at).length); } catch {}
+  }, [comments]);
   const [loading, setLoading] = useState(true)
   const [canComment, setCanComment] = useState(true)
   const [canCommentReason, setCanCommentReason] = useState('')
@@ -30,9 +41,9 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
   const [editText, setEditText] = useState("")
   const [pickerFor, setPickerFor] = useState(null)
   const listRef = useRef(null)
-  const onCountChangeRef = useRef(onCountChange)
+  
 
-  useEffect(() => { onCountChangeRef.current = onCountChange }, [onCountChange])
+  
 
   // Deep-link: scroll to + highlight the target comment
   useEffect(() => {
@@ -52,6 +63,7 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
     if (!postId) return
     ;(async () => {
       const table = source === "personal" ? "user_posts" : "community_posts"
+    const commentTable = source === "personal" ? "user_post_comments" : "community_post_comments"
       const col = source === "personal" ? "user_id" : "author_id"
       const { data } = await supabase.from(table).select(col).eq("id", postId).maybeSingle()
       setPostAuthorId(data?.[col] || null)
@@ -65,7 +77,7 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
       .select("id, user_id, content, created_at, reply_to_id, edited_at, deleted_at, pinned_at")
       .eq("post_id", postId)
       .order("created_at", { ascending: true })
-      .limit(300)
+      .limit(50)
 
     const list = (rows || []).slice().sort((a, b) => {
       if (a.pinned_at && !b.pinned_at) return -1
@@ -147,7 +159,6 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
     if (!body || !myId || busy) return
     setBusy(true); tap("light")
 
-    // Enforce recipient's who_can_comment (post author)
     if (postAuthorId && postAuthorId !== myId) {
       try {
         const { data: allowed } = await supabase.rpc("can_comment", {
@@ -163,32 +174,51 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
       } catch (e) { console.warn("can_comment check failed", e) }
     }
 
-    const { error } = await supabase.from(table).insert({
+    // Safe temp ID (crypto.randomUUID may not exist on old WebViews)
+    const tempId = (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function")
+      ? crypto.randomUUID()
+      : "temp-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+
+    const generateUUID = () => typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) { var r = Math.random() * 16 | 0, v = c == "x" ? r : (r & 0x3 | 0x8); return v.toString(16); });
+    const safeTempId = (tempId && tempId.includes("-") && tempId.length > 20) ? tempId : generateUUID();
+    const optimisticComment = {
+      id: tempId,
       post_id: postId,
       user_id: myId,
       content: body.slice(0, 800),
+      created_at: new Date().toISOString(),
       reply_to_id: replyingTo?.id || null,
-    })
-    setBusy(false)
-    if (!error) {
-      setText(""); setReplyingTo(null)
-      load()
-      try {
-        const postTable = source === "personal" ? "user_posts" : "community_posts"
-        const idCol = source === "personal" ? "user_id" : "author_id"
-        const { data: p } = await supabase.from(postTable).select(idCol).eq("id", postId).maybeSingle()
-        const targetId = p?.[idCol]
-        if (targetId && targetId !== myId) {
-          await supabase.from("notifications").insert({
-            user_id: targetId,
-            actor_id: myId,
-            type: "comment_post",
-            ref_id: String(postId),
-            ref_type: "post",
-            body: "commented on your post",
-          })
-        }
-      } catch (e) { console.warn("comment notify failed", e) }
+      pending: true,
+    };
+
+    // 1. Optimistic append (comment shows up instantly)
+    setComments(prev => [...prev, optimisticComment]);
+    setText("");
+    setReplyingTo(null);
+
+    try {
+      // 2. Server insert
+      console.log("INSERTING COMMENT:", { table, postId, myId, tempId, body });
+      const { data, error } = await supabase.from(source === "personal" ? "user_post_comments" : "community_post_comments").insert({
+        post_id: postId,
+        user_id: myId,
+        content: body.slice(0, 800),
+        reply_to_id: optimisticComment.reply_to_id,
+      }).select().single();
+
+      if (error) throw error;
+
+      // 3. Merge server data safely — keep optimistic fields if data is null
+      setComments(prev => prev.map(c =>
+        c.id === tempId ? { ...c, ...(data || {}), pending: false } : c
+      ));
+    } catch (err) {
+      console.error("Comment insert failed:", err);
+      // 4. Rollback optimistic comment
+      setComments(prev => prev.filter(c => c.id !== tempId));
+      if (typeof alert !== "undefined") alert("Comment Error: " + (err.message || JSON.stringify(err)));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -235,8 +265,8 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
 
   async function remove(id) {
     if (!confirm("Delete this comment?")) return
-    await supabase.from(table).update({ deleted_at: new Date().toISOString(), content: "" }).eq("id", id)
-    setComments((cur) => cur.map((c) => c.id === id ? { ...c, deleted_at: new Date().toISOString(), content: "" } : c))
+    await supabase.from(table).update({ deleted_at: new Date().toISOString(), content: "[deleted]" }).eq("id", id)
+    setComments((cur) => cur.map((c) => c.id === id ? { ...c, deleted_at: new Date().toISOString(), content: "[deleted]" } : c))
   }
 
   async function toggleReaction(id, emoji) {
@@ -280,9 +310,19 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
   const groupedList = grouped()
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-end" onClick={onClose}>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[300] flex items-end" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50" />
-      <div
+      <motion.div
+        initial={{ y: "100%" }}
+        animate={{ y: 0 }}
+        exit={{ y: "100%" }}
+        transition={{ type: "spring", damping: 25, stiffness: 250 }}
+        drag="y"
+        dragConstraints={{ top: 0 }}
+        dragElastic={0.2}
+        onDragEnd={(e, info) => {
+          if (info.offset.y > 100 || info.velocity.y > 500) onClose();
+        }}
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 flex flex-col"
         style={{ maxHeight: "85dvh", height: "85dvh" }}
@@ -337,7 +377,7 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
         {replyingTo && (
           <div className="shrink-0 mx-3 mb-2 px-3 py-2 rounded-xl bg-elevated border border-purple-500/30 flex items-start gap-2">
             <CornerDownRight size={14} className="text-purple-300 mt-0.5 shrink-0" />
-            <div className="flex-1 min-w-0">
+            <div className={`flex-1 min-w-0 ${c.pending ? 'opacity-50' : ''}`}>
               <p className="text-purple-300 text-[10.5px] font-bold tracking-wide uppercase mb-0.5">
                 Replying to {profiles.get(replyingTo.user_id)?.display_name || profiles.get(replyingTo.user_id)?.username || "Someone"}
               </p>
@@ -349,7 +389,7 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
           </div>
         )}
 
-        <div className="px-3 py-3 border-t border-white/8 shrink-0" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
+        <div className="px-3 py-3 border-t border-white/8 shrink-0" style={{ paddingBottom: "max(12px, var(--safe-bottom, 8px))" }}>
 
           {mentionResults.length > 0 && mentionQuery !== null && (
             <div className="mb-2 max-h-40 overflow-y-auto rounded-2xl bg-elevated border border-white/10">
@@ -399,8 +439,8 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 
   function renderComment(c, prof, photoPath, name, mine, isReply) {

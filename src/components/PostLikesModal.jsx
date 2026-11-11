@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { X, Heart } from "lucide-react"
+import { motion } from "framer-motion"
 import { supabase } from "../lib/supabase"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
@@ -54,12 +55,28 @@ export default function PostLikesModal({ postId, source, count, onClose }) {
   }, [postId, source])
 
   return (
-    <div className="fixed inset-0 z-[500] flex items-end" onClick={onClose}>
+    <motion.div 
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }} 
+      exit={{ opacity: 0 }} 
+      className="fixed inset-0 z-[500] flex items-end" 
+      onClick={onClose}
+    >
       <div className="absolute inset-0 bg-black/60" />
-      <div
+      <motion.div
+        initial={{ y: "100%" }}
+        animate={{ y: 0 }}
+        exit={{ y: "100%" }}
+        transition={{ type: "spring", damping: 25, stiffness: 250 }}
+        drag="y"
+        dragConstraints={{ top: 0 }}
+        dragElastic={0.2}
+        onDragEnd={(e, info) => {
+          if (info.offset.y > 100 || info.velocity.y > 500) onClose();
+        }}
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 flex flex-col"
-        style={{ maxHeight: "75dvh", paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}
+        style={{ maxHeight: "85dvh", paddingBottom: "max(16px, var(--safe-bottom, 8px))" }}
       >
         <div className="p-4 shrink-0 border-b border-white/8">
           <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-3" />
@@ -122,7 +139,7 @@ export default function PostLikesModal({ postId, source, count, onClose }) {
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }

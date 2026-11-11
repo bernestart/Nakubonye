@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Timer, Search, Send, Sparkles, Paperclip, Camera, X , Mic, Square , Pin , MoreVertical , Eraser , Bell, BellOff , Flag } from 'lucide-react'
+import { Timer, Search, Send, Sparkles, Paperclip, Camera, X , Mic, Square , Pin , MoreVertical , Eraser , Bell, BellOff , Flag, Trash2} from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { loadBlockedIds } from "../lib/blocks"
 import { useAuth } from '../lib/auth'
@@ -19,6 +19,7 @@ import ReportModal from './ReportModal'
 import AudioBubble from './chat/AudioBubble'
 import PollMessage from './PollMessage'
 import { useVoiceRecorder } from './chat/useVoiceRecorder'
+import DocBubble from './chat/DocBubble'
 
 const TIMER_OPTIONS = [
   { value: null,   label: "Off",      sub: "Messages stay forever" },
@@ -54,6 +55,7 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
   const [attachment, setAttachment] = useState(null)
   const [attachmentPreview, setAttachmentPreview] = useState("")
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
+  const docInputRef = useRef(null)
   const [pollComposerOpen, setPollComposerOpen] = useState(false)
   const [lightboxUrl, setLightboxUrl] = useState(null)
   const voice = useVoiceRecorder({ maxSeconds: 300 })
@@ -90,12 +92,14 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
     if (!myId || !communityId) return
     setLoading(true); setError('')
 
-    const [clearRes, muteRes] = await Promise.all([
+    const [clearRes, muteRes, communityRes] = await Promise.all([
       supabase.from("community_clears").select("cleared_at").eq("community_id", communityId).eq("user_id", myId).maybeSingle(),
       supabase.from("community_mutes").select("community_id").eq("community_id", communityId).eq("user_id", myId).maybeSingle(),
+      supabase.from("communities").select("disappearing_timer_seconds").eq("id", communityId).maybeSingle(),
     ])
     setClearedAt(clearRes.data?.cleared_at || null)
     setIsMuted(!!muteRes.data)
+    setDisappearingTimer(communityRes.data?.disappearing_timer_seconds || null)
 
     const { data: rows, error: err } = await supabase
       .from('community_messages')
@@ -302,6 +306,22 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
     }
   }
 
+  async function pickDocument(e) {
+    const file = e.target.files?.[0]; if (!file) return
+    if (file.size > 15 * 1024 * 1024) { setError("File too large"); return }
+    setSending(true)
+    const path = `community/${communityId}/${crypto.randomUUID()}.${file.name.split('.').pop()}`
+    const { error: upErr } = await supabase.storage.from('chat-media').upload(path, file, { contentType: file.type })
+    if (upErr) { setError(upErr.message); setSending(false); return }
+    const { data: pub } = supabase.storage.from('chat-media').getPublicUrl(path)
+    const payload = { community_id: communityId, sender_id: myId, content: '', media_url: pub?.publicUrl, media_type: file.type, media_name: file.name }
+    if (disappearingTimer) payload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
+    if (replyingTo?.id) payload.reply_to_id = replyingTo.id
+    const { data: inserted, error: sendErr } = await supabase.from('community_messages').insert(payload).select().single()
+    if (sendErr) setError(sendErr.message); else if (inserted) setMessages(cur => [...cur, inserted])
+    setSending(false); setReplyingTo(null); if (docInputRef.current) docInputRef.current.value = ''
+  }
+
   function pickAttachment(e) {
     const f = e.target.files?.[0]
     if (!f) return
@@ -339,10 +359,11 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
     if (result.blob.size > 10 * 1024 * 1024) { setError("Voice note too long"); return }
 
     setSending(true)
-    const path = "community-media/" + communityId + "/" + crypto.randomUUID() + ".webm"
+    const ext = result.mimeType?.includes("mp4") ? "mp4" : "webm";
+    const path = "community-media/" + communityId + "/" + crypto.randomUUID() + "." + ext
     const { error: upErr } = await supabase.storage
       .from("chat-media")
-      .upload(path, result.blob, { upsert: false, contentType: "audio/webm" })
+      .upload(path, result.blob, { upsert: false, contentType: result.mimeType })
     if (upErr) { setSending(false); setError(upErr.message); return }
     const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
 
@@ -351,8 +372,9 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
       sender_id: myId,
       content: "",
       media_url: pub?.publicUrl || null,
-      media_type: "audio/webm",
+      media_type: result.mimeType,
       media_name: "Voice · " + result.seconds + "s",
+          ...(viewOnce ? { view_once: true, viewed_by: [] } : {}),
     }
     if (disappearingTimer) voicePayload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
     const { error: err } = await supabase.from("community_messages").insert(voicePayload)
@@ -530,14 +552,14 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
       }
     }
     if (sw.active) {
-      sw.dx = Math.min(dx, 80)
+      sw.dx = Math.min(dx * 0.45, 64)
       setSwipeState({ id: sw.id, dx: sw.dx })
     }
   }
 
   function onRowSwipeEnd(m) {
     const sw = swipeRef.current
-    const triggered = sw.active && sw.dx >= 50
+    const triggered = sw.active && sw.dx >= 64
     const wasSwipe = sw.active
     swipeRef.current = { id: null, startX: 0, dx: 0, active: false }
     setSwipeState({ id: null, dx: 0 })
@@ -645,7 +667,7 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
             return names.join(", ") + " are typing…"
           })()}
         </p>
-        <button
+        <button className={voice.recording ? 'hidden' : ''} 
           onClick={() => { tap("light"); setSearchOpen(true) }}
           className="w-8 h-8 rounded-full grid place-items-center text-muted shrink-0"
           aria-label="Search in chat"
@@ -695,7 +717,7 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             <button
@@ -742,7 +764,7 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             <h3 className="text-cream font-extrabold text-[16px] mb-1">Disappearing messages</h3>
@@ -756,13 +778,19 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
                   key={String(o.value)}
                   onClick={async () => {
                     tap("light")
+                    const savedBefore = disappearingTimer
                     setTimerSheetOpen(false)
-                    setDisappearingTimer(o.value)
-                    try {
-                      await supabase.from("communities")
-                        .update({ disappearing_timer_seconds: o.value })
-                        .eq("id", communityId)
-                    } catch (e) { console.warn("timer save failed", e) }
+                    const { data: saveData, error: saveErr } = await supabase.from("communities")
+      .update({ disappearing_timer_seconds: o.value })
+      .eq("id", communityId)
+      .select('id, disappearing_timer_seconds')
+    if (saveErr || !saveData || saveData.length === 0) {
+      console.error('[timer-save] FAILED', { saveErr, saveData, communityId, value: o.value })
+      if (typeof setError === 'function') setError('Timer save failed: ' + (saveErr?.message || 'no rows updated - communityId=' + communityId))
+      setDisappearingTimer(savedBefore)
+    } else {
+      setDisappearingTimer(saveData[0].disappearing_timer_seconds)
+    }
                   }}
                   className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left active:bg-white/[0.03] last:border-b-0"
                 >
@@ -814,7 +842,7 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
       {/* Messages */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto flex flex-col gap-2 mb-3"
+        className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2 mb-3"
         style={{ maxHeight: '420px', minHeight: '260px' }}
       >
         {loading ? (
@@ -960,6 +988,9 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
                       )
                     })() : (
                     <>
+                    {m.media_url && m.media_type && !m.media_type.startsWith("image/") && !m.media_type.startsWith("audio/") && !m.media_type.startsWith("video/") && (
+                      <div className="max-w-[260px]"><DocBubble url={m.media_url} name={m.media_name} type={m.media_type} mine={mine} /></div>
+                    )}
                     {m.media_url && m.media_type?.startsWith("image/") && (
                       <img
                         src={m.media_url}
@@ -1108,17 +1139,18 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
 
       {/* Composer */}
       <div className="flex items-end gap-2 pt-2 border-t border-white/8">
+        {!voice.recording && (
+          <>
         <button
           onClick={() => setAttachMenuOpen(true)}
-          className="w-10 h-10 rounded-full grid place-items-center text-muted shrink-0"
-          aria-label="Attach"
+          className="w-10 h-10 rounded-full grid place-items-center text-muted shrink-0" aria-label="Attach"
         >
           <Paperclip size={19} strokeWidth={2.3} />
         </button>
 
         <button
           onClick={() => { tap("light"); setViewOnce((v) => !v) }}
-          disabled={voice.recording || !attachment}
+          disabled={!attachment}
           className="w-10 h-10 rounded-full grid place-items-center shrink-0 disabled:opacity-40 relative"
           style={{ background: viewOnce ? "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" : "transparent" }}
           aria-label={viewOnce ? "Disable view once" : "Enable view once"}
@@ -1127,41 +1159,51 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
         </button>
         <button
           onClick={() => { setEmojiOpen((v) => !v); tap("light") }}
-          className="w-10 h-10 rounded-full grid place-items-center text-muted shrink-0"
-          aria-label="Emoji"
+          className="w-10 h-10 rounded-full grid place-items-center text-muted shrink-0"  aria-label="Emoji"
         >
           <span className={`text-[18px] ${emojiOpen ? "opacity-100" : "opacity-70"}`}>😊</span>
         </button>
-        <textarea
+        <textarea 
           value={text}
-          onChange={(e) => { setText(e.target.value.slice(0, 1000)); notifyTyping(e.target.value) }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              send()
-            }
-          }}
-          rows={1}
-          disabled={voice.recording}
-          placeholder={voice.recording ? "Recording voice…" : "Write a message…"}
-          className="flex-1 bg-elevated border border-white/8 rounded-[22px] px-4 py-2.5 text-cream text-[14px] placeholder:text-subtle focus:outline-none focus:border-purple-500 resize-none max-h-28"
+          onChange={(e) => setText(e.target.value.slice(0, 2000))}
+          placeholder="Message..."
+          className="flex-1 bg-elevated border border-white/8 rounded-[22px] px-4 py-2.5 text-cream text-[14px] placeholder:text-subtle focus:outline-none focus:border-purple-500 resize-none max-h-28 min-w-0"
           style={{ minHeight: 44 }}
         />
-        {voice.recording ? (
-          <>
-            <button
-              onClick={cancelVoice}
-              className="flex-1 h-11 rounded-[22px] bg-white/[0.06] text-cream font-semibold text-[13.5px] flex items-center justify-center gap-2 shrink-0"
-            >
-              <X size={16} strokeWidth={2.4} /> Cancel
-            </button>
-            <button
-              onClick={sendVoice}
-              className="flex-1 h-11 rounded-[22px] bg-gradient-to-br from-purple-500 to-pink-500 text-white font-bold text-[13.5px] flex items-center justify-center gap-2 shrink-0"
-            >
-              <Square size={14} strokeWidth={2.6} fill="currentColor" /> Send
-            </button>
           </>
+        )}
+        {voice.recording ? (
+          <div className="flex-1 flex items-center gap-2 min-w-0 px-1">
+      {/* Trash - Fixed Left */}
+      <button onClick={() => cancelVoice} className="shrink-0 text-red-500 hover:text-red-400 p-2">
+        <Trash2 size={22} strokeWidth={2.2} />
+      </button>
+
+      {/* Center Pill */}
+      <div className="flex-1 min-w-0 flex items-center bg-[#1C1C1E] border border-white/10 rounded-full px-4 h-11">
+        {/* Timer */}
+        <span className="text-white text-[13px] font-mono font-semibold shrink-0 mr-3">
+          {Math.floor((voice.seconds || 0) / 60)}:{(Math.floor((voice.seconds || 0) % 60)).toString().padStart(2, '0')}
+        </span>
+
+        {/* Waveform - Flexible but strictly clipped */}
+        <div className="flex-1 min-w-0 h-6 flex items-center justify-center gap-[2px] overflow-hidden">
+          {voice.waveform.slice(-30).map((level, i) => (
+            <div key={i} className="w-[3px] bg-white/60 rounded-full transition-all duration-75" style={{ height: `${Math.max(10, level * 100)}%` }} />
+          ))}
+        </div>
+
+        {/* ViewOnce "1" - Fixed Right Inside Pill */}
+        <button onClick={() => { setViewOnce(v => !v); tap("light"); }} className="shrink-0 w-6 h-6 rounded-full grid place-items-center ml-3" style={{ background: viewOnce ? "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" : "transparent", border: viewOnce ? "none" : "1px solid #888" }}>
+          <span className="font-black text-[10px]" style={{ color: viewOnce ? "#fff" : "#888" }}>1</span>
+        </button>
+      </div>
+
+      {/* Send - Fixed Right */}
+      <button onClick={() => sendVoice} className="shrink-0 text-purple-500 hover:text-purple-400 p-2">
+        <Send size={22} strokeWidth={2.5} />
+      </button>
+    </div>
         ) : text.trim() || attachment ? (
           <button
             onClick={send}
@@ -1173,7 +1215,7 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
           </button>
         ) : (
           <button
-            onClick={startVoice}
+             onClick={startVoice}
             className="w-11 h-11 rounded-full grid place-items-center bg-gradient-to-br from-purple-500 to-pink-500 text-white shrink-0"
             aria-label="Record voice"
           >
@@ -1182,6 +1224,7 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
         )}
       </div>
 
+      <input ref={docInputRef} type="file" accept="*/*" hidden onChange={pickDocument} />
       <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={pickAttachment} />
       <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" hidden onChange={pickAttachment} />
 
@@ -1191,7 +1234,7 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             <button

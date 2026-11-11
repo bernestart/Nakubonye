@@ -737,7 +737,7 @@ export default function Admin() {
       {selected && (
         <div onClick={() => !busy && setSelected(null)} className="fixed inset-0 z-[150] bg-obsidian/85 backdrop-blur-md grid place-items-end">
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-[480px] mx-auto bg-surface rounded-t-[28px] border-t border-white/10 p-5 max-h-[85vh] overflow-y-auto"
-            style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}>
+            style={{ paddingBottom: 'max(20px, var(--safe-bottom, 8px))' }}>
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-4" />
 
             <div className="flex items-center gap-3 mb-5">

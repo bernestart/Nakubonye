@@ -247,7 +247,7 @@ export default function Filters() {
       {/* Save bar */}
       <div
         className="shrink-0 px-5 pt-3 border-t border-white/8"
-        style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}
+        style={{ paddingBottom: 'max(20px, var(--safe-bottom, 8px))' }}
       >
         <button
           onClick={save}

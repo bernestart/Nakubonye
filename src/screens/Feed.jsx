@@ -1,3 +1,4 @@
+import { AnimatePresence } from "framer-motion";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { ImagePlus, Heart, Send, X, Users, Play, Camera, PenSquare, Video, Image as ImageIcon, MessageCircle, Share2 , MoreVertical , Volume2 , VolumeX } from "lucide-react"
@@ -79,7 +80,8 @@ import ExpandableText from "../components/ExpandableText"
 import PostLikesModal from "../components/PostLikesModal"
 import PostCommentsPreview from "../components/PostCommentsPreview"
 import MatchModal from "../components/MatchModal"
-import PostCommentsSheet from "../components/PostCommentsSheet"
+import { lazy, Suspense } from "react";
+const PostCommentsSheet = lazy(() => import("../components/PostCommentsSheet"));
 import PostActionsSheet from "../components/PostActionsSheet"
 import ShareSheet from "../components/ShareSheet"
 import RepostsSheet from "../components/RepostsSheet"
@@ -87,6 +89,8 @@ import ReactionPicker from "../components/ReactionPicker"
 import FollowButton from "../components/FollowButton"
 import PostComposer from "../components/PostComposer"
 import BrandGlow from "../components/BrandGlow"
+import NewPostsPill from "../components/NewPostsPill"
+import PostFeedbackSheet from "../components/PostFeedbackSheet"
 
 // Audience enforcement — mirrors Facebook/IG rules.
 // public: everyone. matches: only my matches. circle: only members. private: only author.
@@ -111,6 +115,7 @@ export default function Feed() {
   const { session, profile } = useAuth()
   const myId = session?.user?.id
   const [posts, setPosts] = useState([])
+  const [suggestedReels, setSuggestedReels] = useState([])
   const [mutedWordsSet, setMutedWordsSet] = useState(new Set())
   const [mutedUsersSet, setMutedUsersSet] = useState(new Set())
   const [communities, setCommunities] = useState(new Map())
@@ -130,7 +135,52 @@ export default function Feed() {
   const [topReactors, setTopReactors] = useState(new Map())  // key → [{ name, emoji }]
   const [commentCounts, setCommentCounts] = useState(new Map())
   const [commentsFor, setCommentsFor] = useState(null)
+  
+  // --- FEED ALGORITHM TRACKING ---
+  const observedPosts = useRef(new Set());
+  const observerRef = useRef(null);
+
+  useEffect(() => {
+    if (!myId) return;
+    
+    // Setup IntersectionObserver for impressions
+    observerRef.current = new IntersectionObserver((entries) => {
+      entries.forEach(async (entry) => {
+        if (entry.isIntersecting) {
+          const postId = entry.target.getAttribute('data-post-id');
+          if (postId && !observedPosts.current.has(postId)) {
+            observedPosts.current.add(postId);
+            try {
+              // Upsert prevents duplicate errors if the user scrolls up and down
+              await supabase.from('feed_impressions').upsert(
+                { post_id: postId, user_id: myId }, 
+                { onConflict: 'post_id, user_id', ignoreDuplicates: true }
+              );
+            } catch (e) { console.warn("Impression track failed", e); }
+          }
+        }
+      });
+    }, { threshold: 0.5 }); // Trigger when 50% of the post is visible
+
+    return () => observerRef.current?.disconnect();
+  }, [myId]);
+
+  const observePost = (el) => {
+    if (el) observerRef.current?.observe(el);
+  };
+
+  const trackClick = async (postId) => {
+    if (!myId || !postId) return;
+    try {
+      await supabase.from('feed_clicks').upsert(
+        { post_id: postId, user_id: myId }, 
+        { onConflict: 'post_id, user_id', ignoreDuplicates: true }
+      );
+    } catch (e) { console.warn("Click track failed", e); }
+  };
+  // -------------------------------
   const [actionsFor, setActionsFor] = useState(null)
+  const [feedbackFor, setFeedbackFor] = useState(null)
   const [shareFor, setShareFor] = useState(null)
   const [suggested, setSuggested] = useState([])
   const [matchModal, setMatchModal] = useState(null)
@@ -140,6 +190,9 @@ export default function Feed() {
   const [composerChooserOpen, setComposerChooserOpen] = useState(false)
   const [postComposerOpen, setPostComposerOpen] = useState(false)
   const [pendingPosts, setPendingPosts] = useState([])
+  const [pendingRealtimeCount, setPendingRealtimeCount] = useState(0)
+  const [hiddenPostKeys, setHiddenPostKeys] = useState(new Set())
+  function hidePost(key) { setHiddenPostKeys((prev) => { const n = new Set(prev); n.add(key); return n }) }
   function addPendingPost(item) { setPendingPosts((c) => [...c, item]) }
   function resolvePendingPost(tempId, realPost) {
     setPendingPosts((c) => c.filter((x) => x._tempId !== tempId))
@@ -161,9 +214,10 @@ export default function Feed() {
   const loadingMoreRef = useRef(false)
   const seenReelIds = useRef(new Set())
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts = {}) => {
     if (!myId) return
-    setLoading(true); setError("")
+    if (!opts?.silent) setLoading(true)
+    setError("")
 
     // 1. My communities (may be empty)
     const { data: mine } = await supabase
@@ -212,14 +266,31 @@ export default function Feed() {
     const followIds = (followRes.data || []).map((f) => f.following_id)
     const allowedUserIds = [...new Set([myId, ...matchIds, ...followIds])]
 
-    const { data: personalRows } = await supabase
-      .from("user_posts")
-      .select("id, user_id, content, image_path, image_paths, audience, created_at, location_text, feeling_text, publish_at")
-      .in("user_id", allowedUserIds)
-      .eq("is_active", true)
-      .lte("publish_at", new Date().toISOString())
-      .order("created_at", { ascending: false })
-      .limit(20)
+    // NEW: Fetch ranked feed using PostGIS/EdgeRank RPC
+    const { data: rankedRows, error: rpcErr } = await supabase.rpc('get_ranked_feed', {
+      viewer_id: myId,
+      page_limit: 20,
+      page_offset: 0
+    });
+
+    if (rpcErr) {
+      console.error("Ranked feed failed, falling back to chronological:", rpcErr);
+    }
+
+    // Map the RPC output back to the format the UI expects (id instead of post_id)
+    const personalRows = (rankedRows || []).map(r => ({
+      id: r.post_id,
+      user_id: r.user_id,
+      content: r.content,
+      image_path: r.image_path,
+      image_paths: r.image_paths,
+      audience: r.audience,
+      created_at: r.created_at,
+      location_text: r.location_text,
+      feeling_text: r.feeling_text,
+      publish_at: r.publish_at,
+      _rank_score: r.rank_score
+    }));
     const personalPosts = (personalRows || [])
       .filter((r) => !blockedIds.has(r.user_id) && canSeePost(r, { myId, matchIds: new Set(matchIds), myCircleIds }))
       .map((r) => ({
@@ -229,13 +300,11 @@ export default function Feed() {
       }))
 
     // 3c. Reels (public only, from anyone)
-    const { data: reelRows } = await supabase
-      .from("reels")
-      .select("id, user_id, video_url, thumbnail_url, caption, mirrored, cover_frame_time, created_at")
-      .eq("is_active", true)
-      .eq("audience", "public")
-      .order("created_at", { ascending: false })
-      .limit(4)
+    const { data: reelRows, error: reelErr } = await supabase.rpc('get_suggested_reels', {
+      viewer_id: myId,
+      page_limit: 10
+    });
+    if (!reelErr && reelRows) setSuggestedReels(reelRows);
     const reelItems = (reelRows || []).map((r) => ({
       id: r.id,
       user_id: r.user_id,
@@ -617,6 +686,7 @@ export default function Feed() {
     })
 
     setLoading(false)
+    setPendingRealtimeCount(0)
   }, [myId])
 
   // ---- Infinite scroll: fetch next page ----
@@ -1087,8 +1157,7 @@ export default function Feed() {
   useEffect(() => {
     if (!myId) return
     const debounced = () => {
-      if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current)
-      realtimeDebounceRef.current = setTimeout(() => load(), 800)
+      setPendingRealtimeCount((c) => c + 1)
     }
     const ch = supabase
       .channel("feed-realtime-" + myId)
@@ -1356,7 +1425,42 @@ export default function Feed() {
               </article>
             ))}
 
+            <NewPostsPill
+              count={pendingRealtimeCount}
+              onTap={() => { setPendingRealtimeCount(0); load({ silent: true }) }}
+            />
+
+            {/* SUGGESTED REELS CAROUSEL */}
+            {suggestedReels.length > 0 && (
+              <div className="mb-4">
+                <div className="flex items-center justify-between px-1 mb-2">
+                  <h3 className="text-cream font-extrabold text-[15px]">Suggested Reels</h3>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-2 snap-x snap-mandatory" style={{ scrollbarWidth: "none" }}>
+                  {suggestedReels.map((reel) => (
+                    <button
+                      key={"reel-carousel-" + reel.id}
+                      onClick={() => { tap("light"); nav("/reels/" + reel.id) }} // Update this route if your reels route is different
+                      className="snap-start shrink-0 w-[120px] h-[200px] rounded-xl overflow-hidden relative bg-[#1A1A24] border border-white/10"
+                    >
+                      {reel.thumbnail_url ? (
+                        <img src={reel.thumbnail_url} alt="" className="w-full h-full object-cover opacity-90" />
+                      ) : (
+                        <video src={reel.video_url} className="w-full h-full object-cover opacity-90" muted playsInline />
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-2">
+                        <p className="text-white text-[11px] font-bold line-clamp-2 leading-tight">
+                          {reel.caption || "Watch Reel"}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {posts.map((p, idx) => {
+            if (hiddenPostKeys.has(p._source + ":" + p.id)) return null
             // REELS render as video cards
             if (p._source === "reel") {
               const rProf = profiles.get(p.author_id)
@@ -1364,7 +1468,7 @@ export default function Feed() {
               const rName = rProf?.display_name || rProf?.username || "Someone"
               return (
                 <Fragment key={"reel-" + p.id}>
-                  <article data-post-key={"reel:" + p.id} className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
+                  <article ref={observePost} data-post-id={p.id} data-post-key={"reel:" + p.id} className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
                     {/* Author header */}
                     <div className="flex items-center gap-2.5 px-3 pt-3 pb-2">
                       <button
@@ -1498,7 +1602,7 @@ export default function Feed() {
                 : null
               return (
                 <Fragment key={"listing-" + p.id}>
-                  <article data-post-key={"listing:" + p.id} className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
+                  <article ref={observePost} data-post-id={p.id} data-post-key={"listing:" + p.id} className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
                     <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-white/[0.02]">
                       <span className="w-6 h-6 rounded-lg grid place-items-center text-[12px]" style={{ background: "rgba(236,72,153,0.2)" }}>🛒</span>
                       <span className="text-pink-300 text-[11.5px] font-bold tracking-wide">Marketplace</span>
@@ -1525,7 +1629,7 @@ export default function Feed() {
                 : null
               return (
                 <Fragment key={"service-" + p.id}>
-                  <article data-post-key={"service:" + p.id} className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
+                  <article ref={observePost} data-post-id={p.id} data-post-key={"service:" + p.id} className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
                     <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-white/[0.02]">
                       <span className="w-6 h-6 rounded-lg grid place-items-center text-[12px]" style={{ background: "rgba(168,85,247,0.2)" }}>🔧</span>
                       <span className="text-purple-300 text-[11.5px] font-bold tracking-wide">Service</span>
@@ -1555,7 +1659,7 @@ export default function Feed() {
             const imageUrl = p.image_path ? supabase.storage.from("community-media").getPublicUrl(p.image_path).data?.publicUrl : null
             return (
               <Fragment key={p.id}>
-              <article data-post-key={p._source + ":" + p.id} className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
+              <article ref={observePost} data-post-id={p.id} data-post-key={p._source + ":" + p.id} className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
                     {/* Source badge — community OR profile */}
                 {p._source === "community" && comm && (
                   <button
@@ -1571,48 +1675,44 @@ export default function Feed() {
                     <span className="text-purple-300 text-[11.5px] font-bold tracking-wide truncate">{comm.name}</span>
                   </button>
                 )}
-                {p._source === "personal" && (
-                  <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-white/[0.02]">
-                    <span className="w-6 h-6 rounded-lg grid place-items-center text-[12px] bg-pink-500/20">
-                      {p.audience === "matches" ? "💜" : p.audience === "private" ? "🔒" : "🌍"}
-                    </span>
-                    <span className="text-pink-300 text-[11.5px] font-bold tracking-wide">
-                      {p.author_id === myId
-                        ? "Your post · " + (p.audience === "matches" ? "Matches" : p.audience === "private" ? "Only me" : "Everyone")
-                        : "Posted to their profile"}
-                    </span>
-                  </div>
-                )}
 
-                {/* Author header */}
+                {/* Author header — FB anatomy */}
                 <div className="flex items-center gap-2.5 px-3 pt-3 pb-2">
                   <button
                     onClick={() => { tap("light"); nav("/profile/" + p.author_id) }}
-                    className="w-9 h-9 rounded-full overflow-hidden bg-elevated border border-white/8 shrink-0"
+                    className="relative w-9 h-9 rounded-full overflow-hidden bg-elevated border border-white/8 shrink-0"
                   >
                     {photoPath ? (
                       <img src={publicPhotoUrl(photoPath)} alt="" className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full grid place-items-center text-purple-400 font-black text-sm">{name[0]}</div>
                     )}
+                    {p.author_id === myId && (
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[#0B0B14]" />
+                    )}
                   </button>
                   <div className="flex-1 min-w-0">
-                    <p className="text-cream font-bold text-[13.5px] truncate">
-                      {name} {prof?.is_verified && <VerifiedBadge size={14} className="ml-1" />}
-                    </p>
-                    <p className="text-subtle text-[11px]">
-                      {new Date(p.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                      {(p.location_text || p.feeling_text) && (
-                        <span className="text-muted text-[11px] ml-1.5">
-                          {p.feeling_text && <>· feeling {p.feeling_text}</>}
-                          {p.location_text && <> · 📍 {p.location_text}</>}
-                        </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-cream font-bold text-[13.5px] truncate max-w-[60%]">{name}</span>
+                      {prof?.is_verified && <VerifiedBadge size={14} />}
+                      {p.author_id !== myId && <FollowButton userId={p.author_id} size="sm" />}
+                    </div>
+                    <p className="text-subtle text-[11px] flex items-center gap-1 flex-wrap">
+                      <span>{new Date(p.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                      <span>·</span>
+                      <span>{p.audience === "matches" ? "💜" : p.audience === "private" ? "🔒" : "🌐"}</span>
+                      {(p.feeling_text || p.location_text) && (
+                        <>
+                          <span>·</span>
+                          <span className="text-muted text-[11px] truncate">
+                            {p.feeling_text && <>feeling {p.feeling_text}</>}
+                            {p.feeling_text && p.location_text ? " · " : ""}
+                            {p.location_text && <>📍 {p.location_text}</>}
+                          </span>
+                        </>
                       )}
                     </p>
                   </div>
-                  {p.author_id !== myId && (
-                    <FollowButton userId={p.author_id} size="sm" />
-                  )}
                   <button
                     onClick={() => { tap("light"); setActionsFor(p) }}
                     className="w-8 h-8 rounded-full grid place-items-center text-muted shrink-0"
@@ -1620,11 +1720,26 @@ export default function Feed() {
                   >
                     <MoreVertical size={18} />
                   </button>
+                  <button
+                    onClick={() => { tap("light"); setFeedbackFor(p) }}
+                    className="w-8 h-8 rounded-full grid place-items-center text-muted shrink-0"
+                    aria-label="Hide post"
+                  >
+                    <X size={18} />
+                  </button>
                 </div>
 
                 {/* Content */}
                 {p.content && (
-                  <ExpandableText text={p.content} className="px-3 pb-3 text-cream text-[14px] leading-[1.5] whitespace-pre-wrap" />
+                  <div
+                    className={"mx-3 mb-3 rounded-xl " + (p.background_style ? "p-4 min-h-[120px] flex items-center justify-center" : "")}
+                    style={{ background: p.background_style || "transparent" }}
+                  >
+                    <ExpandableText
+                      text={p.content}
+                      className={"text-cream leading-[1.5] whitespace-pre-wrap w-full text-center " + (p.background_style ? "text-[20px] font-bold" : "text-[14px]")}
+                    />
+                  </div>
                 )}
 
                 {p.reshared_from_type && p.reshared_include_original && p.reshared_from_snapshot && (
@@ -1643,6 +1758,7 @@ export default function Feed() {
                   return (
                     <PostImages
                       paths={paths}
+                      alts={p.image_alts || []}
                       bucket="community-media"
                       onDoubleTap={() => toggleLike(p.id, p._source)}
                       onPostOpen={() => { tap("light"); nav("/post/" + p._source + "/" + p.id) }}
@@ -1753,7 +1869,7 @@ export default function Feed() {
                     })()}
                   </div>
                   <button
-                    onClick={() => { tap("light"); setCommentsFor({ id: p.id, source: p._source }) }}
+                    onClick={() => { tap("light"); trackClick(p.id); setCommentsFor({ id: p.id, source: p._source }) }}
                     className="flex items-center gap-1.5 px-3 py-2 rounded-xl flex-1 justify-center"
                   >
                     <MessageCircle size={18} strokeWidth={2.2} color="#888" />
@@ -1840,7 +1956,7 @@ export default function Feed() {
       </div>
 
       {commentsFor && (
-        <PostCommentsSheet
+        <Suspense fallback={null}><PostCommentsSheet
           key={commentsFor.source + ":" + commentsFor.id}
           postId={commentsFor.id}
           source={commentsFor.source}
@@ -1854,7 +1970,7 @@ export default function Feed() {
               return next
             })
           }}
-        />
+        /></Suspense>
       )}
 
       {/* Composer chooser sheet */}
@@ -1864,7 +1980,7 @@ export default function Feed() {
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             <h3 className="text-cream font-extrabold text-[16px] mb-1">Share something real</h3>
@@ -1915,6 +2031,15 @@ export default function Feed() {
         />
       )}
 
+      {feedbackFor && (
+        <PostFeedbackSheet
+          post={feedbackFor}
+          onClose={() => setFeedbackFor(null)}
+          onHide={(p) => hidePost(p._source + ":" + p.id)}
+          onReport={(p) => { setFeedbackFor(null); setActionsFor(p); /* Opens report flow */ }}
+        />
+      )}
+
       {actionsFor && (
         <PostActionsSheet
           post={actionsFor}
@@ -1944,25 +2069,29 @@ export default function Feed() {
         />
       )}
 
-      {likesModalFor && (
-        <PostLikesModal
-          postId={likesModalFor.postId}
-          source={likesModalFor.source}
-          count={reactionCounts.get(likesModalFor.source + ":" + likesModalFor.postId) || 0}
-          onClose={() => setLikesModalFor(null)}
-        />
-      )}
+      <AnimatePresence>
+        {likesModalFor && (
+          <PostLikesModal
+            postId={likesModalFor.postId}
+            source={likesModalFor.source}
+            count={reactionCounts.get(likesModalFor.source + ":" + likesModalFor.postId) || 0}
+            onClose={() => setLikesModalFor(null)}
+          />
+        )}
+      </AnimatePresence>
 
-      {commentsModalFor && (
-        <PostCommentsPreview
-          key={commentsModalFor.source + ":" + commentsModalFor.postId}
-          postId={commentsModalFor.postId}
-          source={commentsModalFor.source}
-          count={commentCounts.get(commentsModalFor.source + ":" + commentsModalFor.postId) || 0}
-          onClose={() => setCommentsModalFor(null)}
-          onOpenSheet={() => setCommentsFor({ id: commentsModalFor.postId, source: commentsModalFor.source })}
-        />
-      )}
+      <AnimatePresence>
+        {commentsModalFor && (
+          <PostCommentsPreview
+            key={commentsModalFor.source + ":" + commentsModalFor.postId}
+            postId={commentsModalFor.postId}
+            source={commentsModalFor.source}
+            count={commentCounts.get(commentsModalFor.source + ":" + commentsModalFor.postId) || 0}
+            onClose={() => setCommentsModalFor(null)}
+            onOpenSheet={() => setCommentsFor({ id: commentsModalFor.postId, source: commentsModalFor.source })}
+          />
+        )}
+      </AnimatePresence>
 
       {matchModal && (
         <MatchModal

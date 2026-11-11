@@ -233,7 +233,7 @@ export default function ServiceDetail() {
       {/* Bottom bar */}
       {!isOwner && (
         <div className="shrink-0 px-4 py-3 border-t border-white/8 flex gap-2"
-             style={{ background: 'rgba(11,11,20,0.95)', backdropFilter: 'blur(12px)', paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+             style={{ background: 'rgba(11,11,20,0.95)', backdropFilter: 'blur(12px)', paddingBottom: 'max(12px, var(--safe-bottom, 8px))' }}>
           <button onClick={messageProvider}
             className="h-12 px-4 rounded-full bg-white/[0.06] border border-white/12 text-cream font-bold text-[14px] inline-flex items-center justify-center gap-2">
             <MessageCircle size={17} />
@@ -253,7 +253,7 @@ export default function ServiceDetail() {
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             {isOwner ? (

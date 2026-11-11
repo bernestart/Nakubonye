@@ -11,15 +11,16 @@ import { tap } from "../lib/haptic"
  * 4 → 2x2 grid
  * 5+ → 2x2 grid with +N overlay on last tile
  */
-export default function PostImages({ paths = [], bucket = "community-media", onDoubleTap, onPostOpen }) {
+export default function PostImages({ paths = [], bucket = "community-media", onDoubleTap, onPostOpen, alts = [] }) {
   const [lightbox, setLightbox] = useState(null)
   const [lastTapRef, setLastTap] = useState({ id: null, time: 0 })
 
   if (!paths || paths.length === 0) return null
 
-  const urls = paths.map((p) =>
-    supabase.storage.from(bucket).getPublicUrl(p).data?.publicUrl
-  ).filter(Boolean)
+  const urls = paths.map((p) => {
+    if (typeof p === 'string' && p.startsWith('http')) return p;
+    return supabase.storage.from(bucket).getPublicUrl(p).data?.publicUrl;
+  }).filter(Boolean)
 
   if (urls.length === 0) return null
 
@@ -46,7 +47,7 @@ export default function PostImages({ paths = [], bucket = "community-media", onD
       <>
         <img
           src={urls[0]}
-          alt=""
+          alt={alts[0] || ""}
           onClick={(e) => handleTap(0, e)}
           className="w-full object-cover cursor-pointer"
           style={{ maxHeight: "72vh", display: "block" }}
@@ -70,7 +71,7 @@ export default function PostImages({ paths = [], bucket = "community-media", onD
               onClick={(e) => handleTap(i, e)}
               className="aspect-square overflow-hidden bg-black/40 active:opacity-90"
             >
-              <img src={u} alt="" className="w-full h-full object-cover" loading="lazy" />
+              <img src={u} alt={alts[i] || ""} className="w-full h-full object-cover" loading="lazy" />
             </button>
           ))}
         </div>
@@ -90,19 +91,19 @@ export default function PostImages({ paths = [], bucket = "community-media", onD
             onClick={(e) => handleTap(0, e)}
             className="col-span-2 row-span-2 overflow-hidden bg-black/40 active:opacity-90"
           >
-            <img src={urls[0]} alt="" className="w-full h-full object-cover" loading="lazy" />
+            <img src={urls[0]} alt={alts[0] || ""} className="w-full h-full object-cover" loading="lazy" />
           </button>
           <button
             onClick={(e) => handleTap(1, e)}
             className="col-span-1 row-span-1 overflow-hidden bg-black/40 active:opacity-90"
           >
-            <img src={urls[1]} alt="" className="w-full h-full object-cover" loading="lazy" />
+            <img src={urls[1]} alt={alts[1] || ""} className="w-full h-full object-cover" loading="lazy" />
           </button>
           <button
             onClick={(e) => handleTap(2, e)}
             className="col-span-1 row-span-1 overflow-hidden bg-black/40 active:opacity-90"
           >
-            <img src={urls[2]} alt="" className="w-full h-full object-cover" loading="lazy" />
+            <img src={urls[2]} alt={alts[2] || ""} className="w-full h-full object-cover" loading="lazy" />
           </button>
         </div>
         {lightbox !== null && (
@@ -126,7 +127,7 @@ export default function PostImages({ paths = [], bucket = "community-media", onD
               onClick={(e) => handleTap(i, e)}
               className="aspect-square overflow-hidden bg-black/40 relative active:opacity-90"
             >
-              <img src={u} alt="" className="w-full h-full object-cover" loading="lazy" />
+              <img src={u} alt={alts[i] || ""} className="w-full h-full object-cover" loading="lazy" />
               {isLast && (
                 <span
                   className="absolute inset-0 grid place-items-center bg-black/55 text-white text-[28px] font-black"

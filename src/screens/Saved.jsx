@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
+import ProfilePostCard from "../components/ProfilePostCard"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 import BrandGlow from "../components/BrandGlow"
@@ -152,34 +153,22 @@ export default function Saved() {
         ) : tab === "posts" ? (
           <div className="px-3 flex flex-col gap-2">
             {posts.map((p) => (
-              <button
+              <ProfilePostCard
                 key={p._source + "-" + p.id}
-                onClick={() => { tap("light"); nav("/post/" + p._source + "/" + p.id) }}
-                className="rounded-2xl bg-white/[0.03] border border-white/8 overflow-hidden text-left active:opacity-90"
-              >
-                <div className="flex items-center gap-2 px-3 pt-2.5 pb-2">
-                  <span className="w-8 h-8 rounded-full overflow-hidden bg-purple-600 grid place-items-center text-white font-black text-[12px]">
-                    {p._photo ? (
-                      <img src={p._photo} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      (p._prof?.display_name || p._prof?.username || "?")[0].toUpperCase()
-                    )}
-                  </span>
-                  <p className="text-cream text-[13px] font-bold truncate">
-                    {p._prof?.display_name || p._prof?.username || "User"}
-                  </p>
-                </div>
-                {p.image_path && (
-                  <img
-                    src={supabase.storage.from("community-media").getPublicUrl(p.image_path).data?.publicUrl}
-                    alt=""
-                    className="w-full max-h-[240px] object-cover"
-                  />
-                )}
-                {p.content && (
-                  <p className="px-3 py-2 text-cream text-[13px] leading-snug line-clamp-2">{p.content}</p>
-                )}
-              </button>
+                post={p}
+                authorProfile={p._prof}
+                authorPhoto={p._photo}
+                isMe={false}
+                onOpenMenu={() => {}}
+                reactionCount={0}
+                liked={false}
+                reactionEmoji="❤️"
+                commentCount={0}
+                topReactors={[]}
+                shareCount={0}
+                onOpenReposts={() => {}}
+                onToggleLike={() => {}}
+              />
             ))}
           </div>
         ) : tab === "reels" ? (

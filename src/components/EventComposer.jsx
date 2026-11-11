@@ -114,7 +114,7 @@ export default function EventComposer({ communityId, onClose, onCreated, existin
       <div
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 flex flex-col"
-        style={{ maxHeight: "90dvh", paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}
+        style={{ maxHeight: "90dvh", paddingBottom: "max(16px, var(--safe-bottom, 8px))" }}
       >
         <div className="flex items-center justify-between p-4 border-b border-white/8">
           <button

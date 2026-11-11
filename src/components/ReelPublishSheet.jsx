@@ -22,7 +22,7 @@ export default function ReelPublishSheet({
       <div
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 flex flex-col"
-        style={{ maxHeight: "85dvh", paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}
+        style={{ maxHeight: "85dvh", paddingBottom: "max(16px, var(--safe-bottom, 8px))" }}
       >
         <header className="flex items-center justify-between px-4 py-3 shrink-0 border-b border-white/8">
           <button onClick={onClose} className="w-9 h-9 rounded-full grid place-items-center text-muted">

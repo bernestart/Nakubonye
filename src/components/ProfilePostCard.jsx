@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Heart, MessageCircle, Share2, MoreVertical, Globe, Users, Lock } from "lucide-react"
+import { Heart, MessageCircle, Share2, MoreVertical, Globe, Users, Lock, X } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 import VerifiedBadge from "./VerifiedBadge"
 import ResharedPost from "./ResharedPost"
+import PostImages from "./PostImages"
 
-export default function ProfilePostCard({ post, authorProfile, authorPhoto, isMe, onOpenMenu, reactionCount = 0, liked = false, reactionEmoji = "❤️", commentCount = 0, shareCount = 0, onToggleLike, onOpenReposts, topReactors = [] }) {
+export default function ProfilePostCard({ post, authorProfile, authorPhoto, isMe, onOpenMenu, onHide, reactionCount = 0, liked = false, reactionEmoji = "❤️", commentCount = 0, shareCount = 0, onToggleLike, onOpenReposts, topReactors = [] }) {
   const nav = useNavigate()
   const imageUrl = post.image_path
     ? supabase.storage.from("community-media").getPublicUrl(post.image_path).data?.publicUrl
@@ -51,16 +52,32 @@ export default function ProfilePostCard({ post, authorProfile, authorPhoto, isMe
         </div>
         <button
           onClick={() => { tap("light"); onOpenMenu?.(post) }}
-          className="w-9 h-9 rounded-full grid place-items-center text-muted shrink-0"
+          className="w-8 h-8 rounded-full grid place-items-center text-muted shrink-0"
           aria-label="Post options"
         >
           <MoreVertical size={18} />
         </button>
+        {onHide && (
+          <button
+            onClick={() => { tap("light"); onHide(post) }}
+            className="w-8 h-8 rounded-full grid place-items-center text-muted shrink-0"
+            aria-label="Hide post"
+          >
+            <X size={18} />
+          </button>
+        )}
       </div>
 
       {/* Content */}
       {post.content && (
-        <p className="px-4 pb-2 text-cream text-[14.5px] leading-snug whitespace-pre-wrap">{post.content}</p>
+        <div
+          className={"mx-3 mb-3 rounded-xl " + (post.background_style ? "p-4 min-h-[120px] flex items-center justify-center" : "")}
+          style={{ background: post.background_style || "transparent" }}
+        >
+          <p className={"text-cream leading-snug whitespace-pre-wrap w-full text-center " + (post.background_style ? "text-[20px] font-bold" : "text-[14.5px]")}>
+            {post.content}
+          </p>
+        </div>
       )}
 
       {/* Nested reshare */}
@@ -76,15 +93,22 @@ export default function ProfilePostCard({ post, authorProfile, authorPhoto, isMe
         </div>
       )}
 
-      {/* Image */}
-      {imageUrl && (
-        <img
-          src={imageUrl}
-          alt=""
-          className="w-full max-h-[500px] object-cover"
-          onClick={() => { tap("light"); nav("/post/personal/" + post.id) }}
-        />
-      )}
+      {/* Images */}
+      {(() => {
+        const paths = Array.isArray(post.image_paths) && post.image_paths.length > 0
+          ? post.image_paths
+          : (post.image_path ? [post.image_path] : [])
+        if (paths.length === 0) return null
+        return (
+          <PostImages
+            paths={paths}
+            alts={post.image_alts || []}
+            bucket="community-media"
+            onPostOpen={() => { tap("light"); nav("/post/" + (post._source || "personal") + "/" + post.id) }}
+            onDoubleTap={() => onToggleLike?.()}
+          />
+        )
+      })()}
 
       {/* Engagement summary */}
       {(reactionCount > 0 || commentCount > 0 || shareCount > 0) && (

@@ -108,7 +108,6 @@ import {
   CameraRotate as PhCameraRotate,
   ArrowRight as PhArrowRight,
   Baby as PhBaby,
-  ChartBar as PhChartBar2,
   BookOpen as PhBookOpen,
   CaretUp as PhCaretUp,
   Cigarette as PhCigarette,
@@ -122,7 +121,7 @@ import {
   Hammer as PhHammer,
   House as PhHouse,
   Translate as PhTranslate,
-  LinkSimple as PhLinkSimple,
+  LinkSimple as Simple,
   CircleNotch as PhCircleNotch,
   MusicNotes as PhMusicNotes,
   PauseCircle as PhPauseCircle,
@@ -151,17 +150,28 @@ import {
   ArrowClockwise as PhArrowClockwise2,
   Scroll as PhScroll,
   Record as PhRecord,
+  Hash as PhHash,
+  Link as PhLink,
+  CloudSun as PhCloudSun,
+  Spinner as PhSpinner,
+  LinkSimple as PhLinkSimple,
+  Question as PhQuestion,
+  TextAlignLeft as PhTextAlignLeft,
+  TextAlignCenter as PhTextAlignCenter,
+  TextAlignRight as PhTextAlignRight,
+  PenNib as PhPenNib,
+  HighlighterCircle as PhHighlighterCircle
 } from '@phosphor-icons/react'
 
 // Wrapper: accepts lucide's `size` / `strokeWidth` / `fill`,
 // maps to Phosphor's `size` / `weight`. Default weight = bold (FB-tier chunk).
-function shim(PhosphorIcon) {
+function shim(Icon) {
   return function LucideCompat({ size, fill, strokeWidth, ...rest }) {
     const isFilled = fill && fill !== 'none' && fill !== 'transparent'
     const weight = isFilled
       ? 'fill'
       : (strokeWidth != null && Number(strokeWidth) <= 1.75 ? 'regular' : 'bold')
-    return <PhosphorIcon size={size ?? 24} weight={weight} {...rest} />
+    return <Icon size={size ?? 24} weight={weight} {...rest} />
   }
 }
 
@@ -273,7 +283,7 @@ export const Zap = shim(PhLightning)
 
 export const ArrowRight = shim(PhArrowRight)
 export const Baby = shim(PhBaby)
-export const BarChart2 = shim(PhChartBar2)
+export const BarChart2 = shim(PhChartBar)
 export const BookOpen = shim(PhBookOpen)
 export const ChevronUp = shim(PhCaretUp)
 export const Cigarette = shim(PhCigarette)
@@ -319,3 +329,20 @@ export const Wand2 = shim(PhMagicWand)
 export const RotateCw = shim(PhArrowClockwise2)
 export const ScrollText = shim(PhScroll)
 export const CircleDot = shim(PhRecord)
+export const Hash = shim(PhHash)
+
+export const CheckCircle2 = (props) => <Check {...props} />; // Fallback to Check
+
+export const Award = (props) => <Star {...props} />; // Fallback to Star
+
+export const CloudSun = shim(PhCloudSun)
+export const BarChart = shim(PhChartBar)
+export const Link = shim(PhLink)
+export const HelpCircle = shim(PhQuestion)
+
+// Added for Phase 3 & 4 (Text Alignment & Drawing)
+export const AlignLeft = shim(PhTextAlignLeft)
+export const AlignCenter = shim(PhTextAlignCenter)
+export const AlignRight = shim(PhTextAlignRight)
+export const PenTool = shim(PhPenNib)
+export const Highlighter = shim(PhHighlighterCircle)

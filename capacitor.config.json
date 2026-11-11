@@ -1,5 +1,19 @@
 {
   "appId": "com.nakubonye.app",
   "appName": "Nakubonye",
-  "webDir": "dist"
+  "webDir": "dist",
+  "plugins": {
+    "StatusBar": {
+      "overlaysWebView": false,
+      "style": "DARK"
+    },
+    "SafeArea": {
+      "initialViewportFitCover": true
+    },
+    "SystemBars": {
+      "insetsHandling": "css",
+      "style": "DARK",
+      "hidden": false
+    }
+  }
 }

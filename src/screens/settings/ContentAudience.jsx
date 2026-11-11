@@ -59,7 +59,7 @@ export default function ContentAudience() {
   return (
     <div style={{ position: "fixed", inset: 0, margin: "0 auto", maxWidth: 480, display: "flex", flexDirection: "column", background: "#0B0B14", overflow: "hidden" }}>
       <BrandGlow />
-      <header className="shrink-0 flex items-center gap-2 px-3 h-14 border-b border-white/6" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+      <header className="shrink-0 flex items-center gap-2 px-3 h-14 border-b border-white/6" style={{ paddingTop: "var(--safe-top, 32px)" }}>
         <button onClick={() => nav(-1)} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Back">
           <ArrowLeft size={20} strokeWidth={2.3} />
         </button>
@@ -131,7 +131,7 @@ export default function ContentAudience() {
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             <h3 className="text-cream font-extrabold text-[16px] mb-2">{sheet.title}</h3>

@@ -15,7 +15,7 @@ export default function FollowList() {
         position: "fixed", inset: 0,
         margin: "0 auto", maxWidth: 480,
         background: "#0B0B14",
-        paddingTop: "env(safe-area-inset-top)",
+        paddingTop: "var(--safe-top, 32px)",
       }}
     >
       <header className="shrink-0 flex items-center gap-2 px-3 h-12 border-b border-white/8">

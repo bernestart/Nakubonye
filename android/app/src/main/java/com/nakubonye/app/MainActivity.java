@@ -3,10 +3,14 @@ package com.nakubonye.app;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.graphics.Color;
+import androidx.activity.EdgeToEdge;
 import android.webkit.PermissionRequest;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.BridgeActivity;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
 import com.getcapacitor.BridgeWebChromeClient;
 
 import java.util.ArrayList;
@@ -16,6 +20,10 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+    WebView webView = this.bridge.getWebView();
+    webView.setBackgroundColor(Color.TRANSPARENT);
+    WebSettings webSettings = webView.getSettings();
+    webSettings.setTextZoom(100); // 🔒 Prevents system font size from breaking layout
 
         List<String> perms = new ArrayList<>();
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)

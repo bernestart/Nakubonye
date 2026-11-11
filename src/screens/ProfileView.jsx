@@ -89,7 +89,7 @@ export default function ProfileView() {
 
     const { data: prof, error: profErr } = await supabase
       .from('profiles')
-      .select('id, display_name, username, date_of_birth, bio, city, country, is_verified, tier, looking_for, cover_photo_path, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children, hide_age')
+      .select('id, display_name, username, date_of_birth, bio, city, country, is_verified, tier, looking_for, cover_photo_path, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children, hide_age, account_type, category_label')
       .eq('id', userId)
       .single()
 
@@ -555,7 +555,7 @@ export default function ProfileView() {
 
       {/* Top bar */}
       <header className="relative z-30 shrink-0 h-12 px-3 flex items-center gap-2 bg-[#0B0B14] border-b border-white/6"
-              style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+              style={{ paddingTop: 'var(--safe-top, 32px)' }}>
         <button
           onClick={() => nav(-1)}
           className="w-9 h-9 rounded-full grid place-items-center text-muted shrink-0"
@@ -598,7 +598,7 @@ export default function ProfileView() {
         {/* Header — centered Facebook layout */}
         <div className="flex justify-center -mt-16 relative z-10">
           <div className="relative">
-            <TierRing tier={person.tier || 'standard'} size={128}>
+            <TierRing tier={person.account_type === 'creator' ? 'creator' : (person.tier || 'standard')} size={128}>
               <span className="block w-full h-full rounded-full overflow-hidden bg-elevated">
                 {photos[0] ? (
                   <img src={photos[0]} alt="" className="w-full h-full object-cover" />
@@ -613,16 +613,28 @@ export default function ProfileView() {
           </div>
         </div>
 
-        <div className="flex items-center justify-center gap-1.5 mt-3 px-4">
-          <h1 className="text-cream text-[22px] font-extrabold tracking-tight text-center">
-            {person.display_name || person.username}
-          </h1>
-          {person.is_verified && (
-            <span className="w-[16px] h-[16px] rounded-full bg-[#1DA1F2] grid place-items-center shrink-0">
-              <span className="text-white text-[10px] font-black">✓</span>
+        <div className="flex flex-col items-center justify-center mt-3 px-4">
+            <div className="flex items-center justify-center gap-1.5">
+              <h1 className="text-cream text-[22px] font-extrabold tracking-tight text-center">
+                {person.display_name || person.username}
+          {person.account_type === 'creator' && person.category_label && (
+            <span className="block text-purple-400 text-[11px] font-bold tracking-wide uppercase mt-1">
+              {person.category_label}
             </span>
           )}
-        </div>
+              </h1>
+              {person.is_verified && (
+                <span className="w-[16px] h-[16px] rounded-full bg-[#1DA1F2] grid place-items-center shrink-0">
+                  <span className="text-white text-[10px] font-black">✓</span>
+                </span>
+              )}
+            </div>
+            {person.account_type === 'creator' && person.category_label && (
+              <span className="text-purple-400 text-[11.5px] font-black tracking-widest uppercase mt-1">
+                {person.category_label}
+              </span>
+            )}
+          </div>
 
         {(() => {
           const parts = []
@@ -638,7 +650,7 @@ export default function ProfileView() {
           {canSeeFollowerCounts ? (
             <>
               <button onClick={() => { tap('light'); nav(`/user/${userId}/connections?tab=followers`) }} className="text-cream font-bold active:opacity-70">
-                {followersCount} follower{followersCount === 1 ? "" : "s"}
+                {followersCount} {person.account_type === 'creator' ? `follower${followersCount === 1 ? "" : "s"}` : `match${followersCount === 1 ? "" : "es"}`}
               </button>
               <span className="text-muted">·</span>
               <button onClick={() => { tap('light'); nav(`/user/${userId}/connections?tab=following`) }} className="text-cream font-bold active:opacity-70">
@@ -738,7 +750,7 @@ export default function ProfileView() {
         )}
           <ProfileHighlights userId={userId} isOwn={isMe} />
 
-          {!isMe && <MutualConnections userId={userId} myId={myId} />}
+          {!isMe && <MutualConnections userId={userId} myId={myId} accountType={person.account_type} />}
 
         {/* Tabs — sticky below top bar, flat text */}
         <div className="border-b border-white/8 sticky top-0 z-20" style={{ background: '#0B0B14' }}>

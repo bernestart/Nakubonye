@@ -82,7 +82,7 @@ export default function HighlightPicker({ onClose, onCreated }) {
       <div
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 flex flex-col"
-        style={{ maxHeight: "85dvh", paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}
+        style={{ maxHeight: "85dvh", paddingBottom: "max(16px, var(--safe-bottom, 8px))" }}
       >
         <div className="p-4 shrink-0 border-b border-white/8">
           <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-3" />

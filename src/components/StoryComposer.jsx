@@ -1,460 +1,333 @@
-import { useEffect, useRef, useState } from "react"
-import { X, ImagePlus, RefreshCw, Send, Pencil } from "lucide-react"
-import { supabase } from "../lib/supabase"
-import { deleteDraftsByKind } from "../lib/drafts"
-import { useAuth } from "../lib/auth"
-import { Capacitor } from "@capacitor/core"
-import { Camera as NativeCamera, CameraResultType, CameraSource } from "@capacitor/camera"
-import { tap } from "../lib/haptic"
-import StoryEditor from "./StoryEditor"
+import { useState, useEffect } from "react"
 import { createPortal } from "react-dom"
+import { X, Camera, Image as ImageIcon, Type, LayoutGrid, Loader2, Settings, Video } from "lucide-react"
+import { useAuth } from "../lib/auth"
+import { Camera as NativeCamera, CameraResultType, CameraSource } from "@capacitor/camera"
+import { PhotoLibrary } from "@capgo/capacitor-photo-library"
+import { FilePicker } from "@capawesome/capacitor-file-picker"
+import { Capacitor } from "@capacitor/core"
+import StoryEditor from "./story/StoryEditor"
+import { base64ToBlob, uploadStoryMedia } from "../lib/storyUpload"
+import { supabase } from "../lib/supabase"
 
-const TEXT_BGS = [
-  ["#EC4899", "#A855F7"],
-  ["#3B82F6", "#06B6D4"],
-  ["#F59E0B", "#EC4899"],
-  ["#10B981", "#3B82F6"],
-  ["#8B5CF6", "#EC4899"],
-  ["#EF4444", "#F59E0B"],
-  ["#1E1B4B", "#4C1D95"],
-  ["#0F172A", "#334155"],
-]
-
-async function notifyMentions(caption, storyId, authorId) {
-  if (!caption || !storyId || !authorId) return
-  // Extract @username tokens
-  const matches = [...caption.matchAll(/@([a-z0-9_]{3,20})/gi)].map((m) => m[1].toLowerCase())
-  const unique = [...new Set(matches)]
-  if (unique.length === 0) return
-  try {
-    const { data: profs } = await supabase
-      .from("profiles")
-      .select("id, username")
-      .in("username", unique)
-    if (!profs || profs.length === 0) return
-    const rows = profs
-      .filter((p) => p.id !== authorId)
-      .map((p) => ({
-        user_id: p.id,
-        actor_id: authorId,
-        type: "mention",
-        ref_id: String(storyId),
-        ref_type: "story",
-        body: "mentioned you in a story",
-      }))
-    if (rows.length > 0) {
-      await supabase.from("notifications").insert(rows)
-    }
-  } catch (e) { console.warn("mention notify failed", e) }
+const MIME_TO_EXT = {
+  "video/mp4": "mp4",
+  "video/quicktime": "mov",
+  "video/webm": "webm",
+  "video/3gpp": "3gp",
+  "video/x-matroska": "mkv",
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/heic": "heic",
 }
 
-export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve, onFail, onRetryStart }) {
+function normaliseMime(rawMime, fallbackType) {
+  const m = (rawMime || "").toLowerCase().trim()
+  if (m.startsWith("video/") || m.startsWith("image/")) return m
+  return fallbackType === "video" ? "video/mp4" : "image/jpeg"
+}
+
+function extFromMime(mime, fallbackType) {
+  return MIME_TO_EXT[mime] || (fallbackType === "video" ? "mp4" : "jpg")
+}
+
+export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve, onFail }) {
   const { session } = useAuth()
   const myId = session?.user?.id
-  const fileRef = useRef(null)
-  const [file, setFile] = useState(null)
-  const [preview, setPreview] = useState("")
-  const [editedBlob, setEditedBlob] = useState(null)
-  const [editorOpen, setEditorOpen] = useState(false)
-  const [caption, setCaption] = useState("")
-  const [mode, setMode] = useState("media")
-  const [textContent, setTextContent] = useState("")
-  const [textBg, setTextBg] = useState(0)
-  const [audienceMode, setAudienceMode] = useState("everyone")
-  const storyDraftTimerRef = useRef(null)
-  useEffect(() => {
-    if (!myId) return
-    if (mode === "media" && !preview && !caption.trim()) return
-    if (storyDraftTimerRef.current) clearTimeout(storyDraftTimerRef.current)
-    storyDraftTimerRef.current = setTimeout(async () => {
-      try {
-        const payload = mode === "text"
-          ? { mode: "text", text_content: textContent, text_bg: textBg }
-          : { mode: "media", caption }
-        const { data: existing } = await supabase
-          .from("drafts").select("id")
-          .eq("user_id", myId).eq("kind", "story")
-          .maybeSingle()
-        const row = {
-          user_id: myId,
-          kind: "story",
-          payload,
-          preview_url: preview || null,
-          updated_at: new Date().toISOString(),
-        }
-        if (existing?.id) await supabase.from("drafts").update(row).eq("id", existing.id)
-        else await supabase.from("drafts").insert(row)
-      } catch (e) { console.warn("story autosave failed", e) }
-    }, 1200)
-    return () => { if (storyDraftTimerRef.current) clearTimeout(storyDraftTimerRef.current) }
-  }, [myId, caption, textContent, textBg, mode, preview])
 
+  const [step, setStep] = useState("hub")
+  const [mediaSrc, setMediaSrc] = useState("")
+  const [mediaType, setMediaType] = useState("image")
+  const [mediaMime, setMediaMime] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
-
-  async function pickNative() {
-    if (!Capacitor.isNativePlatform()) { fileRef.current?.click(); return }
-    try {
-      const shot = await NativeCamera.getPhoto({ quality: 90, resultType: CameraResultType.Uri, source: CameraSource.Prompt })
-      const res = await fetch(shot.webPath)
-      const blob = await res.blob()
-      const ext = (shot.format || "jpeg").toLowerCase()
-      const file = new File([blob], "story-" + Date.now() + "." + ext, { type: blob.type })
-      await pick({ target: { files: [file], value: "" } })
-    } catch (e) { if (e && e.message && !/cancel/i.test(e.message)) console.warn(e) }
-  }
-
-  function pick(e) {
-    const f = e.target.files?.[0]
-    if (!f) return
-    if (!f.type.startsWith("image/") && !f.type.startsWith("video/")) {
-      setError("Only images and videos allowed")
-      return
-    }
-    if (f.size > 25 * 1024 * 1024) { setError("Max 25 MB"); return }
-    setFile(f)
-    setPreview(URL.createObjectURL(f))
-    setEditedBlob(null)
-    setError("")
-    if (f.type.startsWith("image/")) setEditorOpen(true)
-  }
-
-  async function runPublish(tempId, useFile, ext, contentType, mediaType, captionSnapshot, audienceSnapshot) {
-    try {
-      const path = "stories/" + myId + "/" + crypto.randomUUID() + "." + ext
-      const { error: upErr } = await supabase.storage
-        .from("chat-media")
-        .upload(path, useFile, { upsert: false, contentType })
-      if (upErr) throw new Error(upErr.message)
-      const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
-      const { data: inserted, error: insErr } = await supabase.from("stories").insert({
-        user_id: myId,
-        media_url: pub?.publicUrl,
-        media_type: mediaType,
-        caption: captionSnapshot || null,
-        audience: audienceSnapshot || 'everyone',
-      }).select("id").single()
-      if (insErr) throw new Error(insErr.message)
-      onResolve?.(tempId)
-      if (inserted?.id && captionSnapshot) {
-        notifyMentions(captionSnapshot, inserted.id, myId)
-      }
-    } catch (e) {
-      onFail?.(tempId, e.message || String(e))
-    }
-  }
-
-  async function submitTextStory() {
-    const body = textContent.trim()
-    if (!body || !myId || busy) return
-    setBusy(true); setError("")
-    try {
-      // Render to 1080x1920 canvas
-      const canvas = document.createElement("canvas")
-      canvas.width = 1080
-      canvas.height = 1920
-      const ctx = canvas.getContext("2d")
-      const [c1, c2] = TEXT_BGS[textBg] || TEXT_BGS[0]
-      const grad = ctx.createLinearGradient(0, 0, 1080, 1920)
-      grad.addColorStop(0, c1)
-      grad.addColorStop(1, c2)
-      ctx.fillStyle = grad
-      ctx.fillRect(0, 0, 1080, 1920)
-
-      // Text — centered, wrapped
-      const maxWidth = 900
-      const fontSize = 88
-      ctx.font = "900 " + fontSize + "px -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif"
-      ctx.fillStyle = "#ffffff"
-      ctx.textAlign = "center"
-      ctx.textBaseline = "middle"
-      ctx.shadowColor = "rgba(0,0,0,0.35)"
-      ctx.shadowBlur = 20
-      ctx.shadowOffsetY = 6
-
-      const words = body.split(/\s+/)
-      const lines = []
-      let current = ""
-      for (const w of words) {
-        const test = current ? current + " " + w : w
-        if (ctx.measureText(test).width > maxWidth && current) {
-          lines.push(current)
-          current = w
-        } else {
-          current = test
-        }
-      }
-      if (current) lines.push(current)
-
-      const lineHeight = fontSize * 1.22
-      const totalH = lines.length * lineHeight
-      const startY = 960 - totalH / 2 + lineHeight / 2
-      lines.forEach((line, i) => {
-        ctx.fillText(line, 540, startY + i * lineHeight)
-      })
-
-      const blob = await new Promise((res) => canvas.toBlob((b) => res(b), "image/jpeg", 0.92))
-      if (!blob) throw new Error("Canvas export failed")
-
-      const tempId = "pending-story-" + crypto.randomUUID()
-      const snapshot = body
-      onOptimistic?.(tempId, URL.createObjectURL(blob), snapshot, audienceMode)
-      setBusy(false)
-      onClose?.()
-      runPublish(tempId, blob, "jpg", "image/jpeg", "image", snapshot, audienceMode)
-    } catch (e) {
-      setBusy(false)
-      setError(e.message || String(e))
-    }
-  }
-
-  function publishNow(blob, ext, contentType, mediaType, captionSnapshot, audienceSnapshot) {
-    if (!myId || !blob) return
-    const tempId = "pending-story-" + crypto.randomUUID()
-    const previewUrl = URL.createObjectURL(blob)
-    const retry = () => {
-      onRetryStart?.(tempId)
-      runPublish(tempId, blob, ext, contentType, mediaType, captionSnapshot, audienceSnapshot)
-    }
-    onOptimistic?.({
-      _tempId: tempId,
-      user_id: myId,
-      display_name: "You",
-      media_url: previewUrl,
-      media_type: mediaType,
-      caption: captionSnapshot || null,
-      _status: "uploading",
-      _retry: retry,
-      created_at: new Date().toISOString(),
-    })
-    onClose?.()
-    runPublish(tempId, blob, ext, contentType, mediaType, captionSnapshot, audienceSnapshot)
-  }
-
-  async function submit() {
-    if (!file || !myId) return
-    setBusy(true); setError("")
-    const useFile = editedBlob || file
-    const ext = editedBlob ? "jpg" : (file.name.split(".").pop()?.toLowerCase() || "jpg")
-    const contentType = editedBlob ? "image/jpeg" : file.type
-    const mediaType = !editedBlob && file.type.startsWith("video/") ? "video" : "image"
-    const tempId = "pending-story-" + crypto.randomUUID()
-    const captionSnapshot = caption.trim()
-    const audienceSnapshot = audienceMode
-    const retry = () => {
-      onRetryStart?.(tempId)
-      runPublish(tempId, useFile, ext, contentType, mediaType, captionSnapshot, audienceSnapshot)
-    }
-    onOptimistic?.({
-      _tempId: tempId,
-      user_id: myId,
-      display_name: "You",
-      media_url: preview,
-      media_type: mediaType,
-      caption: captionSnapshot || null,
-      _status: "uploading",
-      _retry: retry,
-      created_at: new Date().toISOString(),
-    })
-    onClose?.()
-    await runPublish(tempId, useFile, ext, contentType, mediaType, captionSnapshot, audienceSnapshot)
-  }
+  const [recent, setRecent] = useState([])
+  const [loadingMedia, setLoadingMedia] = useState(true)
 
   useEffect(() => {
-    // On native, launch the OS camera/gallery via the plugin.
-    // On web, fall back to the hidden file input (which the browser opens).
-    if (Capacitor.isNativePlatform()) {
-      const t = setTimeout(() => { pickNative() }, 80)
-      return () => clearTimeout(t)
-    }
-    const el = fileRef.current
-    if (!el) return
-    const onCancel = () => onClose?.()
-    el.addEventListener("cancel", onCancel)
-    const t = setTimeout(() => el.click(), 60)
+    const current = mediaSrc
     return () => {
-      clearTimeout(t)
-      el.removeEventListener("cancel", onCancel)
+      if (current && current.startsWith("blob:")) {
+        try { URL.revokeObjectURL(current) } catch {}
+      }
     }
+  }, [mediaSrc])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadRecent() {
+      if (!Capacitor.isNativePlatform()) {
+        setLoadingMedia(false)
+        return
+      }
+      try {
+        const perm = await PhotoLibrary.requestAuthorization()
+        if (perm.state === "authorized" || perm.state === "limited") {
+          const result = await PhotoLibrary.getLibrary({
+            limit: 18,
+            thumbnailWidth: 256,
+            thumbnailHeight: 256,
+            includeImages: true
+          })
+          if (!cancelled) setRecent(result.assets || [])
+        }
+      } catch (e) {
+        console.warn("Preload failed:", e)
+      } finally {
+        if (!cancelled) setLoadingMedia(false)
+      }
+    }
+    loadRecent()
+    return () => { cancelled = true }
   }, [])
 
-  useEffect(() => {
-    return () => { if (preview) URL.revokeObjectURL(preview) }
-  }, [preview])
-
-  if (mode === "text") {
-    const [c1, c2] = TEXT_BGS[textBg] || TEXT_BGS[0]
-    return createPortal(
-      <div className="fixed inset-0 z-[2000] flex flex-col" style={{ background: `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)` }}>
-        <div className="flex items-center justify-between p-4 shrink-0" style={{ paddingTop: "max(16px, env(safe-area-inset-top))" }}>
-          <button
-            onClick={() => { setMode("media"); setTextContent("") }}
-            className="h-10 px-4 rounded-full bg-black/25 text-white font-bold text-[13px]"
-          >← Media</button>
-          <button
-            onClick={onClose}
-            className="w-10 h-10 rounded-full grid place-items-center bg-black/25 text-white"
-            aria-label="Close"
-          ><X size={20} /></button>
-        </div>
-
-        <div className="flex-1 grid place-items-center px-6 overflow-hidden">
-          <textarea
-            value={textContent}
-            onChange={(e) => setTextContent(e.target.value.slice(0, 200))}
-            placeholder="Type something…"
-            autoFocus
-            className="w-full max-w-[420px] bg-transparent text-white text-center font-black text-[28px] leading-tight placeholder:text-white/50 focus:outline-none resize-none"
-            style={{ minHeight: 200 }}
-          />
-        </div>
-
-        <div className="px-4 flex gap-2 overflow-x-auto mb-3" style={{ scrollbarWidth: "none" }}>
-          {TEXT_BGS.map((pair, i) => (
-            <button
-              key={i}
-              onClick={() => setTextBg(i)}
-              className="shrink-0 w-11 h-11 rounded-full border-2 transition-transform active:scale-95"
-              style={{
-                background: `linear-gradient(135deg, ${pair[0]} 0%, ${pair[1]} 100%)`,
-                borderColor: textBg === i ? "#fff" : "transparent",
-                boxShadow: textBg === i ? "0 0 0 2px rgba(0,0,0,0.3)" : "none",
-              }}
-              aria-label={"Background " + (i + 1)}
-            />
-          ))}
-        </div>
-
-        {error && <p className="text-red-200 text-[12.5px] text-center px-4 pb-2">{error}</p>}
-
-        <div className="p-4 pt-0 shrink-0" style={{ paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}>
-          <button
-            onClick={submitTextStory}
-            disabled={busy || !textContent.trim()}
-            className="w-full h-12 rounded-full bg-white text-black font-black text-[15px] flex items-center justify-center gap-2 disabled:opacity-40"
-          >
-            <Send size={16} /> {busy ? "Posting…" : "Share to story"}
-          </button>
-        </div>
-      </div>,
-      document.body
-    )
+  async function ensureMediaPermission() {
+    if (!Capacitor.isNativePlatform()) return true
+    try {
+      const status = await NativeCamera.checkPermissions()
+      if (status.photos === "granted" || status.photos === "limited") return true
+      const req = await NativeCamera.requestPermissions({ permissions: ["photos", "camera"] })
+      return req.photos === "granted" || req.photos === "limited"
+    } catch (e) {
+      console.warn("Permission check failed:", e)
+      return true
+    }
   }
 
-  if (editorOpen && preview && file?.type.startsWith("image/")) {
-    return (
-      <StoryEditor
-        src={preview}
-        onCancel={() => { setEditorOpen(false); setPreview(""); setFile(null); setEditedBlob(null) }}
-        onSave={(blob, meta) => {
-          publishNow(blob, "jpg", "image/jpeg", "image", meta?.caption || "", meta?.audience || "everyone")
-        }}
-      />
-    )
+  async function pickFromGallery() {
+    setError("")
+    if (!Capacitor.isNativePlatform()) {
+      const input = document.createElement("input")
+      input.type = "file"
+      input.accept = "image/*,video/*"
+      input.onchange = () => {
+        const file = input.files?.[0]
+        if (file) {
+          const isVideo = file.type.startsWith("video/")
+          const reader = new FileReader()
+          reader.onloadend = () => {
+            setMediaSrc(reader.result)
+            setMediaType(isVideo ? "video" : "image")
+            setStep("editor")
+          }
+          reader.readAsDataURL(file)
+        }
+      }
+      input.click()
+      return
+    }
+
+    setBusy(true)
+    try {
+      // Use FilePicker to get the native path. Do NOT use readData: true for videos.
+      const result = await FilePicker.pickFiles({ types: ['image/*', 'video/*'] })
+      if (result.files && result.files.length > 0) {
+        const file = result.files[0]
+        const isVideo = file.mimeType?.startsWith("video/")
+        
+        if (file.path) {
+          // Convert the native path to a safe web URL for the <video> tag
+          const safePath = Capacitor.convertFileSrc(file.path)
+          setMediaSrc(safePath)
+          setMediaType(isVideo ? "video" : "image")
+          setStep("editor")
+        } else {
+           throw new Error("Could not read file path.")
+        }
+      }
+    } catch (e) {
+      if (!/cancel/i.test(e.message || "")) setError("Gallery failed: " + (e.message || "unknown"))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function selectPreload(asset) {
+    setError("")
+    setBusy(true)
+    try {
+      // Replicate the exact logic from your successful grid render
+      const thumbSrc = asset.thumbnail?.webPath || (asset.thumbnail?.path ? Capacitor.convertFileSrc(asset.thumbnail.path) : null)
+      const fullSrc = asset.file?.webPath || (asset.file?.path ? Capacitor.convertFileSrc(asset.file.path) : null)
+      
+      const safeSrc = fullSrc || thumbSrc
+
+      if (!safeSrc) {
+        throw new Error("No readable path for this asset.")
+      }
+
+      setMediaSrc(safeSrc)
+      const isVideo = (asset.type || asset.mimeType || asset.file?.mimeType || "").toLowerCase().startsWith("video/")
+      setMediaType(isVideo ? "video" : "image")
+      if (isVideo) setMediaMime(asset.mimeType || asset.file?.mimeType || "")
+      setStep("editor")
+    } catch (err) {
+      console.warn("Preload tap failed:", err)
+      setError("Could not open image: " + err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function pickVideoFromCamera() {
+    setError("")
+    setBusy(true)
+    try {
+      const result = await FilePicker.pickFiles({ types: ['video/*'] })
+      if (result.files && result.files.length > 0) {
+        const file = result.files[0]
+        if (file.path) {
+          const safePath = Capacitor.convertFileSrc(file.path)
+          setMediaSrc(safePath)
+          setMediaMime(file.mimeType || "")
+          setMediaType("video")
+          setStep("editor")
+        }
+      }
+    } catch (e) {
+      if (!/cancel/i.test(e.message || "")) setError("Video picker failed: " + (e.message || "unknown"))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function pickFromCamera() {
+    if (!Capacitor.isNativePlatform()) { pickFromGallery(); return }
+    setError("")
+    setBusy(true)
+    try {
+      const ok = await ensureMediaPermission()
+      if (!ok) throw new Error("Camera permission denied.")
+      const shot = await NativeCamera.getPhoto({
+        quality: 90, resultType: CameraResultType.Base64, source: CameraSource.Camera
+      })
+      if (!shot?.base64String) throw new Error("Camera returned no image.")
+      const blob = base64ToBlob(shot.base64String, "image/jpeg")
+      if (blob.size === 0) throw new Error("Camera returned an empty image.")
+      setMediaSrc(URL.createObjectURL(blob))
+      setStep("editor")
+    } catch (err) {
+      if (!/cancel/i.test(err.message || "")) setError("Camera failed: " + (err.message || "unknown"))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleShare(blob, meta) {
+    const finalMediaType = meta.mediaType || mediaType || "image"
+    if (!myId) return
+    setBusy(true)
+    setError("")
+
+    // Stable client-generated ID — used for BOTH optimistic-add AND resolve.
+    const clientKey = "temp-" + (typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : (Date.now() + "-" + Math.random().toString(36).slice(2)))
+
+    // Optimistic: show the pending card BEFORE upload starts.
+    onOptimistic?.({
+      _tempId: clientKey,
+      _status: "uploading",
+      user_id: myId,
+      media_type: finalMediaType,
+      _localPreview: finalMediaType === "image" ? mediaSrc : null,
+      created_at: new Date().toISOString()
+    })
+
+    try {
+      const rawMime = meta.mimeType || (blob && blob.type) || mediaMime || ""
+      const mime = normaliseMime(rawMime, finalMediaType)
+      const ext = extFromMime(mime, finalMediaType)
+      if (!blob || blob.size === 0) throw new Error("The file is empty or unreadable.")
+      const path = await uploadStoryMedia(blob, ext, mime, myId)
+      const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
+
+      const { error: dbErr } = await supabase.from("stories").insert({
+        user_id: myId,
+        media_url: pub.publicUrl,
+        media_type: finalMediaType,
+        caption: meta.caption || null,
+        audience: meta.audience || "everyone",
+        metadata: meta.metadata || {},
+        link_url: meta.metadata?.link?.url || null,
+        music_track: meta.metadata?.music || null
+      })
+      if (dbErr) throw new Error(dbErr.message)
+
+      // Success — resolve the optimistic card using the SAME key.
+      onResolve?.(clientKey)
+      onClose?.()
+    } catch (err) {
+      setError(err.message || "Upload failed.")
+      onFail?.(clientKey, err.message || "Upload failed")
+      setBusy(false)
+    }
+  }
+
+  if (step === "editor") {
+    return <StoryEditor src={mediaSrc} mediaType={mediaType} mediaMime={mediaMime} onCancel={() => setStep("hub")} onShare={handleShare} />
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[2000] bg-black">
-      <input ref={fileRef} type="file" accept="image/*,video/*" hidden onChange={pick} />
+    <div className="fixed inset-0 z-[2000] bg-[#18191A] flex flex-col">
+      <div className="flex items-center justify-between p-4 shrink-0" style={{ paddingTop: "max(16px, var(--safe-top, 32px))" }}>
+        <button onClick={onClose} className="w-10 h-10 bg-white/10 rounded-full grid place-items-center">
+          <X size={24} className="text-white" />
+        </button>
+        <h2 className="text-white font-bold text-lg">Create story</h2>
+        <button className="w-10 h-10 grid place-items-center"><Settings size={22} className="text-white" /></button>
+      </div>
 
-      {!preview && null}
+      <div className="flex gap-3 px-4 py-4 overflow-x-auto shrink-0">
+        <button onClick={() => {}} className="flex flex-col items-center justify-center w-[100px] h-[100px] bg-[#1C1C1E] border border-purple-500/30 rounded-xl gap-2 shrink-0 text-white">
+          <Type size={28} /><span className="text-sm font-semibold">Text</span>
+        </button>
+        <button onClick={pickFromCamera} className="flex flex-col items-center justify-center w-[100px] h-[100px] bg-[#1C1C1E] border border-purple-500/30 rounded-xl gap-2 shrink-0 text-white">
+          <Camera size={28} /><span className="text-sm font-semibold">Camera</span>
+        </button>
+        <button onClick={pickVideoFromCamera} className="flex flex-col items-center justify-center w-[100px] h-[100px] bg-[#1C1C1E] border border-purple-500/30 rounded-xl gap-2 shrink-0 text-white">
+          <Video size={28} /><span className="text-sm font-semibold">Video</span>
+        </button>
+        <button onClick={pickFromGallery} className="flex flex-col items-center justify-center w-[100px] h-[100px] bg-[#1C1C1E] border border-purple-500/30 rounded-xl gap-2 shrink-0 text-white">
+          <LayoutGrid size={28} /><span className="text-sm font-semibold">Collage</span>
+        </button>
+      </div>
 
-      {preview && (
-        <div className="absolute inset-0 flex flex-col">
-          <button
-            onClick={onClose}
-            className="absolute top-3 left-3 w-10 h-10 rounded-full grid place-items-center bg-black/50 text-white z-20"
-            aria-label="Close"
-          >
-            <X size={22} />
-          </button>
+      <div className="flex-1 px-4 overflow-y-auto">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-white text-lg font-bold">Gallery</h3>
+          <button onClick={pickFromGallery} className="text-purple-400 font-semibold text-sm flex items-center gap-1"><ImageIcon size={16} /> Open Gallery</button>
+        </div>
 
-          <div className="flex-1 grid place-items-center bg-black overflow-hidden">
-            {file?.type.startsWith("video/") ? (
-              <video src={preview} controls className="max-w-full max-h-full object-contain" />
-            ) : (
-              <img src={preview} alt="" className="max-w-full max-h-full object-contain" />
-            )}
-          </div>
-
-          <div className="p-3 flex flex-col gap-2" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}>
-            <div className="flex gap-2">
-              <button
-                onClick={pickNative}
-                className="flex-1 h-11 rounded-full bg-white/10 text-white font-semibold text-[13.5px] inline-flex items-center justify-center gap-2"
-              >
-                <RefreshCw size={15} /> Change
-              </button>
-
-            <div className="flex gap-2 mt-1">
-              <button
-                onClick={() => { tap("light"); setAudienceMode("everyone") }}
-                className="flex-1 h-9 rounded-full text-[12.5px] font-bold"
-                style={{
-                  background: audienceMode === "everyone" ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.05)",
-                  border: audienceMode === "everyone" ? "1px solid rgba(255,255,255,0.30)" : "1px solid rgba(255,255,255,0.08)",
-                  color: audienceMode === "everyone" ? "#fff" : "#aaa",
-                }}
-              >
-                🌍 Everyone
-              </button>
-              <button
-                onClick={() => { tap("light"); setAudienceMode("inner_circle") }}
-                className="flex-1 h-9 rounded-full text-[12.5px] font-bold"
-                style={{
-                  background: audienceMode === "inner_circle" ? "linear-gradient(135deg, rgba(16,185,129,0.30) 0%, rgba(5,150,105,0.30) 100%)" : "rgba(255,255,255,0.05)",
-                  border: audienceMode === "inner_circle" ? "1px solid rgba(16,185,129,0.55)" : "1px solid rgba(255,255,255,0.08)",
-                  color: audienceMode === "inner_circle" ? "#6EE7B7" : "#aaa",
-                }}
-              >
-                💫 Inner Circle
-              </button>
-              <button
-                onClick={() => { tap("light"); setAudienceMode("matches") }}
-                className="flex-1 h-9 rounded-full text-[12.5px] font-bold"
-                style={{
-                  background: audienceMode === "matches" ? "linear-gradient(135deg, rgba(236,72,153,0.30) 0%, rgba(168,85,247,0.30) 100%)" : "rgba(255,255,255,0.05)",
-                  border: audienceMode === "matches" ? "1px solid rgba(236,72,153,0.55)" : "1px solid rgba(255,255,255,0.08)",
-                  color: audienceMode === "matches" ? "#F9A8D4" : "#aaa",
-                }}
-              >
-                💜 Matches
-              </button>
-            </div>
-              <button
-                onClick={() => { setMode("text"); setPreview(""); setFile(null); setEditedBlob(null) }}
-                className="flex-1 h-11 rounded-full bg-white/10 text-white font-semibold text-[13.5px] inline-flex items-center justify-center gap-2"
-              >
-                <Pencil size={15} /> Text
-              </button>
-              {file?.type.startsWith("image/") && (
-                <button
-                  onClick={() => { setEditorOpen(true); setPreview(preview) }}
-                  className="flex-1 h-11 rounded-full bg-white/10 text-white font-semibold text-[13.5px] inline-flex items-center justify-center gap-2"
-                >
-                  <Pencil size={15} /> Edit drawing
+        {loadingMedia ? (
+          <div className="grid grid-cols-3 gap-1">{[...Array(9)].map((_, i) => <div key={i} className="aspect-square bg-white/5 animate-pulse rounded-sm" />)}</div>
+        ) : recent.length > 0 ? (
+          <div className="grid grid-cols-3 gap-1">
+            {recent.map((asset, i) => {
+              const thumbSrc = asset.thumbnail?.webPath || (asset.thumbnail?.path ? Capacitor.convertFileSrc(asset.thumbnail.path) : null)
+              return (
+                <button key={asset.identifier || i} onClick={() => selectPreload(asset)} className="aspect-square bg-gray-800 overflow-hidden relative active:opacity-70">
+                  {thumbSrc ? <img src={thumbSrc} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full grid place-items-center"><ImageIcon size={20} className="text-white/30" /></div>}
                 </button>
-              )}
-            </div>
-
-            <input
-              value={caption}
-              onChange={(e) => setCaption(e.target.value.slice(0, 200))}
-              placeholder="Add a caption…"
-              className="h-12 rounded-full bg-white/10 px-5 text-white text-[14.5px] placeholder:text-white/50 focus:outline-none focus:bg-white/15"
-            />
-
-            {error && <p className="text-red-400 text-[12.5px] text-center">{error}</p>}
-
-            <button
-              onClick={submit}
-              disabled={busy}
-              className="h-12 rounded-full text-white font-bold text-[15px] inline-flex items-center justify-center gap-2 disabled:opacity-40"
-              style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
-            >
-              <Send size={16} /> {busy ? "Posting…" : "Share to story"}
+              )
+            })}
+          </div>
+        ) : (
+          <div className="grid place-items-center h-40">
+            <button onClick={pickFromGallery} className="text-white/50 flex flex-col items-center gap-2">
+              <ImageIcon size={32} /><span>Tap to open gallery</span>
             </button>
           </div>
+        )}
+      </div>
+
+      <div style={{ height: "max(12px, var(--safe-bottom, 8px))" }} />
+
+      {busy && <div className="absolute inset-0 bg-[#0B0B14]/80 z-50 grid place-items-center"><Loader2 className="animate-spin text-white" size={40} /></div>}
+      {error && (
+        <div className="absolute left-4 right-4 bg-red-500/20 border border-red-500/40 rounded-lg p-3" style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }}>
+          <p className="text-red-300 text-sm text-center">{error}</p>
         </div>
       )}
     </div>,

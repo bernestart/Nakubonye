@@ -303,7 +303,7 @@ export default function ReelDecorate({ clips, onBack, onNext, initialOverlays })
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-3"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto" />
             <h3 className="text-cream font-extrabold text-[16px]">
@@ -389,7 +389,7 @@ export default function ReelDecorate({ clips, onBack, onNext, initialOverlays })
           <div className="absolute inset-0 bg-black/60" />
           <div onClick={(e) => e.stopPropagation()}
                className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-3"
-               style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
+               style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}>
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto" />
             <h3 className="text-cream font-extrabold text-[16px]">Add sticker</h3>
             <div className="flex flex-wrap gap-2 justify-center">
@@ -438,7 +438,7 @@ export default function ReelDecorate({ clips, onBack, onNext, initialOverlays })
           <div className="absolute inset-0 bg-black/60" />
           <div onClick={(e) => e.stopPropagation()}
                className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5"
-               style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
+               style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}>
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-4" />
             <h3 className="text-cream font-extrabold text-[16px] mb-4">Effects</h3>
             <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>

@@ -70,7 +70,7 @@ export default function TagPicker({ initial = [], onClose, onSave }) {
       <div
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-3"
-        style={{ maxHeight: "80dvh", paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+        style={{ maxHeight: "80dvh", paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
       >
         <div className="w-10 h-1 rounded-full bg-white/20 mx-auto" />
         <div className="flex items-center justify-between">

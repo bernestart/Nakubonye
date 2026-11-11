@@ -32,6 +32,13 @@ export default function Messages() {
     return t === "unread" || t === "groups" ? t : "all"
   })
   const [rowMenuFor, setRowMenuFor] = useState(null)
+  const [lockedChats, setLockedChats] = useState(() => JSON.parse(localStorage.getItem('lockedChats') || '[]'))
+  const [showLockedFolder, setShowLockedFolder] = useState(false)
+  const [unlockFolderPrompt, setUnlockFolderPrompt] = useState(false)
+  const [folderPinInput, setFolderPinInput] = useState("")
+  const [savedPin, setSavedPin] = useState(() => localStorage.getItem('chatPin') || null)
+  const [pinModalFor, setPinModalFor] = useState(null)
+  const [pinInput, setPinInput] = useState("")
   const [pinnedKeys, setPinnedKeys] = useState(new Set())
   const [archivedKeys, setArchivedKeys] = useState(new Set())
   const [deletedKeys, setDeletedKeys] = useState(new Set())
@@ -85,8 +92,9 @@ export default function Messages() {
   }
 
   const load = useCallback(async () => {
-    if (!session?.user?.id) return
+    if (!session?.user?.id) { setLoading(false); return }
     setLoading(true); setError('')
+    try {
     const userId = session.user.id
 
     const { data: matches, error: mErr } = await supabase
@@ -443,6 +451,11 @@ export default function Messages() {
 
     setItems(list)
     setLoading(false)
+    } catch (e) {
+      console.error('Messages load error:', e)
+      setError(friendlyError(e))
+      setLoading(false)
+    }
   }, [session?.user?.id])
 
   useEffect(() => { load() }, [load])
@@ -638,13 +651,18 @@ export default function Messages() {
     return new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0)
   })
 
+  const getItemId = (item) => item.isGroup ? item.groupId : item.userId;
+  const securedCombined = showLockedFolder 
+    ? combined.filter(item => lockedChats.includes(getItemId(item)))
+    : combined.filter(item => !lockedChats.includes(getItemId(item)));
+
   const tabFiltered = tabFilter === "all"
-    ? combined
+    ? securedCombined
     : tabFilter === "unread"
-      ? combined.filter((item) => item.unread)
+      ? securedCombined.filter((item) => item.unread)
       : tabFilter === "groups"
-        ? combined.filter((item) => item.isGroup)
-        : combined
+        ? securedCombined.filter((item) => item.isGroup)
+        : securedCombined
 
   const visibleItems = searchQuery.trim()
     ? tabFiltered.filter((item) => {
@@ -667,10 +685,10 @@ export default function Messages() {
       }}
     >
       <BrandGlow />
-      <AppHeader />
+      
 
       {/* Messages list header */}
-      <div className="px-4 pt-2 pb-3 shrink-0 flex items-center justify-between">
+      <div className="px-4 pb-3 shrink-0 flex items-center justify-between" style={{ paddingTop: 'var(--safe-top, 32px)' }}>
         <div>
           <h1 className="text-cream text-[22px] font-extrabold tracking-tight">
             Messages
@@ -1065,7 +1083,7 @@ export default function Messages() {
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
 
@@ -1086,6 +1104,26 @@ export default function Messages() {
               {rowMenuFor.muted ? <Bell size={18} /> : <BellOff size={18} />}
               <span className="font-semibold text-[14px]">
                 {rowMenuFor.muted ? "Unmute" : "Mute"}
+              </span>
+            </button>
+
+            <button
+              onClick={() => toggleRowPin(rowMenuFor)}
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]"
+            >
+              <Pin size={18} className={rowMenuFor.isPinned ? "text-purple-400" : ""} />
+              <span className="font-semibold text-[14px]">
+                {rowMenuFor.isPinned ? "Unpin from top" : "Pin to top"}
+              </span>
+            </button>
+
+            <button
+              onClick={() => { setPinModalFor(rowMenuFor); setRowMenuFor(null); }}
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]"
+            >
+              {rowMenuFor.isLocked ? <Unlock size={18} className="text-orange-400" /> : <Lock size={18} />}
+              <span className="font-semibold text-[14px]">
+                {rowMenuFor.isLocked ? "Remove Lock" : "Lock Chat"}
               </span>
             </button>
 
@@ -1120,6 +1158,44 @@ export default function Messages() {
             ? { id: reportRowFor.groupId, name: reportRowFor.display_name, isGroup: true }
             : { id: reportRowFor.userId, display_name: reportRowFor.display_name, username: reportRowFor.username }}
         />
+      )}
+
+      {!showLockedFolder && lockedChats.length > 0 && (
+        <div className="px-4 py-2">
+          <button onClick={() => { if (savedPin) setUnlockFolderPrompt(true); else setShowLockedFolder(true); }} className="w-full flex items-center justify-between p-4 rounded-2xl bg-white/[0.03] border border-white/10 active:bg-white/[0.06]">
+            <div className="flex items-center gap-3">
+              <Lock size={18} className="text-purple-400" />
+              <span className="text-cream font-bold text-[14px]">Locked Chats</span>
+            </div>
+            <span className="text-muted text-[12px]">{lockedChats.length}</span>
+          </button>
+        </div>
+      )}
+      {showLockedFolder && (
+        <div className="px-4 py-2">
+           <button onClick={() => setShowLockedFolder(false)} className="w-full flex items-center gap-3 p-4 rounded-2xl bg-white/[0.03] border border-white/10 active:bg-white/[0.06]">
+             <Unlock size={18} className="text-muted" />
+             <span className="text-muted font-bold text-[14px]">Back to Main Inbox</span>
+           </button>
+        </div>
+      )}
+
+      {/* FOLDER UNLOCK PROMPT */}
+      {unlockFolderPrompt && (
+        <div className="fixed inset-0 z-[600] flex items-center justify-center bg-black/80 px-6">
+          <div className="w-full max-w-[320px] bg-[#18191A] rounded-2xl p-6 flex flex-col gap-4 text-center">
+            <h3 className="text-white font-bold text-[18px]">Enter PIN</h3>
+            <p className="text-gray-400 text-[13px]">Enter your 4-digit PIN to view locked chats.</p>
+            <input type="password" maxLength={4} value={folderPinInput} onChange={(e) => setFolderPinInput(e.target.value.replace(/[^0-9]/g, ''))} className="w-full bg-black/50 border border-white/20 rounded-xl px-4 py-3 text-center text-2xl tracking-[0.5em] text-white focus:outline-none focus:border-purple-500" placeholder="••••" autoFocus />
+            <div className="flex gap-2 mt-2">
+              <button onClick={() => { setUnlockFolderPrompt(false); setFolderPinInput(""); }} className="flex-1 py-3 rounded-xl bg-white/10 text-white font-bold active:bg-white/20">Cancel</button>
+              <button onClick={() => {
+                if (folderPinInput === savedPin) { setShowLockedFolder(true); setUnlockFolderPrompt(false); setFolderPinInput(""); }
+                else alert("Incorrect PIN");
+              }} disabled={folderPinInput.length !== 4} className="flex-1 py-3 rounded-xl bg-purple-600 text-white font-bold disabled:opacity-50">Unlock</button>
+            </div>
+          </div>
+        </div>
       )}
 
       <div style={{ height: 72, flexShrink: 0 }} />

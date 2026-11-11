@@ -276,7 +276,7 @@ export default function Search() {
         position: "fixed", inset: 0,
         margin: "0 auto", maxWidth: 480,
         background: "#0B0B14",
-        paddingTop: "env(safe-area-inset-top)",
+        paddingTop: "var(--safe-top, 32px)",
       }}
     >
       <header className="shrink-0 flex items-center gap-2 px-3 h-12 border-b border-white/8">
@@ -331,11 +331,30 @@ export default function Search() {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-3 py-3 pb-10">
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 pb-10">
 
         {/* Empty state (no query yet) */}
         {!isSearching && (
           <>
+          {trendingTags.length > 0 && (
+            <div className="mb-5">
+              <h3 className="text-cream font-bold text-[15px] mb-3 flex items-center gap-2">
+                <TrendingUp size={16} className="text-purple-400" /> Trending
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {trendingTags.slice(0, 8).map((tag, i) => (
+                  <button
+                    key={i}
+                    onClick={() => { tap("light"); setQuery(tag); runSearch(tag) }}
+                    className="px-3 py-1.5 rounded-full bg-white/[0.05] border border-white/10 text-cream text-[13px] font-semibold active:bg-white/[0.1]"
+                  >
+                    #{tag}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
             {recent.length > 0 ? (
               <div className="mb-5">
                 <div className="flex items-center justify-between mb-2 px-1">

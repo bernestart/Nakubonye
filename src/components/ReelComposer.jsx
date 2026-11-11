@@ -306,7 +306,7 @@ export default function ReelComposer({ onClose, onDone, remixOf, kind = "reel" }
         const voPath = myId + "/voiceover_" + crypto.randomUUID() + ".webm"
         const { error: voErr } = await supabase.storage
           .from("reels-media")
-          .upload(voPath, voiceoverBlobState, { upsert: false, contentType: "audio/webm" })
+          .upload(voPath, voiceoverBlobState, { upsert: false, contentType: voiceoverBlobState.type || "audio/mp4" })
         if (!voErr) {
           const { data: vpub } = supabase.storage.from("reels-media").getPublicUrl(voPath)
           voiceoverUrl = vpub?.publicUrl || null
@@ -317,6 +317,7 @@ export default function ReelComposer({ onClose, onDone, remixOf, kind = "reel" }
 
     const { error: insErr } = await supabase.from("reels").insert({
       user_id: myId,
+      remix_of: remixOf?.id || null,
       kind,
       video_url: firstUrl,
       clips: uploaded,
@@ -672,7 +673,7 @@ export default function ReelComposer({ onClose, onDone, remixOf, kind = "reel" }
 
       {remixOf && (
         <div className="shrink-0 px-3 pt-3 flex items-center gap-3"
-             style={{ paddingTop: "max(12px, env(safe-area-inset-top))" }}>
+             style={{ paddingTop: "max(12px, var(--safe-top, 32px))" }}>
           <div className="relative shrink-0 rounded-xl overflow-hidden bg-black border border-white/15" style={{ width: 48, height: 64 }}>
             <video
               src={remixOf.video_url}
@@ -713,7 +714,7 @@ export default function ReelComposer({ onClose, onDone, remixOf, kind = "reel" }
             </div>
             {error && <div className="absolute top-20 left-4 right-4 bg-red-500/20 border border-red-500/50 rounded-xl px-3 py-2 text-red-200 text-[12.5px]">{error}</div>}
           </div>
-          <div className="px-6 py-6 flex items-center justify-between" style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}>
+          <div className="px-6 py-6 flex items-center justify-between" style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}>
             <button onClick={() => fileRef.current?.click()} disabled={recording} className="w-14 h-14 rounded-xl overflow-hidden bg-white/10 border border-white/20 grid place-items-center disabled:opacity-40" aria-label="Gallery">
               <Upload size={22} className="text-white" />
             </button>

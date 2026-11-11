@@ -7,6 +7,9 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
+  build: {
+    minify: false, // temporary: fixes TDZ error
+  },
   plugins: [react(), tailwindcss()],
   server: { host: true },
   resolve: {

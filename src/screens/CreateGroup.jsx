@@ -125,7 +125,7 @@ export default function CreateGroup() {
     }}>
       <BrandGlow />
 
-      <header style={{ height: 52, flexShrink: 0 }} className="px-3 flex items-center gap-2">
+      <header style={{ minHeight: 'calc(52px + var(--safe-top, 32px))', flexShrink: 0, paddingTop: 'var(--safe-top, 32px)' }} className="px-3 flex items-center gap-2">
         <button onClick={() => nav(-1)} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Back">
           <ArrowLeft size={20} strokeWidth={2.3} />
         </button>

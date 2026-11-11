@@ -17,7 +17,7 @@ export default function TermsPolicies() {
       <BrandGlow />
 
       <header className="shrink-0 flex items-center gap-2 px-3 h-14 border-b border-white/6"
-        style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        style={{ paddingTop: 'var(--safe-top, 32px)' }}>
         <button onClick={() => { tap('light'); nav(-1) }}
           className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Back">
           <ArrowLeft size={20} strokeWidth={2.3} />

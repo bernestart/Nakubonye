@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react"
 import { X, ImagePlus, Send, BarChart2, Trash2, Plus, MapPin, Smile, Clock } from "lucide-react"
 import { supabase } from "../lib/supabase"
+import { getCurrentLocation } from "../lib/geolocation"
 import { loadBlockedIds } from "../lib/blocks"
 import { useAuth } from "../lib/auth"
 import { useSettings } from "../lib/settings.jsx"
 import { tap } from "../lib/haptic"
 import { autosaveDraft, deleteDraftsByKind } from "../lib/drafts"
+import TagPicker from "./TagPicker"
 
 const AUDIENCES = [
   { id: "public",  label: "Everyone",  icon: "🌍", desc: "Anyone on Nakubonye can see this" },
@@ -15,7 +17,7 @@ const AUDIENCES = [
 
 const MAX_IMAGES = 10
 
-export default function PostComposer({ onClose, onDone, onOptimistic, onResolve, onFail, onRetryStart }) {
+export default function PostComposer({ onClose, onDone, onOptimistic, onResolve, onFail, onRetryStart, communityId }) {
   const { settings } = useSettings()
   const { session } = useAuth()
   const myId = session?.user?.id
@@ -47,6 +49,13 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
   const [aiLabel, setAiLabel] = useState(false)
   const [shareToStory, setShareToStory] = useState(false)
   const [commentSheetOpen, setCommentSheetOpen] = useState(false)
+  const [taggedUsers, setTaggedUsers] = useState([])
+  const [tagPickerOpen, setTagPickerOpen] = useState(false)
+  const [bgStyle, setBgStyle] = useState(null)
+  const [imageAlts, setImageAlts] = useState([])
+  const [bgSheetOpen, setBgSheetOpen] = useState(false)
+  const [altSheetIdx, setAltSheetIdx] = useState(null)
+  const [altDraft, setAltDraft] = useState("")
   const [locationSheetOpen, setLocationSheetOpen] = useState(false)
   const [feelingSheetOpen, setFeelingSheetOpen] = useState(false)
   const [scheduleSheetOpen, setScheduleSheetOpen] = useState(false)
@@ -218,7 +227,8 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
         if (upErr) throw new Error(upErr.message)
         uploadedPaths.push(path)
       }
-      const scheduledFor = publishAt && new Date(publishAt).getTime() > Date.now() + 60_000
+      const location = await getCurrentLocation()
+        const scheduledFor = publishAt && new Date(publishAt).getTime() > Date.now() + 60_000
         ? new Date(publishAt).toISOString()
         : new Date().toISOString()
       const { data: insertedRow, error: insErr } = await supabase.from("user_posts").insert({
@@ -232,11 +242,15 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
         reshared_from_snapshot: reshareRef?.snapshot || null,
         reshared_include_original: reshareRef ? true : null,
         location_text: locationText.trim() || null,
+        location: location ? `SRID=4326;POINT(${location.lng} ${location.lat})` : null,
         feeling_text: feelingText.trim() || null,
         publish_at: scheduledFor,
         who_can_comment: whoCanComment,
         ai_label: aiLabel,
         share_to_story: shareToStory,
+        tagged_user_ids: taggedUsers.map((u) => u.id).filter(Boolean),
+        background_style: imageFiles.length === 0 ? bgStyle : null,
+        image_alts: imageAlts.filter(Boolean),
       }).select("id").single()
       if (insErr) throw new Error(insErr.message)
       if (scheduledFor && new Date(scheduledFor).getTime() > Date.now() + 60_000) {
@@ -303,6 +317,15 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
     if (!handedOffRef.current) imagePreviews.forEach((p) => URL.revokeObjectURL(p))
   }, [])
 
+  // Ensure imageAlts matches imageFiles length
+  useEffect(() => {
+    setImageAlts((prev) => {
+      const next = [...prev]
+      while (next.length < imageFiles.length) next.push("")
+      return next.slice(0, imageFiles.length)
+    })
+  }, [imageFiles.length])
+
   const activeAud = (() => {
     if (typeof audience === "string" && audience.startsWith("circle:")) {
       const cid = audience.slice(7)
@@ -318,7 +341,7 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
     return (
       <div className="fixed inset-0 z-[220] bg-[#0B0B14] flex flex-col" style={{ height: "100dvh" }}>
         <header className="flex items-center justify-between px-3 py-3 shrink-0"
-                style={{ paddingTop: "max(12px, env(safe-area-inset-top))" }}>
+                style={{ paddingTop: "max(12px, var(--safe-top, 32px))" }}>
           <button
             onClick={() => setStage("settings")}
             className="h-10 px-4 rounded-full bg-white/[0.06] text-cream font-semibold text-[13.5px]"
@@ -374,6 +397,12 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
                     <span className="text-[11.5px] text-purple-300 font-bold">Cover image</span>
                   )}
                   <button
+                    onClick={() => { tap("light"); setAltSheetIdx(i); setAltDraft(imageAlts[i] || "") }}
+                    className="h-8 px-3 rounded-full bg-white/[0.06] border border-white/10 text-cream font-bold text-[11.5px]"
+                  >
+                    Alt
+                  </button>
+                  <button
                     onClick={() => { tap("light"); moveImage(i, 1) }}
                     disabled={i === imagePreviews.length - 1}
                     className="h-8 px-3 rounded-full bg-white/[0.06] border border-white/10 text-cream font-bold text-[11.5px] disabled:opacity-30"
@@ -418,7 +447,7 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
   return (
     <div className="fixed inset-0 z-[220] bg-[#0B0B14] flex flex-col" style={{ height: "100dvh" }}>
       <header className="flex items-center justify-between px-3 py-3 shrink-0"
-              style={{ paddingTop: "max(12px, env(safe-area-inset-top))" }}>
+              style={{ paddingTop: "max(12px, var(--safe-top, 32px))" }}>
         {stage === "settings" ? (
           <button
             onClick={() => { tap("light"); setStage("compose") }}
@@ -460,14 +489,25 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
             </button>
           )
         ) : (
-          <button
-            onClick={() => { tap("light"); setStage("settings") }}
-            disabled={!canPost}
-            className="h-10 px-4 rounded-full text-white font-bold text-[13.5px] disabled:opacity-40"
-            style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
-          >
-            Next
-          </button>
+          <div className="flex items-center gap-1.5">
+            {imageFiles.length === 0 && (
+              <button
+                onClick={() => { tap("light"); setBgSheetOpen(true) }}
+                className="w-10 h-10 rounded-full grid place-items-center bg-white/[0.06] text-cream"
+                aria-label="Background color"
+              >
+                <span className="font-black text-[14px]">Aa</span>
+              </button>
+            )}
+            <button
+              onClick={() => { tap("light"); setStage("settings") }}
+              disabled={!canPost}
+              className="h-10 px-4 rounded-full text-white font-bold text-[13.5px] disabled:opacity-40"
+              style={{ background: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" }}
+            >
+              Next
+            </button>
+          </div>
         )}
       </header>
 
@@ -594,14 +634,17 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
           </div>
         )}
 
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value.slice(0, 1000))}
-          placeholder="Share something real…"
-          rows={5}
-          autoFocus
-          className="w-full bg-transparent border-0 text-cream text-[16px] leading-[1.5] placeholder:text-subtle focus:outline-none resize-none mb-3"
-        />
+        <div className="rounded-2xl transition-colors" style={{ background: bgStyle || "transparent", minHeight: bgStyle ? 180 : "auto", display: "flex", alignItems: "center" }}>
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value.slice(0, 1000))}
+            placeholder="Share something real…"
+            rows={5}
+            autoFocus
+            className="w-full bg-transparent border-0 text-cream text-[16px] leading-[1.5] placeholder:text-subtle focus:outline-none resize-none mb-3 px-2"
+            style={{ textAlign: bgStyle ? "center" : "left", fontSize: bgStyle ? 22 : 16, fontWeight: bgStyle ? 700 : 400 }}
+          />
+        </div>
 
         {/* Image grid */}
         {imagePreviews.length > 0 && (
@@ -787,10 +830,11 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
             <span className="text-cream font-semibold text-[13.5px] flex-1">Photo/video</span>
             {imageFiles.length > 0 && <span className="text-purple-400 text-[12px] font-bold">{imageFiles.length}</span>}
           </button>
-          <button type="button" onClick={() => { tap("light"); try { alert("Tag people coming soon") } catch {} }}
+          <button type="button" onClick={() => { tap("light"); setTagPickerOpen(true) }}
             className="w-full flex items-center gap-3 px-3.5 py-3 text-left active:bg-white/[0.04] border-b border-white/[0.06]">
             <span className="w-9 h-9 rounded-full grid place-items-center bg-blue-500/15"><span className="text-[15px]">{"\u{1F464}"}</span></span>
             <span className="text-cream font-semibold text-[13.5px] flex-1">Tag people</span>
+            {taggedUsers.length > 0 && <span className="text-purple-400 text-[12px] font-bold">{taggedUsers.length}</span>}
           </button>
           <button type="button" onClick={() => { tap("light"); setFeelingDraft(feelingText); setFeelingSheetOpen(true) }}
             className="w-full flex items-center gap-3 px-3.5 py-3 text-left active:bg-white/[0.04] border-b border-white/[0.06]">
@@ -833,7 +877,7 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="mx-auto mb-4" style={{ width: 40, height: 4, borderRadius: 999, background: "rgba(255,255,255,0.2)" }} />
             <h3 className="text-cream font-extrabold text-[16px] mb-3">Add location</h3>
@@ -865,7 +909,7 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="mx-auto mb-4" style={{ width: 40, height: 4, borderRadius: 999, background: "rgba(255,255,255,0.2)" }} />
             <h3 className="text-cream font-extrabold text-[16px] mb-3">How are you feeling?</h3>
@@ -897,7 +941,7 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="mx-auto mb-4" style={{ width: 40, height: 4, borderRadius: 999, background: "rgba(255,255,255,0.2)" }} />
             <h3 className="text-cream font-extrabold text-[16px] mb-1">Schedule post</h3>
@@ -937,7 +981,7 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             <h3 className="text-cream font-extrabold text-[16px] mb-2">Who can comment?</h3>
@@ -966,13 +1010,67 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
         </div>
       )}
 
+      {bgSheetOpen && (
+        <div className="fixed inset-0 z-[240] flex items-end" onClick={() => setBgSheetOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5" style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}>
+            <h3 className="text-cream font-extrabold text-[16px] mb-3">Background color</h3>
+            <div className="flex gap-2">
+              {[
+                { id: "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)", label: "Pink" },
+                { id: "linear-gradient(135deg, #3B82F6 0%, #2DD4BF 100%)", label: "Blue" },
+                { id: "linear-gradient(135deg, #F59E0B 0%, #EF4444 100%)", label: "Sunset" },
+                { id: null, label: "None" },
+              ].map((b) => (
+                <button
+                  key={b.label}
+                  onClick={() => { tap("light"); setBgStyle(b.id); setBgSheetOpen(false) }}
+                  className="flex-1 h-16 rounded-xl border border-white/10 grid place-items-center font-bold text-white text-[13px]"
+                  style={{ background: b.id || "rgba(255,255,255,0.05)" }}
+                >
+                  {b.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {altSheetIdx !== null && (
+        <div className="fixed inset-0 z-[240] flex items-end" onClick={() => setAltSheetIdx(null)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5" style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}>
+            <h3 className="text-cream font-extrabold text-[16px] mb-3">Alt text</h3>
+            <input
+              value={altDraft}
+              onChange={(e) => setAltDraft(e.target.value.slice(0, 120))}
+              placeholder="Describe this image for blind users…"
+              autoFocus
+              className="w-full h-12 rounded-2xl bg-white/[0.05] border border-white/10 px-4 text-cream text-[14px] placeholder:text-subtle focus:outline-none focus:border-purple-500 mb-4"
+            />
+            <div className="flex gap-2">
+              <button onClick={() => setAltSheetIdx(null)} className="flex-1 h-11 rounded-full bg-white/[0.05] border border-white/10 text-muted font-semibold text-[13.5px]">Cancel</button>
+              <button onClick={() => { tap("light"); setImageAlts(prev => { const n = [...prev]; n[altSheetIdx] = altDraft; return n }); setAltSheetIdx(null) }} className="flex-1 h-11 rounded-full text-white font-bold text-[13.5px]" style={{ background: "linear-gradient(135deg, #4C1D95 0%, #7C3AED 100%)" }}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tagPickerOpen && (
+        <TagPicker
+          initial={taggedUsers}
+          onClose={() => setTagPickerOpen(false)}
+          onSave={(sel) => setTaggedUsers(sel || [])}
+        />
+      )}
+
       {audienceSheetOpen && (
         <div className="fixed inset-0 z-[240] flex items-end" onClick={() => setAudienceSheetOpen(false)}>
           <div className="absolute inset-0 bg-black/60" />
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             <h3 className="text-cream font-extrabold text-[16px] mb-2">

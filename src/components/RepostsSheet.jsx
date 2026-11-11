@@ -63,7 +63,7 @@ export default function RepostsSheet({ postId, postType, onClose }) {
       <div
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] flex flex-col"
-        style={{ maxHeight: "75dvh", paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+        style={{ maxHeight: "75dvh", paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
       >
         <div className="shrink-0 pt-3 pb-2 flex justify-center">
           <span className="w-10 h-1 rounded-full bg-white/20" />

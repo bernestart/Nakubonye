@@ -12,6 +12,9 @@ import { Camera as NativeCamera, CameraResultType, CameraSource } from '@capacit
 import { publicPhotoUrl } from '../lib/photo'
 import { tap } from '../lib/haptic'
 import { useVoiceCall } from '../lib/voiceCall'
+import { useVoiceRecorder } from '../components/chat/useVoiceRecorder'
+import Waveform from '../components/chat/Waveform'
+import VanishModeOverlay from '../components/chat/VanishModeOverlay'
 
 import { Capacitor } from '@capacitor/core'
 import { PrivacyScreen } from '@capacitor-community/privacy-screen'
@@ -35,6 +38,7 @@ import AudioBubble from '../components/chat/AudioBubble'
 import EmojiPicker from '../components/chat/EmojiPicker'
 import PollComposer from '../components/PollComposer'
 import ImageLightbox from '../components/chat/ImageLightbox'
+import DocBubble from '../components/chat/DocBubble'
 import ForwardPicker from '../components/ForwardPicker'
 import ChatSearchSheet from '../components/ChatSearchSheet'
 import MessageActionsSheet from '../components/MessageActionsSheet'
@@ -82,7 +86,17 @@ export default function Chat() {
   const [conversationId, setConversationId] = useState(null)
   const [disappearingTimer, setDisappearingTimer] = useState(null)
   const [viewOnce, setViewOnce] = useState(false)
+  const docInputRef = useRef(null)
+      
+    const voiceRecorder = useVoiceRecorder()
+
   const [viewOnceActive, setViewOnceActive] = useState(null)
+  // Screenshot Guard (PrivacyScreen) for View Once
+  useEffect(() => {
+    if (viewOnceActive) { setPrivacyScreen(true) }
+    else { setPrivacyScreen(false) }
+    return () => { setPrivacyScreen(false) }
+  }, [viewOnceActive])
 
   // View-once only: enable FLAG_SECURE while the modal is open, disable on close.
   useEffect(() => {
@@ -351,10 +365,17 @@ export default function Chat() {
     setIsMuted(!!muteRes.data)
     setClearedAt(clearRes.data?.cleared_at || null)
 
-    await supabase.from('conversation_reads').upsert(
+    
+    // 1. OPTIMISTIC UI: Instantly reset local unread badge to 0
+    if (typeof setUnreadCount === 'function') setUnreadCount(0);
+    
+    // 2. Push timestamp to Supabase in the background
+    supabase.from('conversation_reads').upsert(
       { conversation_id: convId, user_id: myId, last_read_at: new Date().toISOString() },
       { onConflict: 'conversation_id,user_id' }
-    )
+    ).then(({ error }) => {
+      if (error) console.warn("Failed to sync read receipt:", error);
+    });
     setLoading(false)
   }, [myId, otherId])
 
@@ -491,7 +512,7 @@ export default function Chat() {
     }
   }
   if (sw.active) {
-    sw.dx = Math.min(dx, 80)
+    sw.dx = Math.min(dx * 0.45, 64)
     setSwipeState({ id: sw.id, dx: sw.dx })
   }
   }
@@ -593,46 +614,56 @@ export default function Chat() {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  async function startRecording() {
-    if (recording) return
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mime = typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus' : 'audio/webm'
-      const mr = new MediaRecorder(stream, { mimeType: mime })
-      recordChunksRef.current = []
-      mr.ondataavailable = (e) => { if (e.data.size > 0) recordChunksRef.current.push(e.data) }
-      mr.onstop = () => { stream.getTracks().forEach((t) => t.stop()); clearInterval(recordTimerRef.current) }
-      mr.start()
-      recorderRef.current = mr
-      setRecording(true); setRecordSeconds(0)
-      recordTimerRef.current = setInterval(() => setRecordSeconds((s) => s + 1), 1000)
-      tap('medium')
-    } catch (err) { setError('Microphone access denied. ' + (err?.message || '')) }
+  async function pickDocument(e) {
+    const file = e.target.files?.[0]; if (!file) return
+    if (file.size > 15 * 1024 * 1024) { setError("File too large"); return }
+    setSending(true)
+    const path = `${conversationId}/${crypto.randomUUID()}.${file.name.split('.').pop()}`
+    const { error: upErr } = await supabase.storage.from('chat-media').upload(path, file, { contentType: file.type })
+    if (upErr) { setError(upErr.message); setSending(false); return }
+    const { data: pub } = supabase.storage.from('chat-media').getPublicUrl(path)
+    const payload = { conversation_id: conversationId, sender_id: myId, content: '', media_url: pub?.publicUrl, media_type: file.type, media_name: file.name }
+    if (disappearingTimer) payload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
+    if (replyingTo?.id) payload.reply_to_id = replyingTo.id
+    const finalPayload = { ...payload, view_once: viewOnce };
+    const { data: inserted, error: sendErr } = await supabase.from('messages').insert(finalPayload).select().single();
+    if (!sendErr) setViewOnce(false); // Reset toggle after send
+    if (sendErr) setError(sendErr.message); else if (inserted) setMessages(cur => [...cur, inserted])
+    setSending(false); setReplyingTo(null); if (docInputRef.current) docInputRef.current.value = ''
+  }
+
+  async function startRecording() { document.activeElement?.blur();
+    if (!canMsg) { setError(canMsgReason || "You can't message this user"); return }
+    try { await voiceRecorder.start(); tap('medium') } catch (err) { setError('Microphone access denied.') }
   }
 
   async function stopRecording(send_it) {
     if (send_it && !canMsg) { setError(canMsgReason || "You can't message this user"); return }
-    const mr = recorderRef.current
-    if (!mr) return
-    clearInterval(recordTimerRef.current)
-    const seconds = recordSeconds
-    await new Promise((resolve) => { mr.addEventListener('stop', resolve, { once: true }); mr.stop() })
-    recorderRef.current = null
-    setRecording(false); setRecordSeconds(0)
-    if (!send_it) return
-    if (seconds < 1) { setError('Recording too short.'); return }
-    const blob = new Blob(recordChunksRef.current, { type: 'audio/webm' })
-    recordChunksRef.current = []
-    if (blob.size > 10 * 1024 * 1024) { setError('Voice note too long.'); return }
-    setSending(true)
-    const path = `${conversationId}/${crypto.randomUUID()}.webm`
-    const { error: upErr } = await supabase.storage.from('chat-media').upload(path, blob, { upsert: false, contentType: 'audio/webm' })
-    if (upErr) { setError(upErr.message); setSending(false); return }
-    const { data: pub } = supabase.storage.from('chat-media').getPublicUrl(path)
-    const payload = { conversation_id: conversationId, sender_id: myId, content: '', media_url: pub?.publicUrl || null, media_type: 'audio/webm', media_name: `Voice · ${seconds}s` }
-    if (replyingTo?.id) payload.reply_to_id = replyingTo.id
-    if (viewOnce) payload.view_once = true
+    try {
+      const res = await voiceRecorder.stop({ send: send_it })
+      if (!res) return
+      if (res.duration < 1) { setError('Recording too short.'); return }
+      setSending(true)
+      const path = `${conversationId}/${crypto.randomUUID()}.webm`
+      const { error: upErr } = await supabase.storage.from('chat-media').upload(path, res.blob, { upsert: false, contentType: res.mimeType })
+      if (upErr) { setError(upErr.message); setSending(false); return }
+      const { data: pub } = supabase.storage.from('chat-media').getPublicUrl(path)
+      const payload = { 
+        conversation_id: conversationId, 
+        sender_id: myId, 
+        content: '', 
+        media_url: pub?.publicUrl || null, 
+        media_type: res.mimeType, 
+        media_name: `Voice · ${res.duration}s`,
+        voice_duration_seconds: res.duration,
+        voice_waveform: res.waveform
+      }
+      if (replyingTo?.id) payload.reply_to_id = replyingTo.id
+      if (disappearingTimer) payload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
+      if (viewOnce) {
+        payload.view_once = true
+        payload.ephemeral_type = 'VIEW_ONCE'
+      }
     setReplyingTo(null)
     setViewOnce(false)
 
@@ -648,9 +679,13 @@ export default function Chat() {
       setMessages((cur) => cur.some((x) => x.id === inserted.id) ? cur : [...cur, inserted])
     }
     setSending(false)
-  }
+        } catch (err) {
+          setError(err.message || "Send failed")
+          setSending(false)
+        }
+      }
 
-  async function saveEdit() {
+      async function saveEdit() {
     if (!editingMsg || !myId) return
     const body = text.trim()
     if (!body) return
@@ -676,6 +711,7 @@ export default function Chat() {
       content: poll.question || "",
       metadata: { poll },
     }
+    if (disappearingTimer) payload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
     const { data: inserted, error: err } = await supabase
       .from("messages")
       .insert(payload)
@@ -802,9 +838,9 @@ export default function Chat() {
     const already = Array.isArray(m.viewed_by) && m.viewed_by.includes(myId)
     if (already) return
     const nextViewedBy = Array.isArray(m.viewed_by) ? [...m.viewed_by, myId] : [myId]
-    setMessages((cur) => cur.map((x) => x.id === m.id ? { ...x, viewed_by: nextViewedBy } : x))
+    setMessages((cur) => cur.map((x) => x.id === m.id ? { ...x, viewed_by: nextViewedBy, media_url: null } : x))
     try {
-      await supabase.from("messages").update({ viewed_by: nextViewedBy }).eq("id", m.id)
+      await supabase.from("messages").update({ viewed_by: nextViewedBy, media_url: null }).eq("id", m.id)
       try {
         const url = m.media_url || ""
         const marker = "/object/public/chat-media/"
@@ -860,9 +896,10 @@ export default function Chat() {
       margin: '0 auto', maxWidth: 480,
       display: 'flex', flexDirection: 'column',
       background: '#0B0B14', overflow: 'hidden',
-    }}>
+    }}
+>
       <BrandGlow />
-      <header style={{ height: 60, flexShrink: 0 }} className="px-3 flex items-center gap-2">
+      <header style={{ minHeight: 'calc(64px + var(--safe-top, 32px))', flexShrink: 0, paddingTop: 'var(--safe-top, 32px)' }} className="px-3 flex items-center gap-2">
         <button onClick={() => nav('/messages')} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Back">
           <ArrowLeft size={20} strokeWidth={2.3} />
         </button>
@@ -942,7 +979,7 @@ export default function Chat() {
           <MoreVertical size={20} strokeWidth={2.2} />
         </button>
       </header>
-
+      
       {error && (
         <div className="mx-3 mt-2 text-danger text-[12px] bg-danger/10 border border-danger/30 rounded-xl px-3 py-2.5 shrink-0">
           {error}
@@ -1148,6 +1185,9 @@ export default function Chat() {
                       }
 
 
+                      const isDoc = m.media_type && !m.media_type.startsWith('image/') && !m.media_type.startsWith('audio/') && !m.media_type.startsWith('video/')
+                      if (isDoc) return <div className="max-w-[260px]"><DocBubble url={m.media_url} name={m.media_name} type={m.media_type} mine={mine} /></div>
+
                       // IMAGE ONLY — no bubble, just the image
                       if (hasImage && !hasAudio && !hasText) {
                         return (
@@ -1352,14 +1392,7 @@ export default function Chat() {
         </div>
       )}
 
-      {recording && (
-        <div className="shrink-0 mx-3 mb-2 px-4 py-3 rounded-2xl bg-red-500/15 border border-red-500/40 flex items-center gap-3">
-          <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
-          <span className="text-cream text-[14px] font-semibold">
-            Recording · {String(Math.floor(recordSeconds / 60)).padStart(2,'0')}:{String(recordSeconds % 60).padStart(2,'0')}
-          </span>
-        </div>
-      )}
+
 
       {emojiOpen && (
         <EmojiPicker
@@ -1370,27 +1403,29 @@ export default function Chat() {
 
       <div
         className="shrink-0 px-3 pt-3 pb-3 flex items-end gap-2 relative"
-        style={{ background: 'linear-gradient(to top, #0B0B14 70%, rgba(11,11,20,0) 100%)' }}
         style={{
-          paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
+          background: 'linear-gradient(to top, #0B0B14 70%, rgba(11,11,20,0) 100%)',
+          paddingBottom: 'max(12px, var(--safe-bottom, 8px))',
           pointerEvents: (canMsg || canMsgRequest) ? 'auto' : 'none',
           opacity: (canMsg || canMsgRequest) ? 1 : 0.4,
         }}
       >
+        
+        <input ref={docInputRef} type="file" accept="*/*" hidden onChange={pickDocument} />
         <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={pickAttachment} />
         <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" hidden onChange={pickAttachment} />
         <button
           onClick={() => setAttachMenuOpen(true)}
           disabled={recording}
-          className="w-10 h-10 rounded-full grid place-items-center text-muted shrink-0 disabled:opacity-40"
+          className={`w-10 h-10 rounded-full grid place-items-center text-muted shrink-0 disabled:opacity-40 ${(recording || voiceRecorder?.recording) ? "hidden" : ""}`}
           aria-label="Attach photo"
         >
           <Paperclip size={19} strokeWidth={2.3} />
         </button>
         <button
           onClick={() => { tap("light"); setViewOnce((v) => !v) }}
-          disabled={recording || !attachment}
-          className="w-10 h-10 rounded-full grid place-items-center shrink-0 disabled:opacity-40 relative"
+          disabled={(recording || voiceRecorder.recording) && !attachment && !voiceRecorder.recording}
+          className={`w-10 h-10 rounded-full grid place-items-center shrink-0 disabled:opacity-40 relative ${(recording || voiceRecorder?.recording) ? "hidden" : ""}`}
           style={{
             background: viewOnce ? "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" : "transparent",
           }}
@@ -1403,27 +1438,45 @@ export default function Chat() {
         </button>
         <button
           onClick={() => { setEmojiOpen((v) => !v); tap("light") }}
-          className="w-10 h-10 rounded-full grid place-items-center text-muted shrink-0"
+          className={`w-10 h-10 rounded-full grid place-items-center text-muted shrink-0 ${(recording || voiceRecorder?.recording) ? "hidden" : ""}`}
           aria-label="Emoji"
         >
           <Smile size={20} strokeWidth={2.3} className={emojiOpen ? "text-purple-400" : ""} />
         </button>
+        
 
-        {recording ? (
-          <>
-            <button
-              onClick={() => stopRecording(false)}
-              className="flex-1 h-11 rounded-[22px] bg-white/[0.06] text-cream font-semibold text-[13.5px] flex items-center justify-center gap-2"
-            >
-              <X size={16} strokeWidth={2.4} /> Cancel
-            </button>
-            <button
-              onClick={() => stopRecording(true)}
-              className="flex-1 h-11 rounded-[22px] bg-gradient-to-br from-purple-500 to-pink-500 text-white font-bold text-[13.5px] flex items-center justify-center gap-2"
-            >
-              <Square size={14} strokeWidth={2.6} fill="currentColor" /> Send
-            </button>
-          </>
+        {(recording || voiceRecorder.recording) ? (
+          <div className="flex-1 flex items-center gap-2 min-w-0 px-1">
+      {/* Trash - Fixed Left */}
+      <button onClick={() => stopRecording(false)} className="shrink-0 text-red-500 hover:text-red-400 p-2">
+        <Trash2 size={22} strokeWidth={2.2} />
+      </button>
+
+      {/* Center Pill */}
+      <div className="flex-1 min-w-0 flex items-center bg-[#1C1C1E] border border-white/10 rounded-full px-4 h-11">
+        {/* Timer */}
+        <span className="text-white text-[13px] font-mono font-semibold shrink-0 mr-3">
+          {Math.floor((voiceRecorder?.seconds || voiceRecorder?.duration || 0) / 60)}:{(Math.floor((voiceRecorder?.duration || voiceRecorder?.seconds || 0) % 60)).toString().padStart(2, '0')}
+        </span>
+
+        {/* Waveform - Flexible but strictly clipped */}
+        <div className="flex-1 min-w-0 h-6 flex items-center justify-center gap-[2px] overflow-hidden">
+          {voiceRecorder.waveform.slice(-30).map((level, i) => (
+            <div key={i} className="w-[3px] bg-white/60 rounded-full transition-all duration-75" style={{ height: `${Math.max(10, level * 100)}%` }} />
+          ))}
+        </div>
+
+        {/* ViewOnce "1" - Fixed Right Inside Pill */}
+        <button onClick={() => { setViewOnce(v => !v); tap("light"); }} className="shrink-0 w-6 h-6 rounded-full grid place-items-center ml-3" style={{ background: viewOnce ? "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" : "transparent", border: viewOnce ? "none" : "1px solid #888" }}>
+          <span className="font-black text-[10px]" style={{ color: viewOnce ? "#fff" : "#888" }}>1</span>
+        </button>
+      </div>
+
+      {/* Send - Fixed Right */}
+      <button onClick={() => stopRecording(true)} className="shrink-0 text-purple-500 hover:text-purple-400 p-2">
+        <Send size={22} strokeWidth={2.5} />
+      </button>
+    </div>
         ) : (
           <>
             <textarea
@@ -1432,7 +1485,7 @@ export default function Chat() {
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
               rows={1}
               placeholder={canMsg ? "Write a message…" : canMsgRequest ? "Write a request…" : "Messaging is not allowed"}
-              className="flex-1 bg-elevated border border-white/8 rounded-[22px] px-4 py-2.5 text-cream text-[14.5px] placeholder:text-subtle focus:outline-none focus:border-purple-500 resize-none max-h-32 leading-[1.4]"
+              className="flex-1 min-w-0 bg-elevated border border-white/8 rounded-[22px] px-4 py-2.5 text-cream text-[14.5px] placeholder:text-subtle focus:outline-none focus:border-purple-500 resize-none max-h-32 leading-[1.4]"
               style={{ minHeight: 44 }}
             />
             {text.trim() || attachment ? (
@@ -1501,7 +1554,7 @@ export default function Chat() {
               onClick={() => { setMenuOpen(false); setTimerSheetOpen(true) }}
             />
             <MenuItem icon={<Eraser size={16} />} label="Clear chat" onClick={() => { setMenuOpen(false); clearChat() }} />
-            <MenuItem icon={<Flag size={16} />} label="Report" onClick={() => { setMenuOpen(false); setReportOpen(true) }} />
+                            <MenuItem icon={<Flag size={16} />} label="Report" onClick={() => { setMenuOpen(false); setReportOpen(true) }} />
             <MenuItem icon={<Ban size={16} />} label="Block" danger onClick={() => { setMenuOpen(false); setBlockOpen(true) }} />
           </div>
         </div>
@@ -1513,7 +1566,7 @@ export default function Chat() {
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             <h3 className="text-cream font-extrabold text-[16px] mb-1">Disappearing messages</h3>
@@ -1527,13 +1580,19 @@ export default function Chat() {
                   key={String(o.value)}
                   onClick={async () => {
                     tap("light")
+                    const savedBefore = disappearingTimer
                     setTimerSheetOpen(false)
-                    setDisappearingTimer(o.value)
-                    try {
-                      await supabase.from('conversations')
-                        .update({ disappearing_timer_seconds: o.value })
-                        .eq('id', conversationId)
-                    } catch (e) { console.warn("timer save failed", e) }
+                    const { data: saveData, error: saveErr } = await supabase.from('conversations')
+      .update({ disappearing_timer_seconds: o.value })
+      .eq('id', conversationId)
+      .select('id, disappearing_timer_seconds')
+    if (saveErr || !saveData || saveData.length === 0) {
+      console.error('[timer-save] FAILED', { saveErr, saveData, conversationId, value: o.value })
+      if (typeof setError === 'function') setError('Timer save failed: ' + (saveErr?.message || 'no rows updated - conversationId=' + conversationId))
+      setDisappearingTimer(savedBefore)
+    } else {
+      setDisappearingTimer(saveData[0].disappearing_timer_seconds)
+    }
                   }}
                   className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left active:bg-white/[0.03] last:border-b-0"
                 >
@@ -1550,7 +1609,7 @@ export default function Chat() {
       )}
 
       {viewOnceActive && (
-        <div
+            <div
           className="fixed inset-0 z-[600] bg-black flex items-center justify-center"
           onClick={() => {
             const m = viewOnceActive
@@ -1577,6 +1636,7 @@ export default function Chat() {
         </div>
       )}
 
+      
       <ReportModal
         open={reportOpen}
         onClose={() => setReportOpen(false)}
@@ -1628,7 +1688,7 @@ export default function Chat() {
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             <button
@@ -1654,6 +1714,13 @@ export default function Chat() {
                 <p className="font-bold text-[14.5px]">Choose from gallery</p>
                 <p className="text-muted text-[11.5px] mt-0.5">Pick an existing photo</p>
               </div>
+            </button>
+            <button
+              onClick={() => { setAttachMenuOpen(false); setTimeout(() => docInputRef.current?.click(), 100) }}
+              className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]"
+            >
+              <span className="w-10 h-10 rounded-xl bg-purple-500/20 grid place-items-center shrink-0"><span className="text-purple-300"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span></span>
+              <div className="flex-1"><p className="font-bold text-[14.5px]">Document</p><p className="text-muted text-[11.5px] mt-0.5">Send a PDF, doc, or zip</p></div>
             </button>
             <button
               onClick={() => { setAttachMenuOpen(false); setTimeout(() => setPollComposerOpen(true), 120) }}

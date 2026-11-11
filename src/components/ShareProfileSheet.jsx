@@ -45,7 +45,7 @@ export default function ShareProfileSheet({ open, onClose, username, displayName
       <div
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 flex flex-col"
-        style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}
+        style={{ paddingBottom: 'max(20px, var(--safe-bottom, 8px))' }}
       >
         <div className="flex items-center justify-between px-5 pt-4 pb-2">
           <span className="w-9" />

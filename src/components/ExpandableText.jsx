@@ -1,4 +1,5 @@
 import { useState } from "react"
+import HashtagText from "./HashtagText"
 import { useNavigate } from "react-router-dom"
 
 const MAX_CHARS = 300
@@ -30,6 +31,9 @@ export default function ExpandableText({ text, className = "" }) {
   const shown = expanded || !shouldTruncate ? text : text.slice(0, MAX_CHARS).trimEnd() + "…"
   const parts = tokenize(shown)
 
+  return (
+    <HashtagText text={text} className={className} />
+  )
   return (
     <p className={className}>
       {parts.map((p, i) => {

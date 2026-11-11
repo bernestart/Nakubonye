@@ -7,7 +7,8 @@ import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 import VerifiedBadge from "../components/VerifiedBadge"
 import Poll from "../components/Poll"
-import PostCommentsSheet from "../components/PostCommentsSheet"
+import { lazy, Suspense } from "react";
+const PostCommentsSheet = lazy(() => import("../components/PostCommentsSheet"));
 import PostActionsSheet from "../components/PostActionsSheet"
 import ReactionPicker from "../components/ReactionPicker"
 import BrandGlow from "../components/BrandGlow"
@@ -22,6 +23,11 @@ export default function PostDetail() {
 
   const [loading, setLoading] = useState(true)
   const [post, setPost] = useState(null)
+  useEffect(() => {
+    if (post && myId) {
+      supabase.from("post_views").upsert({ post_id: String(post.id), post_source: post._source, viewer_id: myId }, { onConflict: "post_id, post_source, viewer_id" }).then(() => {})
+    }
+  }, [post?.id, myId])
   const [author, setAuthor] = useState(null)
   const [authorPhoto, setAuthorPhoto] = useState("")
   const [community, setCommunity] = useState(null)
@@ -188,7 +194,7 @@ export default function PostDetail() {
     <div style={{ position: "fixed", inset: 0, margin: "0 auto", maxWidth: 480, display: "flex", flexDirection: "column", background: "#0B0B14", overflow: "hidden" }}>
       <BrandGlow />
 
-      <header className="shrink-0 h-12 px-3 flex items-center justify-between" style={{ paddingTop: "env(safe-area-inset-top)" }}>
+      <header className="shrink-0 h-12 px-3 flex items-center justify-between" style={{ paddingTop: "var(--safe-top, 32px)" }}>
         <button
           onClick={() => nav(-1)}
           className="w-9 h-9 rounded-full grid place-items-center text-muted"
@@ -398,13 +404,13 @@ export default function PostDetail() {
       )}
 
       {commentsOpen && post && (
-        <PostCommentsSheet
+        <Suspense fallback={null}><PostCommentsSheet
           postId={post.id}
           source={post._source}
           initialCommentId={initialCommentId}
           onClose={() => setCommentsOpen(false)}
           onCountChange={(n) => setCommentCount(n)}
-        />
+        /></Suspense>
       )}
     </div>
   )

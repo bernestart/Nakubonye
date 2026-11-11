@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { Timer, Search, ArrowLeft, Send, Paperclip, X, MoreVertical, Users, Camera, Trash2, Flag, LogOut, UserPlus , Pencil , Link2 , Bell , Mic, Square , Pin , Eraser } from "lucide-react"
+import { Timer, Search, ArrowLeft, Send, Paperclip, X, MoreVertical, Users, Camera, Trash2, Flag, LogOut, UserPlus , Pencil , Link2 , Bell , Mic, Square , Pin , Eraser} from "lucide-react"
 import { motion } from "framer-motion"
 import { supabase } from "../lib/supabase"
 import { loadBlockedIds } from "../lib/blocks"
@@ -22,6 +22,7 @@ import AudioBubble from "../components/chat/AudioBubble"
 import EmojiPicker from "../components/chat/EmojiPicker"
 import ImageLightbox from "../components/chat/ImageLightbox"
 import { useVoiceRecorder } from "../components/chat/useVoiceRecorder"
+import DocBubble from "../components/chat/DocBubble"
 
 const TIMER_OPTIONS = [
   { value: null,   label: "Off",      sub: "Messages stay forever" },
@@ -61,6 +62,7 @@ export default function GroupChat() {
   const [attachment, setAttachment] = useState(null)
   const [attachmentPreview, setAttachmentPreview] = useState("")
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
+  const docInputRef = useRef(null)
   const [pollComposerOpen, setPollComposerOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [disappearingTimer, setDisappearingTimer] = useState(null)
@@ -101,11 +103,12 @@ export default function GroupChat() {
     // Verify membership + load group
     const { data: g } = await supabase
       .from("groups")
-      .select("id, name, avatar_url, created_by, created_at, invite_code, invite_enabled")
+      .select("id, name, avatar_url, created_by, created_at, invite_code, invite_enabled, disappearing_timer_seconds")
       .eq("id", groupId)
       .maybeSingle()
     if (!g) { setError("Group not found"); setLoading(false); return }
     setGroup(g)
+    setDisappearingTimer(g.disappearing_timer_seconds || null)
 
     const { data: clearRow } = await supabase
       .from("group_clears")
@@ -327,6 +330,22 @@ export default function GroupChat() {
     }
   }
 
+  async function pickDocument(e) {
+    const file = e.target.files?.[0]; if (!file) return
+    if (file.size > 15 * 1024 * 1024) { setError("File too large"); return }
+    setSending(true)
+    const path = `${groupId}/${crypto.randomUUID()}.${file.name.split('.').pop()}`
+    const { error: upErr } = await supabase.storage.from('chat-media').upload(path, file, { contentType: file.type })
+    if (upErr) { setError(upErr.message); setSending(false); return }
+    const { data: pub } = supabase.storage.from('chat-media').getPublicUrl(path)
+    const payload = { group_id: groupId, sender_id: myId, content: '', media_url: pub?.publicUrl, media_type: file.type, media_name: file.name }
+    if (disappearingTimer) payload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
+    if (replyingTo?.id) payload.reply_to_id = replyingTo.id
+    const { data: inserted, error: sendErr } = await supabase.from('group_messages').insert(payload).select().single()
+    if (sendErr) setError(sendErr.message); else if (inserted) setMessages(cur => [...cur, inserted])
+    setSending(false); setReplyingTo(null); if (docInputRef.current) docInputRef.current.value = ''
+  }
+
   function pickAttachment(e) {
     const f = e.target.files?.[0]
     if (!f) return
@@ -364,10 +383,11 @@ export default function GroupChat() {
     if (result.blob.size > 10 * 1024 * 1024) { setError("Voice note too long"); return }
 
     setBusy(true)
-    const path = "group-media/" + groupId + "/" + crypto.randomUUID() + ".webm"
+    const ext = result.mimeType?.includes("mp4") ? "mp4" : "webm";
+    const path = "group-media/" + groupId + "/" + crypto.randomUUID() + "." + ext
     const { error: upErr } = await supabase.storage
       .from("chat-media")
-      .upload(path, result.blob, { upsert: false, contentType: "audio/webm" })
+      .upload(path, result.blob, { upsert: false, contentType: result.mimeType })
     if (upErr) { setBusy(false); setError(upErr.message); return }
     const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
 
@@ -378,8 +398,10 @@ export default function GroupChat() {
         sender_id: myId,
         content: "",
         media_url: pub?.publicUrl || null,
-        media_type: "audio/webm",
+        media_type: result.mimeType,
         media_name: "Voice · " + result.seconds + "s",
+        ...(viewOnce ? { view_once: true, viewed_by: [] } : {}),
+        ...(disappearingTimer ? { expires_at: new Date(Date.now() + disappearingTimer * 1000).toISOString() } : {}),
       })
       .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, edited_at, created_at, is_system, expires_at, view_once, viewed_by")
       .single()
@@ -488,7 +510,7 @@ export default function GroupChat() {
     const already = Array.isArray(m.viewed_by) && m.viewed_by.includes(myId)
     if (already) return
     const nextViewedBy = Array.isArray(m.viewed_by) ? [...m.viewed_by, myId] : [myId]
-    setMessages((cur) => cur.map((x) => x.id === m.id ? { ...x, viewed_by: nextViewedBy } : x))
+    setMessages((cur) => cur.map((x) => x.id === m.id ? { ...x, viewed_by: nextViewedBy, media_url: null } : x))
     try { await supabase.from("group_messages").update({ viewed_by: nextViewedBy }).eq("id", m.id) } catch (e) {}
   }
 
@@ -556,7 +578,7 @@ export default function GroupChat() {
     const sw = swipeRef.current
     if (!sw.id) return
     const dx = e.touches[0].clientX - sw.startX
-    if (!sw.active && dx > 8) {
+    if (!sw.active && dx > 15) {
       sw.active = true
       if (longPressTimer.current) {
         clearTimeout(longPressTimer.current)
@@ -564,14 +586,14 @@ export default function GroupChat() {
       }
     }
     if (sw.active) {
-      sw.dx = Math.min(dx, 80)
+      sw.dx = Math.min(dx * 0.45, 64)
       setSwipeState({ id: sw.id, dx: sw.dx })
     }
   }
 
   function onRowSwipeEnd(m) {
     const sw = swipeRef.current
-    const triggered = sw.active && sw.dx >= 50
+    const triggered = sw.active && sw.dx >= 64
     const wasSwipe = sw.active
     swipeRef.current = { id: null, startX: 0, dx: 0, active: false }
     setSwipeState({ id: null, dx: 0 })
@@ -662,7 +684,7 @@ export default function GroupChat() {
     }}>
       <BrandGlow />
 
-      <header style={{ height: 60, flexShrink: 0 }} className="px-3 flex items-center gap-2">
+      <header style={{ minHeight: 'calc(64px + var(--safe-top, 32px))', flexShrink: 0, paddingTop: 'var(--safe-top, 32px)' }} className="px-3 flex items-center gap-2">
         <button onClick={() => nav("/messages")} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Back">
           <ArrowLeft size={20} strokeWidth={2.3} />
         </button>
@@ -878,7 +900,10 @@ export default function GroupChat() {
                         "Message deleted"
                       ) : (
                         <>
-                          {m.media_url && m.media_type?.startsWith("image/") && (
+                          {m.media_url && m.media_type && !m.media_type.startsWith("image/") && !m.media_type.startsWith("audio/") && !m.media_type.startsWith("video/") && (
+                        <div className="max-w-[260px]"><DocBubble url={m.media_url} name={m.media_name} type={m.media_type} mine={mine} /></div>
+                      )}
+                      {m.media_url && m.media_type?.startsWith("image/") && (
                             <img
                               src={m.media_url}
                               alt=""
@@ -1002,14 +1027,7 @@ export default function GroupChat() {
         />
       )}
 
-      {voice.recording && (
-        <div className="shrink-0 mx-3 mb-2 px-4 py-3 rounded-2xl bg-red-500/15 border border-red-500/40 flex items-center gap-3">
-          <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
-          <span className="text-cream text-[14px] font-semibold flex-1">
-            Recording · {String(Math.floor(voice.seconds / 60)).padStart(2, "0")}:{String(voice.seconds % 60).padStart(2, "0")}
-          </span>
-        </div>
-      )}
+      
 
       {mentionResults.length > 0 && mentionQuery !== null && (
         <div className="shrink-0 mx-3 mb-2 max-h-40 overflow-y-auto rounded-2xl bg-elevated border border-white/10 z-20">
@@ -1037,13 +1055,14 @@ export default function GroupChat() {
 
       <div
         className="shrink-0 px-3 pt-3 pb-3 flex items-end gap-2 relative"
-        style={{ background: "linear-gradient(to top, #0B0B14 70%, rgba(11,11,20,0) 100%)", paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
+        style={{ background: "linear-gradient(to top, #0B0B14 70%, rgba(11,11,20,0) 100%)", paddingBottom: "max(12px, var(--safe-bottom, 8px))" }}
       >
+        <input ref={docInputRef} type="file" accept="*/*" hidden onChange={pickDocument} />
         <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={pickAttachment} />
         <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" hidden onChange={pickAttachment} />
         <button
           onClick={() => setAttachMenuOpen(true)}
-          className="w-10 h-10 rounded-full grid place-items-center text-muted shrink-0"
+          className={`w-10 h-10 rounded-full grid place-items-center text-muted shrink-0 ${voice.recording ? "hidden" : ""}`}
           aria-label="Attach"
         >
           <Paperclip size={19} strokeWidth={2.3} />
@@ -1052,7 +1071,7 @@ export default function GroupChat() {
         <button
           onClick={() => { tap("light"); setViewOnce((v) => !v) }}
           disabled={recording || !attachment}
-          className="w-10 h-10 rounded-full grid place-items-center shrink-0 disabled:opacity-40 relative"
+          className={`w-10 h-10 rounded-full grid place-items-center shrink-0 disabled:opacity-40 relative ${voice.recording ? "hidden" : ""}`}
           style={{ background: viewOnce ? "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" : "transparent" }}
           aria-label={viewOnce ? "Disable view once" : "Enable view once"}
         >
@@ -1060,7 +1079,7 @@ export default function GroupChat() {
         </button>
         <button
           onClick={() => { setEmojiOpen((v) => !v); tap("light") }}
-          className="w-10 h-10 rounded-full grid place-items-center text-muted shrink-0"
+          className={`w-10 h-10 rounded-full grid place-items-center text-muted shrink-0 ${voice.recording ? "hidden" : ""}`}
           aria-label="Emoji"
         >
           <span className={`text-[18px] ${emojiOpen ? "opacity-100" : "opacity-70"}`}>😊</span>
@@ -1072,24 +1091,41 @@ export default function GroupChat() {
           disabled={voice.recording}
           rows={1}
           placeholder={voice.recording ? "Recording voice…" : "Message group…"}
-          className="flex-1 bg-elevated border border-white/8 rounded-[22px] px-4 py-2.5 text-cream text-[14.5px] placeholder:text-subtle focus:outline-none focus:border-purple-500 resize-none max-h-32 leading-[1.4]"
+          className="flex-1 min-w-0 bg-elevated border border-white/8 rounded-[22px] px-4 py-2.5 text-cream text-[14.5px] placeholder:text-subtle focus:outline-none focus:border-purple-500 resize-none max-h-32 leading-[1.4]"
           style={{ minHeight: 44 }}
         />
         {voice.recording ? (
-          <>
-            <button
-              onClick={cancelVoice}
-              className="flex-1 h-11 rounded-[22px] bg-white/[0.06] text-cream font-semibold text-[13.5px] flex items-center justify-center gap-2 shrink-0"
-            >
-              <X size={16} strokeWidth={2.4} /> Cancel
-            </button>
-            <button
-              onClick={sendVoice}
-              className="flex-1 h-11 rounded-[22px] bg-gradient-to-br from-purple-500 to-pink-500 text-white font-bold text-[13.5px] flex items-center justify-center gap-2 shrink-0"
-            >
-              <Square size={14} strokeWidth={2.6} fill="currentColor" /> Send
-            </button>
-          </>
+          <div className="flex-1 flex items-center gap-2 min-w-0 px-1">
+      {/* Trash - Fixed Left */}
+      <button onClick={() => cancelVoice} className="shrink-0 text-red-500 hover:text-red-400 p-2">
+        <Trash2 size={22} strokeWidth={2.2} />
+      </button>
+
+      {/* Center Pill */}
+      <div className="flex-1 min-w-0 flex items-center bg-[#1C1C1E] border border-white/10 rounded-full px-4 h-11">
+        {/* Timer */}
+        <span className="text-white text-[13px] font-mono font-semibold shrink-0 mr-3">
+          {Math.floor((voice.duration || 0) / 60)}:{(Math.floor((voice.duration || 0) % 60)).toString().padStart(2, '0')}
+        </span>
+
+        {/* Waveform - Flexible but strictly clipped */}
+        <div className="flex-1 min-w-0 h-6 flex items-center justify-center gap-[2px] overflow-hidden">
+          {voice.waveform.slice(-30).map((level, i) => (
+            <div key={i} className="w-[3px] bg-white/60 rounded-full transition-all duration-75" style={{ height: `${Math.max(10, level * 100)}%` }} />
+          ))}
+        </div>
+
+        {/* ViewOnce "1" - Fixed Right Inside Pill */}
+        <button onClick={() => { setViewOnce(v => !v); tap("light"); }} className="shrink-0 w-6 h-6 rounded-full grid place-items-center ml-3" style={{ background: viewOnce ? "linear-gradient(135deg, #EC4899 0%, #A855F7 100%)" : "transparent", border: viewOnce ? "none" : "1px solid #888" }}>
+          <span className="font-black text-[10px]" style={{ color: viewOnce ? "#fff" : "#888" }}>1</span>
+        </button>
+      </div>
+
+      {/* Send - Fixed Right */}
+      <button onClick={() => sendVoice} className="shrink-0 text-purple-500 hover:text-purple-400 p-2">
+        <Send size={22} strokeWidth={2.5} />
+      </button>
+    </div>
         ) : text.trim() || attachment ? (
           <motion.button
             whileTap={{ scale: 0.9 }}
@@ -1128,7 +1164,7 @@ export default function GroupChat() {
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             <button onClick={() => { setAttachMenuOpen(false); setTimeout(() => pickFromNativeCamera(), 100) }}
@@ -1138,8 +1174,13 @@ export default function GroupChat() {
             </button>
             <button onClick={() => { setAttachMenuOpen(false); setTimeout(() => fileInputRef.current?.click(), 100) }}
               className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]">
+              <button onClick={() => { setAttachMenuOpen(false); setTimeout(() => docInputRef.current?.click(), 100) }} className="w-full flex items-center gap-3 py-2 text-left active:bg-white/5">
+                <span className="text-purple-300"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span><span className="font-semibold text-[14px]">Document</span>
+              </button>
+              <div className="w-full flex items-center gap-3 py-2 text-left">
               <Paperclip size={18} className="text-purple-300" />
               <span className="font-semibold text-[14px]">Choose from gallery</span>
+              </div>
             </button>
             <button onClick={() => { setAttachMenuOpen(false); setTimeout(() => setPollComposerOpen(true), 120) }}
               className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left text-cream active:bg-white/[0.03]">
@@ -1236,7 +1277,7 @@ export default function GroupChat() {
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             <h3 className="text-cream font-extrabold text-[16px] mb-1">Disappearing messages</h3>
@@ -1250,13 +1291,19 @@ export default function GroupChat() {
                   key={String(o.value)}
                   onClick={async () => {
                     tap("light")
+                    const savedBefore = disappearingTimer
                     setTimerSheetOpen(false)
-                    setDisappearingTimer(o.value)
-                    try {
-                      await supabase.from("groups")
-                        .update({ disappearing_timer_seconds: o.value })
-                        .eq("id", groupId)
-                    } catch (e) { console.warn("timer save failed", e) }
+                    const { data: saveData, error: saveErr } = await supabase.from("groups")
+      .update({ disappearing_timer_seconds: o.value })
+      .eq("id", groupId)
+      .select('id, disappearing_timer_seconds')
+    if (saveErr || !saveData || saveData.length === 0) {
+      console.error('[timer-save] FAILED', { saveErr, saveData, groupId, value: o.value })
+      if (typeof setError === 'function') setError('Timer save failed: ' + (saveErr?.message || 'no rows updated - groupId=' + groupId))
+      setDisappearingTimer(savedBefore)
+    } else {
+      setDisappearingTimer(saveData[0].disappearing_timer_seconds)
+    }
                   }}
                   className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left active:bg-white/[0.03] last:border-b-0"
                 >

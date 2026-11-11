@@ -331,7 +331,7 @@ export default function BookService() {
 
       {selectedTime && (
         <div className="shrink-0 px-4 py-3 border-t border-white/8"
-             style={{ background: 'rgba(11,11,20,0.95)', backdropFilter: 'blur(12px)', paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+             style={{ background: 'rgba(11,11,20,0.95)', backdropFilter: 'blur(12px)', paddingBottom: 'max(12px, var(--safe-bottom, 8px))' }}>
           <button
             onClick={confirm}
             disabled={busy}

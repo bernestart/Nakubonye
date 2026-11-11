@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { ArrowLeft, Heart, MessageCircle, UserPlus, Sparkles, Play, MessageSquare, Bell, Check, Trash2, Users, AtSign, Settings } from 'lucide-react'
 import { supabase } from "../lib/supabase"
+import { useNotifications } from "../lib/notifications"
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
@@ -80,6 +81,7 @@ function groupItems(list) {
 }
 
 export default function Notifications() {
+  const { setUnreadCount } = useNotifications()
   const nav = useNavigate()
   const { session } = useAuth()
   const myId = session?.user?.id
@@ -147,7 +149,8 @@ export default function Notifications() {
   async function openNotification(n) {
     tap("light")
     if (!n.read_at) {
-      await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", n.id)
+      setUnreadCount(prev => Math.max(0, prev - 1)); // Decrement badge
+    await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", n.id)
       setItems((prev) => prev.map((x) => x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x))
     }
     const t = n.type || ""
@@ -182,6 +185,7 @@ export default function Notifications() {
     if (!myId) return
     tap("light")
     const now = new Date().toISOString()
+    setUnreadCount(0); // Instantly drop the badge to 0
     await supabase.from("notifications").update({ read_at: now }).eq("user_id", myId).is("read_at", null)
     setItems((prev) => prev.map((x) => x.read_at ? x : { ...x, read_at: now }))
   }
@@ -211,7 +215,7 @@ export default function Notifications() {
       background: "#0B0B14", overflow: "hidden",
     }}>
       <BrandGlow />
-      <header style={{ height: 52, flexShrink: 0 }} className="px-3 flex items-center gap-2">
+      <header style={{ minHeight: 'calc(64px + var(--safe-top, 32px))', flexShrink: 0, paddingTop: 'var(--safe-top, 32px)' }} className="px-3 flex items-center gap-2">
         <button onClick={() => nav(-1)} className="w-9 h-9 rounded-full grid place-items-center text-muted" aria-label="Back">
           <ArrowLeft size={20} strokeWidth={2.3} />
         </button>
@@ -233,7 +237,7 @@ export default function Notifications() {
         </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-3 py-3">
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3">
         {loading ? (
           <div className="flex flex-col gap-2">
             {[0,1,2,3,4].map((i) => (
@@ -380,7 +384,7 @@ export default function Notifications() {
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             <button

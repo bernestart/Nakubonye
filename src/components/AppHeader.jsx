@@ -70,7 +70,7 @@ export default function AppHeader({ onScrollTop }) {
 
   return (
     <header
-      className="sticky top-0 z-40 shrink-0"
+      className="sticky top-0 z-40 shrink-0 bg-[#0B0B14] border-b border-white/5"
       style={{
         paddingTop: "var(--safe-area-inset-top, env(safe-area-inset-top, 0px))",
         background: "#1A0A38",

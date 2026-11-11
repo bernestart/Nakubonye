@@ -4,7 +4,6 @@ import { useNavigate, useSearchParams } from "react-router-dom"
 import { Heart, MessageCircle, Share2, Plus, Volume2, VolumeX, ArrowLeft, MoreVertical, Bookmark } from "lucide-react"
 import VerifiedBadge from "../components/VerifiedBadge"
 import { supabase } from "../lib/supabase"
-import { cacheReel, getCachedBlob } from "../lib/reelCache"
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
@@ -12,6 +11,7 @@ import ReelComposer from "../components/ReelComposer"
 import ShareSheet from "../components/ShareSheet"
 import ReelComments from "../components/ReelComments"
 import ReelActionsSheet from "../components/ReelActionsSheet"
+import ReelSoundPage from "../components/reels/ReelSoundPage"
 import FollowButton from "../components/FollowButton"
 
 function fypScore(reel) {
@@ -33,8 +33,22 @@ export default function Reels() {
   const [muted, setMuted] = useState(true)  // always start muted for autoplay
   const userMutedRef = useRef(true)
   const [composerOpen, setComposerOpen] = useState(false)
+  const [soundPageOpen, setSoundPageOpen] = useState(null)
   const [shareFor, setShareFor] = useState(null)
   const [searchParams] = useSearchParams()
+
+  // 🔍 DIAGNOSTIC: show last crash breadcrumb on Reels mount
+  useEffect(() => {
+    try {
+      const prev = localStorage.getItem('rc:bc');
+      if (prev && !prev.includes(':ok') && !prev.includes(':disabled') && !prev.includes(':already') && !prev.includes(':skip-')) {
+        setTimeout(() => {
+          try { alert('🔍 CRASH BREADCRUMB (from previous session):\n\n' + prev + '\n\nPlease screenshot and share.'); } catch {}
+        }, 100);
+      }
+    } catch {}
+  }, [])
+
   useEffect(() => {
     if (searchParams.get("compose")) {
       setComposerOpen(true)
@@ -43,6 +57,7 @@ export default function Reels() {
   const [kindPickerOpen, setKindPickerOpen] = useState(false)
   const [composerKind, setComposerKind] = useState("reel")
   const [loading, setLoading] = useState(true)
+  const trackedViews = useRef(new Set())
   const [currentIdx, setCurrentIdx] = useState(0)
   const [viewCounts, setViewCounts] = useState(new Map())
   const [commentCounts, setCommentCounts] = useState(new Map())
@@ -57,10 +72,8 @@ export default function Reels() {
   const [authorReelsVis, setAuthorReelsVis] = useState(new Map())
   const containerRef = useRef(null)
   const videoRefs = useRef([])
-  const offlineBlobUrls = useRef(new Map())  // reelId → blob URL
-  const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true)
-  const [cachedIdSet, setCachedIdSet] = useState(new Set())
-  const clipIdxRefs = useRef({})
+    const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true)
+    const clipIdxRefs = useRef({})
   const viewedThisSession = useRef(new Set())
   const [heartBurstId, setHeartBurstId] = useState(null)
   const tapTimerRef = useRef(null)
@@ -266,7 +279,7 @@ export default function Reels() {
     setLoadingMore(true)
     const { data: rows } = await supabase
       .from("reels")
-      .select("id, user_id, video_url, clips, thumbnail_url, caption, duration_sec, trim_start, trim_end, mirrored, aspect_ratio, text_overlays, sticker_overlays, filter_id, audience, allow_comments, allow_remix, location, cover_frame_time, view_count, remix_of, created_at")
+      .select("id, user_id, video_url, clips, thumbnail_url, caption, duration_sec, trim_start, trim_end, mirrored, aspect_ratio, text_overlays, sticker_overlays, filter_id, audience, allow_comments, allow_remix, location, cover_frame_time, view_count, remix_of, created_at, original_reel:remix_of(id, video_url, thumbnail_url)")
       .eq("is_active", true)
       .lt("created_at", cursor)
       .order("created_at", { ascending: false })
@@ -387,33 +400,7 @@ export default function Reels() {
     }
   }, [currentIdx, reels, hiddenIds, hasMore, loadMore])
 
-  // Revoke cached blob URLs on unmount
-  useEffect(() => {
-    const map = offlineBlobUrls.current
-    return () => { map.forEach((u) => URL.revokeObjectURL(u)) }
-  }, [])
-
   useEffect(() => { load() }, [load])
-
-  // Auto-cache the currently visible reel + prefetch next 2 in background
-  useEffect(() => {
-    if (!myId) return
-    const visible = reels.filter((r) => !hiddenIds.has(r.id))
-    const current = visible[currentIdx]
-    if (!current) return
-
-    const t = setTimeout(() => {
-      // Cache current reel
-      cacheReel(current, myId).catch(() => {})
-      // Prefetch next 2 silently
-      for (let i = 1; i <= 2; i++) {
-        const next = visible[currentIdx + i]
-        if (next) cacheReel(next, myId).catch(() => {})
-      }
-    }, 1500)
-
-    return () => clearTimeout(t)
-  }, [currentIdx, reels, hiddenIds, myId])
 
   // Online/offline tracking
   useEffect(() => {
@@ -427,26 +414,47 @@ export default function Reels() {
     }
   }, [])
 
-  // Load cached blob URLs for reels in the current list
+  // Revoke null blob URLs on unmount
+  useEffect(() => {
+    const map = new Map()
+    return () => { map.forEach((u) => { if (u && u.startsWith('blob:')) { try { URL.revokeObjectURL(u) } catch {} } }) }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  // Online/offline tracking
+  useEffect(() => {
+    const onOnline = () => setIsOnline(true)
+    const onOffline = () => setIsOnline(false)
+    window.addEventListener("online", onOnline)
+    window.addEventListener("offline", onOffline)
+    return () => {
+      window.removeEventListener("online", onOnline)
+      window.removeEventListener("offline", onOffline)
+    }
+  }, [])
+
+  // Load null blob URLs for reels in the current list
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const { listCached } = await import("../lib/reelCache")
-      const rows = await listCached()
+      try {
+        const { listCached } = ({ listCached: async () => [] })
+        const rows = await listCached()
       if (cancelled) return
       const map = new Map()
       const idSet = new Set()
       rows.forEach((r) => {
-        if (r.blob) {
-          // Revoke previous URL if any
-          const prev = offlineBlobUrls.current.get(r.reelId)
-          if (prev) URL.revokeObjectURL(prev)
-          map.set(r.reelId, URL.createObjectURL(r.blob))
+        if (r.playableUrl) {
+          map.set(r.reelId, r.playableUrl)
           idSet.add(r.reelId)
         }
       })
-      offlineBlobUrls.current = map
+      /* null disabled */
       setCachedIdSet(idSet)
+      } catch (err) {
+        console.warn("Safe catch: Reels cache load failed", err);
+      }
     })()
     return () => { cancelled = true }
   }, [reels.length])
@@ -682,7 +690,7 @@ export default function Reels() {
       {!isOnline && (
         <div className="absolute left-0 right-0 flex justify-center pointer-events-none z-30" style={{ bottom: 72 }}>
           <span className="h-8 px-3 rounded-full bg-black/70 backdrop-blur-md text-white text-[11.5px] font-bold inline-flex items-center gap-1.5">
-            📴 Offline · watching cached reels
+            📴 Offline · watching null reels
           </span>
         </div>
       )}
@@ -785,86 +793,62 @@ export default function Reels() {
                   background: "#000",
                 }}
               >
-                <video
-                  ref={(el) => (videoRefs.current[idx] = el)}
-                  src={(() => {
-                    // Prefer cached blob (instant load, offline-friendly)
-                    const cached = offlineBlobUrls.current.get(reel.id)
-                    if (cached) return cached
-                    const list = Array.isArray(reel.clips) && reel.clips.length > 0
-                      ? reel.clips
-                      : [{ url: reel.video_url, trim_start: reel.trim_start || 0, trim_end: reel.trim_end || null }]
-                    const ci = clipIdxRefs.current[reel.id] || 0
-                    return list[Math.min(ci, list.length - 1)].url
-                  })()}
-                  loop={false}
-                  muted={muted}
-                  playsInline
-                  autoPlay
-                  preload={idx === currentIdx || idx === currentIdx + 1 ? "auto" : "metadata"}
-                  onCanPlay={(e) => {
-                    if (idx !== currentIdx) return
-                    e.target.muted = muted
-                    e.target.play().catch(() => {
-                      // Retry once after short delay (metadata race)
-                      setTimeout(() => {
-                        if (videoRefs.current[idx]) {
-                          videoRefs.current[idx].play().catch(() => {})
-                        }
-                      }, 250)
-                    })
-                  }}
-                  onLoadedMetadata={(e) => {
-                    const list = Array.isArray(reel.clips) && reel.clips.length > 0
-                      ? reel.clips
-                      : [{ url: reel.video_url, trim_start: reel.trim_start || 0, trim_end: reel.trim_end || null }]
-                    const ci = clipIdxRefs.current[reel.id] || 0
-                    const clip = list[Math.min(ci, list.length - 1)]
-                    if (clip.trim_start && e.target.currentTime < clip.trim_start) {
-                      e.target.currentTime = clip.trim_start
-                    }
-                  }}
-                  onTimeUpdate={(e) => {
-                    const list = Array.isArray(reel.clips) && reel.clips.length > 0
-                      ? reel.clips
-                      : [{ url: reel.video_url, trim_start: reel.trim_start || 0, trim_end: reel.trim_end || null }]
-                    const ci = clipIdxRefs.current[reel.id] || 0
-                    const clip = list[Math.min(ci, list.length - 1)]
-                    if (!clip.trim_end) return
-                    if (e.target.currentTime >= clip.trim_end) {
-                      // Advance to next clip or loop back to first
-                      const nextCi = ci + 1 < list.length ? ci + 1 : 0
-                      const nextClip = list[nextCi]
-                      clipIdxRefs.current[reel.id] = nextCi
-                      const v = e.target
-                      v.src = nextClip.url
-                      v.load()
-                      const onReady = () => {
-                        v.currentTime = nextClip.trim_start || 0
-                        v.play().catch(() => {})
-                        v.removeEventListener("loadeddata", onReady)
-                      }
-                      v.addEventListener("loadeddata", onReady)
-                    }
-                  }}
-                  onClick={() => handleVideoTap(idx, reel)}
-                  className="w-full h-full object-cover"
-                  style={{
-                    transform: reel.mirrored ? "scaleX(-1)" : "none",
-                    filter: (() => {
-                      const f = reel.filter_id || "none"
-                      if (f === "warm") return "sepia(0.35) saturate(1.3) brightness(1.05)"
-                      if (f === "cool") return "hue-rotate(180deg) saturate(1.1) brightness(1.05)"
-                      if (f === "mono") return "grayscale(1) contrast(1.1)"
-                      if (f === "vivid") return "saturate(1.8) contrast(1.1)"
-                      if (f === "fade") return "saturate(0.7) brightness(1.15) contrast(0.9)"
-                      if (f === "vintage") return "sepia(0.55) saturate(1.1) contrast(1.05)"
-                      if (f === "noir") return "grayscale(1) contrast(1.3) brightness(0.95)"
-                      return "none"
-                    })(),
-                  }}
-                />
+                <div className={reel.original_reel ? "flex flex-col w-full h-full bg-black gap-[1px]" : "w-full h-full"}>
+                  {reel.original_reel && (
+                    <div className="flex-1 relative overflow-hidden bg-black">
+                      <video onPlay={() => trackView(reel.id)} src={reel.original_reel.video_url} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                      <div className="absolute top-2 left-2 bg-black/60 px-2 py-0.5 rounded text-white text-[10px] font-bold z-10">Original</div>
+                    </div>
+                  )}
+                  <div className={reel.original_reel ? "flex-1 relative overflow-hidden" : "w-full h-full relative"}>
+                {/* Only render video for current, previous, and next index to prevent OOM */}
+                {Math.abs(idx - currentIdx) <= 1 ? (
+                  <video
+                    onPlay={() => trackView(reel.id)}
+                    ref={(el) => (videoRefs.current[idx] = el)}
+                    src={idx === currentIdx ? (() => {
+                                            if (null) return null;
+                      const list = Array.isArray(reel.clips) && reel.clips.length > 0 ? reel.clips : [{ url: reel.video_url, trim_start: reel.trim_start || 0, trim_end: reel.trim_end || null }];
+                      const ci = clipIdxRefs.current[reel.id] || 0;
+                      return list[Math.min(ci, list.length - 1)].url;
+                    })() : undefined}
+                    loop={false}
+                    muted={muted}
+                    playsInline
+                    autoPlay
+                    preload={idx === currentIdx ? "auto" : "none"}
+                    onCanPlay={(e) => {
+                      if (idx !== currentIdx) return;
+                      e.target.muted = muted;
+                      e.target.play().catch(() => {});
+                    }}
+                    onError={(e) => {
+                      console.warn("Video failed, skipping:", reel.id);
+                      e.target.style.display = "none";
+                    }}
+                    onClick={() => handleVideoTap(idx, reel)}
+                    className="w-full h-full object-cover"
+                    style={{
+                      transform: reel.mirrored ? "scaleX(-1)" : "none",
+                      filter: (() => {
+                        const f = reel.filter_id || "none";
+                        if (f === "warm") return "sepia(0.35) saturate(1.3) brightness(1.05)";
+                        if (f === "cool") return "hue-rotate(180deg) saturate(1.1) brightness(1.05)";
+                        if (f === "mono") return "grayscale(1) contrast(1.1)";
+                        if (f === "vivid") return "saturate(1.8) contrast(1.1)";
+                        if (f === "fade") return "saturate(0.7) brightness(1.15) contrast(0.9)";
+                        if (f === "vintage") return "sepia(0.55) saturate(1.1) contrast(1.05)";
+                        if (f === "noir") return "grayscale(1) contrast(1.3) brightness(0.95)";
+                        return "none";
+                      })(),
+                    }}
+                  />
+                ) : (
+                  <img src={reel.thumbnail_url || ""} alt="" className="w-full h-full object-cover" />
+                )}
 
+                  </div>
+                </div>
                 {/* Double-tap heart burst */}
                 {heartBurstId === reel.id && (
                   <motion.div
@@ -1034,6 +1018,15 @@ export default function Reels() {
 
                 {/* Bottom info: author + caption + actions */}
                 <div className="absolute left-3 right-20 bottom-4 z-20">
+                  {reel.audio_track && (
+                    <button 
+                      onClick={() => { tap("light"); setSoundPageOpen(reel.audio_track) }}
+                      className="flex items-center gap-1.5 mb-2 bg-black/40 backdrop-blur-md rounded-full px-3 py-1 w-max active:scale-95 transition-transform"
+                    >
+                      <Music size={12} className="text-white" />
+                      <span className="text-white text-[11px] font-semibold truncate max-w-[120px]">{reel.audio_track.title}</span>
+                    </button>
+                  )}
                   {/* Author row with Like button */}
                   <div className="flex items-center gap-2 mb-2">
                     <button
@@ -1160,7 +1153,7 @@ export default function Reels() {
           <div
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-[480px] mx-auto bg-[#0B0B14] rounded-t-[24px] border-t border-white/10 p-5 flex flex-col gap-2"
-            style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
+            style={{ paddingBottom: "max(20px, var(--safe-bottom, 8px))" }}
           >
             <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-2" />
             <h3 className="text-cream font-extrabold text-[16px] mb-1">What would you like to post?</h3>
@@ -1224,6 +1217,10 @@ export default function Reels() {
             setCurrentIdx(nextIdx)
           }}
         />
+      )}
+
+      {soundPageOpen && (
+        <ReelSoundPage track={soundPageOpen} onClose={() => setSoundPageOpen(null)} />
       )}
 
       {shareFor && (
