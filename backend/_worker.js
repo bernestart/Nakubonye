@@ -28,52 +28,36 @@ export default {
     }
 
     try {
-      // --- MICROSERVICE: POSTS (FEED) ---
-      
-      // 1. CREATE A POST (POST request)
-      if (path === "/api/posts" && request.method === "POST") {
-        const body = await request.json();
-        
-        // Insert into the database. Notice we use $1, $2 to prevent SQL injection!
-        const insertQuery = `
-          INSERT INTO user_posts (user_id, content, audience) 
-          VALUES ($1, $2, 'public') 
-          RETURNING id, content, created_at;
-        `;
-        
-        // Using a dummy UUID for testing, later this will be the logged-in user's ID
-        const dummyUserId = "00000000-0000-0000-0000-000000000000"; 
-        
-        const data = await queryDatabase(insertQuery, [dummyUserId, body.content]);
-        
-        return new Response(JSON.stringify({ 
-          success: true, 
-          message: "Post created successfully", 
-          data: data.rows[0] 
-        }), { headers: { ...cors, "Content-Type": "application/json" } });
+      if (path === "/api/posts") {
+        if (request.method === "POST") {
+          const body = await request.json();
+          const data = await queryDatabase(
+            `INSERT INTO user_posts (user_id, content, audience) VALUES ($1, $2, 'public') RETURNING *;`,
+            ["11111111-1111-1111-1111-111111111111", body.content]
+          );
+          return new Response(JSON.stringify({ success: true, data: data.rows[0] }), { headers: { ...cors, "Content-Type": "application/json" } });
+        }
+
+        if (request.method === "GET") {
+          const userId = url.searchParams.get("userId");
+          let query = `SELECT id, content, image_path, created_at, audience, user_id FROM user_posts WHERE is_active = true`;
+          let params = [];
+          
+          if (userId) {
+            query += ` AND user_id = $1`;
+            params.push(userId);
+          }
+          query += ` ORDER BY created_at DESC LIMIT 60`;
+
+          const data = await queryDatabase(query, params);
+          return new Response(JSON.stringify({ success: true, data: data.rows }), {
+            headers: { ...cors, "Content-Type": "application/json" }
+          });
+        }
       }
-
-      // 2. GET THE FEED (GET request)
-      if (path === "/api/posts" && request.method === "GET") {
-        const data = await queryDatabase(`
-          SELECT id, content, created_at 
-          FROM user_posts 
-          WHERE is_active = true 
-          ORDER BY created_at DESC LIMIT 50;
-        `);
-        return new Response(JSON.stringify({ success: true, data: data.rows }), {
-          headers: { ...cors, "Content-Type": "application/json" }
-        });
-      }
-
-      return new Response(JSON.stringify({ success: false, error: "Route not found" }), {
-        status: 404, headers: cors
-      });
-
+      return new Response(JSON.stringify({ success: false, error: "Route not found" }), { status: 404, headers: cors });
     } catch (err) {
-      return new Response(JSON.stringify({ success: false, error: err.message }), {
-        status: 500, headers: { ...cors, "Content-Type": "application/json" }
-      });
+      return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
     }
   }
 };
