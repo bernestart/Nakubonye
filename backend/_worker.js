@@ -18,8 +18,7 @@ export default {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Neon-Connection-String": env.DATABASE_URL,
-          "Neon-Array-Mode": "true"
+          "Neon-Connection-String": env.DATABASE_URL
         },
         body: JSON.stringify({ query: sqlQuery, params: params })
       });
