@@ -28,6 +28,27 @@ export default {
     }
 
     try {
+      // 1. GET RANKED FEED
+      if (path === "/api/feed" && request.method === "GET") {
+        const userId = url.searchParams.get("userId");
+        const limit = url.searchParams.get("limit") || 20;
+        const offset = url.searchParams.get("offset") || 0;
+        
+        if (!userId) {
+          return new Response(JSON.stringify({ success: false, error: "userId is required" }), { status: 400, headers: cors });
+        }
+
+        const data = await queryDatabase(
+          `SELECT * FROM get_ranked_feed($1::uuid, $2::integer, $3::integer)`,
+          [userId, limit, offset]
+        );
+
+        return new Response(JSON.stringify({ success: true, data: data.rows }), {
+          headers: { ...cors, "Content-Type": "application/json" }
+        });
+      }
+
+      // 2. POSTS (CREATE & GET)
       if (path === "/api/posts") {
         if (request.method === "POST") {
           const body = await request.json();
@@ -41,7 +62,7 @@ export default {
               share_to_story, tagged_user_ids, background_style, image_alts
             ) VALUES (
               $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::geography, $12, $13, $14, $15, $16, $17, $18, $19
-            ) RETURNING id;
+            ) RETURNING *; 
           `;
 
           const params = [
@@ -55,7 +76,6 @@ export default {
           ];
 
           const data = await queryDatabase(insertQuery, params);
-          
           return new Response(JSON.stringify({ success: true, data: data.rows[0] }), { 
             headers: { ...cors, "Content-Type": "application/json" } 
           });
@@ -78,9 +98,16 @@ export default {
           });
         }
       }
-      return new Response(JSON.stringify({ success: false, error: "Route not found" }), { status: 404, headers: cors });
+
+      // 3. DEFAULT / HEALTH CHECK
+      return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), {
+        headers: { ...cors, "Content-Type": "application/json" }
+      });
+
     } catch (err) {
-      return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: false, error: err.message }), {
+        status: 500, headers: { ...cors, "Content-Type": "application/json" }
+      });
     }
   }
 };

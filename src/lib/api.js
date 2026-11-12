@@ -29,3 +29,9 @@ export const createPost = async (postData) => {
   });
   return await res.json();
 };
+
+export const getRankedFeed = async (userId) => {
+  const res = await fetch(`${API_BASE_URL}/api/feed?userId=${userId}`);
+  const json = await res.json();
+  return json.data || [];
+};

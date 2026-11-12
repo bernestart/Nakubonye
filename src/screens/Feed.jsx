@@ -1,3 +1,4 @@
+import { getRankedFeed } from '../lib/api';
 import { AnimatePresence } from "framer-motion";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
@@ -267,11 +268,14 @@ export default function Feed() {
     const allowedUserIds = [...new Set([myId, ...matchIds, ...followIds])]
 
     // NEW: Fetch ranked feed using PostGIS/EdgeRank RPC
-    const { data: rankedRows, error: rpcErr } = await supabase.rpc('get_ranked_feed', {
-      viewer_id: myId,
-      page_limit: 20,
-      page_offset: 0
-    });
+    
+    let rankedRows = [];
+    try {
+      rankedRows = await getRankedFeed(myId);
+    } catch (err) {
+      console.error("Feed API Error:", err);
+    }
+  
 
     if (rpcErr) {
       console.error("Ranked feed failed, falling back to chronological:", rpcErr);
