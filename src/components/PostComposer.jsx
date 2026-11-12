@@ -1,3 +1,4 @@
+import { createPost } from '../lib/api';
 import { useEffect, useRef, useState } from "react"
 import { X, ImagePlus, Send, BarChart2, Trash2, Plus, MapPin, Smile, Clock } from "lucide-react"
 import { supabase } from "../lib/supabase"
@@ -231,7 +232,7 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
         const scheduledFor = publishAt && new Date(publishAt).getTime() > Date.now() + 60_000
         ? new Date(publishAt).toISOString()
         : new Date().toISOString()
-      const { data: insertedRow, error: insErr } = await supabase.from("user_posts").insert({
+      const payload = {
         user_id: myId,
         content: body || null,
         image_path: uploadedPaths[0] || null,
@@ -251,8 +252,10 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
         tagged_user_ids: taggedUsers.map((u) => u.id).filter(Boolean),
         background_style: imageFiles.length === 0 ? bgStyle : null,
         image_alts: imageAlts.filter(Boolean),
-      }).select("id").single()
-      if (insErr) throw new Error(insErr.message)
+      };
+      const apiRes = await createPost(payload);
+      if (!apiRes.success) throw new Error(apiRes.error);
+      const insertedRow = apiRes.data;
       if (scheduledFor && new Date(scheduledFor).getTime() > Date.now() + 60_000) {
         try { alert("Scheduled for " + new Date(scheduledFor).toLocaleString()) } catch {}
       }

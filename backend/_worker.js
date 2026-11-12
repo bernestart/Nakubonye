@@ -31,11 +31,34 @@ export default {
       if (path === "/api/posts") {
         if (request.method === "POST") {
           const body = await request.json();
-          const data = await queryDatabase(
-            `INSERT INTO user_posts (user_id, content, audience) VALUES ($1, $2, 'public') RETURNING *;`,
-            ["11111111-1111-1111-1111-111111111111", body.content]
-          );
-          return new Response(JSON.stringify({ success: true, data: data.rows[0] }), { headers: { ...cors, "Content-Type": "application/json" } });
+          
+          const insertQuery = `
+            INSERT INTO user_posts (
+              user_id, content, image_path, image_paths, audience,
+              reshared_from_type, reshared_from_id, reshared_from_snapshot,
+              reshared_include_original, location_text, location,
+              feeling_text, publish_at, who_can_comment, ai_label,
+              share_to_story, tagged_user_ids, background_style, image_alts
+            ) VALUES (
+              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::geography, $12, $13, $14, $15, $16, $17, $18, $19
+            ) RETURNING id;
+          `;
+
+          const params = [
+            body.user_id, body.content, body.image_path, body.image_paths || [], 
+            body.audience || 'public', body.reshared_from_type, body.reshared_from_id, 
+            body.reshared_from_snapshot ? JSON.stringify(body.reshared_from_snapshot) : null, 
+            body.reshared_include_original, body.location_text, body.location, 
+            body.feeling_text, body.publish_at, body.who_can_comment, body.ai_label, 
+            body.share_to_story, body.tagged_user_ids || [], body.background_style, 
+            body.image_alts ? JSON.stringify(body.image_alts) : null
+          ];
+
+          const data = await queryDatabase(insertQuery, params);
+          
+          return new Response(JSON.stringify({ success: true, data: data.rows[0] }), { 
+            headers: { ...cors, "Content-Type": "application/json" } 
+          });
         }
 
         if (request.method === "GET") {

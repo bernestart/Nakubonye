@@ -20,3 +20,12 @@ export const getUserPosts = async (userId) => {
   const json = await res.json();
   return json.data || []; // Return empty array if error
 };
+
+export const createPost = async (postData) => {
+  const res = await fetch(`${API_BASE_URL}/api/posts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(postData)
+  });
+  return await res.json();
+};
