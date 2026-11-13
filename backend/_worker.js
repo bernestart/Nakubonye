@@ -98,21 +98,8 @@ export default {
         }
       }
 
-      // 3. DEFAULT / HEALTH CHECK
-      return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), {
-        headers: { ...cors, "Content-Type": "application/json" }
-      });
-
-    } catch (err) {
-      return new Response(JSON.stringify({ success: false, error: err.message }), {
-        status: 500, headers: { ...cors, "Content-Type": "application/json" }
-      });
-    }
-  }
-};
       // 3. LIKES MICROSERVICE (Redis)
       if (path === "/api/likes") {
-        // Helper to send commands to Upstash
         const redisCommand = async (commandArray) => {
           const res = await fetch(env.UPSTASH_REDIS_URL, {
             method: 'POST',
@@ -130,14 +117,11 @@ export default {
           const { postId, userId, action } = body;
 
           if (action === 'like') {
-            // SADD adds the user to the Set of likes for this post
             await redisCommand(["SADD", `post:likes:${postId}`, userId]);
           } else if (action === 'unlike') {
-            // SREM removes the user from the Set
             await redisCommand(["SREM", `post:likes:${postId}`, userId]);
           }
 
-          // SCARD gets the total count of likes instantly
           const countRes = await redisCommand(["SCARD", `post:likes:${postId}`]);
           
           return new Response(JSON.stringify({ success: true, likes: countRes.result }), {
@@ -153,3 +137,16 @@ export default {
           });
         }
       }
+
+      // DEFAULT / HEALTH CHECK
+      return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), {
+        headers: { ...cors, "Content-Type": "application/json" }
+      });
+
+    } catch (err) {
+      return new Response(JSON.stringify({ success: false, error: err.message }), {
+        status: 500, headers: { ...cors, "Content-Type": "application/json" }
+      });
+    }
+  }
+};
