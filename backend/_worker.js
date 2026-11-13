@@ -27,7 +27,7 @@ export default {
     }
 
     try {
-      // 1. GET RANKED FEED
+      // 1. GET RANKED FEED (With Redis Likes)
       if (path === "/api/feed" && request.method === "GET") {
         const userId = url.searchParams.get("userId");
         const limit = url.searchParams.get("limit") || 20;
@@ -37,12 +37,34 @@ export default {
           return new Response(JSON.stringify({ success: false, error: "userId is required" }), { status: 400, headers: cors });
         }
 
+        // Fetch posts from Neon
         const data = await queryDatabase(
           `SELECT * FROM get_ranked_feed($1::uuid, $2::integer, $3::integer)`,
           [userId, limit, offset]
         );
 
-        return new Response(JSON.stringify({ success: true, data: data.rows }), {
+        // Fetch Like Counts from Redis for these specific posts
+        const postsWithLikes = [];
+        for (const post of data.rows) {
+          let likesCount = 0;
+          try {
+            const redisRes = await fetch(env.UPSTASH_REDIS_URL, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${env.UPSTASH_REDIS_TOKEN}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(["SCARD", `post:likes:${post.post_id}`])
+            });
+            const redisData = await redisRes.json();
+            likesCount = redisData.result || 0;
+          } catch (e) {
+            console.error("Redis error:", e);
+          }
+          postsWithLikes.push({ ...post, likes_count: likesCount });
+        }
+
+        return new Response(JSON.stringify({ success: true, data: postsWithLikes }), {
           headers: { ...cors, "Content-Type": "application/json" }
         });
       }
