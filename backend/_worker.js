@@ -52,7 +52,7 @@ export default {
         return new Response(JSON.stringify({ success: true, data: postsWithLikes }), { headers: { ...cors, "Content-Type": "application/json" } });
       }
 
-      // 2. POSTS (CREATE & GET & SINGLE)
+      // 2. POSTS (Personal)
       if (path === "/api/posts") {
         if (request.method === "POST") {
           const body = await request.json();
@@ -90,7 +90,28 @@ export default {
         }
       }
 
-      // 3. LIKES MICROSERVICE (Toggle & List)
+      // 3. COMMUNITY POSTS (NEW - TAO Architecture)
+      if (path === "/api/community/posts" && request.method === "GET") {
+        const communityId = url.searchParams.get("communityId");
+        if (!communityId) return new Response(JSON.stringify({ success: false, error: "communityId required" }), { status: 400, headers: cors });
+
+        const data = await queryDatabase(`
+          SELECT id, author_id, community_id, content, image_path, image_paths, created_at, pinned_until, is_announcement
+          FROM community_posts 
+          WHERE community_id = $1 AND deleted_at IS NULL
+          ORDER BY created_at DESC LIMIT 30
+        `, [communityId]);
+
+        const postsWithLikes = [];
+        for (const post of data.rows) {
+          // Note: Using the same Redis likes key for community posts
+          const likesCount = await getRedisLikes(post.id); 
+          postsWithLikes.push({ ...post, likes_count: likesCount });
+        }
+        return new Response(JSON.stringify({ success: true, data: postsWithLikes }), { headers: { ...cors, "Content-Type": "application/json" } });
+      }
+
+      // 4. LIKES
       if (path === "/api/likes") {
         const redisCommand = async (commandArray) => {
           const res = await fetch(env.UPSTASH_REDIS_URL, {
@@ -115,7 +136,7 @@ export default {
         }
       }
 
-      // 4. LIKES LIST (FIXED: Removed avatar_url)
+      // 5. LIKES LIST
       if (path === "/api/likes/list" && request.method === "GET") {
         const postId = url.searchParams.get("postId");
         const redisRes = await fetch(env.UPSTASH_REDIS_URL, {
@@ -126,18 +147,14 @@ export default {
         const redisData = await redisRes.json();
         const userIds = redisData.result || [];
 
-        if (userIds.length === 0) {
-          return new Response(JSON.stringify({ success: true, data: [] }), { headers: { ...cors, "Content-Type": "application/json" } });
-        }
+        if (userIds.length === 0) return new Response(JSON.stringify({ success: true, data: [] }), { headers: { ...cors, "Content-Type": "application/json" } });
 
         const placeholders = userIds.map((_, i) => `$${i + 1}`).join(',');
-        // FIXED QUERY HERE: Removed avatar_url
         const profiles = await queryDatabase(`SELECT id, display_name, username FROM profiles WHERE id IN (${placeholders})`, userIds);
-        
         return new Response(JSON.stringify({ success: true, data: profiles.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
       }
 
-      // 5. COMMENTS
+      // 6. COMMENTS
       if (path === "/api/comments") {
         if (request.method === "POST") {
           const body = await request.json();
