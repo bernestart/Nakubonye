@@ -1,3 +1,4 @@
+import { toggleLikeAPI } from '../lib/api';
 import { getUserPosts } from '../lib/api';
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -292,7 +293,7 @@ export default function ProfileView() {
         }
         return false
       })
-      .map((p) => ({ ...p, _source: 'personal', author_id: p.user_id }))
+      .map((p) => ({ ...p, _source: 'personal', author_id: p.user_id, likes_count: p.likes_count || 0 }))
 
     const community = (communityRes.data || [])
       .filter((p) => {
@@ -351,7 +352,15 @@ export default function ProfileView() {
         })
       }
 
-      setProfileReactionCounts(counts)
+      
+    // FIX: Override empty Supabase counts with Cloudflare Redis counts
+    personal.forEach((p) => {
+      if (typeof p.likes_count !== 'undefined') {
+        counts.set("personal:" + p.id, p.likes_count);
+      }
+    });
+
+    setProfileReactionCounts(counts)
       setProfileMyReactions(mine)
       setProfileMyReactionTypes(mineTypes)
       setProfileCommentCounts(cmtCounts)
@@ -936,7 +945,7 @@ export default function ProfileView() {
                               setProfileMyReactions(nextMine)
                               setProfileMyReactionTypes(nextTypes)
                               setProfileReactionCounts(nextCounts)
-                              await supabase.from(table).delete().eq("post_id", p.id).eq("user_id", myId)
+                              await toggleLikeAPI(p.id, myId, 'unlike');
                             } else {
                               nextMine.add(key)
                               nextTypes.set(key, "❤️")
@@ -947,7 +956,7 @@ export default function ProfileView() {
                               const row = p._source === "personal"
                                 ? { post_id: p.id, user_id: myId, reaction: "❤️" }
                                 : { post_id: p.id, user_id: myId, reaction: "❤️" }
-                              await supabase.from(table).insert(row)
+                              await toggleLikeAPI(p.id, myId, 'like');
                             }
                           }}
                         />

@@ -52,7 +52,7 @@ export default {
         return new Response(JSON.stringify({ success: true, data: postsWithLikes }), { headers: { ...cors, "Content-Type": "application/json" } });
       }
 
-      // 2. POSTS (CREATE & GET)
+      // 2. POSTS
       if (path === "/api/posts") {
         if (request.method === "POST") {
           const body = await request.json();
@@ -72,7 +72,6 @@ export default {
           if (userId) { query += ` AND user_id = $1`; params.push(userId); }
           query += ` ORDER BY created_at DESC LIMIT 60`;
           const data = await queryDatabase(query, params);
-          
           const postsWithLikes = [];
           for (const post of data.rows) {
             const likesCount = await getRedisLikes(post.id);
@@ -82,7 +81,7 @@ export default {
         }
       }
 
-      // 3. LIKES MICROSERVICE
+      // 3. LIKES
       if (path === "/api/likes") {
         const redisCommand = async (commandArray) => {
           const res = await fetch(env.UPSTASH_REDIS_URL, {
@@ -92,7 +91,6 @@ export default {
           });
           return await res.json();
         };
-
         if (request.method === "POST") {
           const body = await request.json();
           const { postId, userId, action } = body;
@@ -108,31 +106,29 @@ export default {
         }
       }
 
-      // 4. COMMENTS MICROSERVICE (NEW!)
+      // 4. COMMENTS
       if (path === "/api/comments") {
         if (request.method === "POST") {
           const body = await request.json();
-          const { postId, userId, content } = body;
+          const { postId, userId, content, replyToId } = body;
           
           const insertQuery = `
-            INSERT INTO user_post_comments (post_id, user_id, content) 
-            VALUES ($1, $2, $3) RETURNING id, content, created_at, user_id;
+            INSERT INTO user_post_comments (post_id, user_id, content, reply_to_id) 
+            VALUES ($1, $2, $3, $4) RETURNING id, content, created_at, user_id, reply_to_id;
           `;
-          const data = await queryDatabase(insertQuery, [postId, userId, content]);
+          const data = await queryDatabase(insertQuery, [postId, userId, content, replyToId || null]);
           
           return new Response(JSON.stringify({ success: true, data: data.rows[0] }), { headers: { ...cors, "Content-Type": "application/json" } });
         }
-
         if (request.method === "GET") {
           const postId = url.searchParams.get("postId");
           const data = await queryDatabase(`
-            SELECT c.id, c.content, c.created_at, c.user_id, p.display_name, p.username
+            SELECT c.id, c.content, c.created_at, c.user_id, c.reply_to_id, p.display_name, p.username
             FROM user_post_comments c
             LEFT JOIN profiles p ON p.id = c.user_id
             WHERE c.post_id = $1 AND c.deleted_at IS NULL
             ORDER BY c.created_at ASC;
           `, [postId]);
-
           return new Response(JSON.stringify({ success: true, data: data.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
         }
       }

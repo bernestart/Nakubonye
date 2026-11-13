@@ -21,7 +21,7 @@ async function fetchRankingSignals(myId) {
 
   // 1. My recent likes + comments on posts (need post_id, will resolve authors later)
   const [postLikes, postComments, reelsLiked] = await Promise.all([
-    supabase.from("user_post_likes").select("post_id, created_at").eq("user_id", myId).gt("created_at", ninetyDaysAgo).limit(500),
+    Promise.resolve({ data: [] }), // DISABLED: Using Cloudflare Redis likes instead
     supabase.from("user_post_comments").select("post_id, created_at").eq("user_id", myId).gt("created_at", ninetyDaysAgo).limit(500),
     supabase.from("reel_likes").select("reel_id, created_at").eq("user_id", myId).gt("created_at", ninetyDaysAgo).limit(500),
   ])
@@ -293,7 +293,8 @@ export default function Feed() {
       location_text: r.location_text,
       feeling_text: r.feeling_text,
       publish_at: r.publish_at,
-      _rank_score: r.rank_score
+      _rank_score: r.rank_score,
+      likes_count: r.likes_count || 0 // FIX: Read likes from Cloudflare API
     }));
     const personalPosts = (personalRows || [])
       .filter((r) => !blockedIds.has(r.user_id) && canSeePost(r, { myId, matchIds: new Set(matchIds), myCircleIds }))
@@ -407,7 +408,7 @@ export default function Feed() {
     }
     if (personalIdsRank.length > 0) {
       const [a, b] = await Promise.all([
-        supabase.from("user_post_likes").select("post_id").in("post_id", personalIdsRank),
+        Promise.resolve({ data: [] }), // DISABLED: Using Cloudflare Redis likes instead
         supabase.from("user_post_comments").select("post_id").in("post_id", personalIdsRank),
       ])
       ;(a.data || []).forEach((r) => likeMap.set(r.post_id, (likeMap.get(r.post_id) || 0) + 1))
@@ -632,6 +633,14 @@ export default function Feed() {
       })
     }
 
+    // FIX: Merge Cloudflare likes_count into the local map
+    list.forEach((p) => {
+      if (typeof p.likes_count !== 'undefined') {
+        const k = p._source + ":" + p.id;
+        counts.set(k, p.likes_count);
+      }
+    });
+
     setMyReactions(myLikedIds)
     setReactionCounts(counts)
     setCommentCounts(cc)
@@ -844,7 +853,7 @@ export default function Feed() {
     }
     if (personalIdsRank.length > 0) {
       const [a, b] = await Promise.all([
-        supabase.from("user_post_likes").select("post_id").in("post_id", personalIdsRank),
+        Promise.resolve({ data: [] }), // DISABLED: Using Cloudflare Redis likes instead
         supabase.from("user_post_comments").select("post_id").in("post_id", personalIdsRank),
       ])
       ;(a.data || []).forEach((r) => likeMap.set(r.post_id, (likeMap.get(r.post_id) || 0) + 1))
