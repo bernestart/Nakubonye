@@ -1,4 +1,4 @@
-import { getRankedFeed } from '../lib/api';
+import { getRankedFeed, toggleLikeAPI } from '../lib/api';
 import { AnimatePresence } from "framer-motion";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
@@ -277,14 +277,14 @@ export default function Feed() {
     }
   
 
-    if (rpcErr) {
-      console.error("Ranked feed failed, falling back to chronological:", rpcErr);
-    }
+
 
     // Map the RPC output back to the format the UI expects (id instead of post_id)
     const personalRows = (rankedRows || []).map(r => ({
       id: r.post_id,
       user_id: r.user_id,
+      author_id: r.user_id, // FIX: Map user_id to author_id for the UI
+      _source: "post",      // FIX: Tell the UI this is a regular post
       content: r.content,
       image_path: r.image_path,
       image_paths: r.image_paths,
@@ -1216,7 +1216,7 @@ export default function Feed() {
       nextTypes.set(key, emoji)
       setMyReactionTypes(nextTypes); setReactionBreakdown(nextBD)
       if (source !== "reel") {
-        await supabase.from(table).update({ reaction: emoji }).eq(idCol, postId).eq("user_id", myId)
+        await toggleLikeAPI(postId, myId, 'like');
       }
       return
     }
@@ -1229,7 +1229,7 @@ export default function Feed() {
       nextTypes.delete(key)
       nextCounts.set(key, Math.max(0, (nextCounts.get(key) || 1) - 1))
       setMyReactions(nextMine); setReactionCounts(nextCounts); setMyReactionTypes(nextTypes); setReactionBreakdown(nextBD)
-      await supabase.from(table).delete().eq(idCol, postId).eq("user_id", myId)
+      await toggleLikeAPI(postId, myId, 'unlike');
     } else {
       const useEmoji = emoji || "❤️"
       bd.set(useEmoji, (bd.get(useEmoji) || 0) + 1)
@@ -1243,7 +1243,7 @@ export default function Feed() {
         : source === "reel"
           ? { reel_id: postId, user_id: myId }
           : { post_id: postId, user_id: myId, reaction: useEmoji }
-      await supabase.from(table).insert(row)
+      await toggleLikeAPI(postId, myId, 'like');
 
       // Notify the author (skip for reels — different flow)
       if (source !== "reel") {

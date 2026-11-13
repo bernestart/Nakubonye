@@ -110,3 +110,46 @@ export default {
     }
   }
 };
+      // 3. LIKES MICROSERVICE (Redis)
+      if (path === "/api/likes") {
+        // Helper to send commands to Upstash
+        const redisCommand = async (commandArray) => {
+          const res = await fetch(env.UPSTASH_REDIS_URL, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${env.UPSTASH_REDIS_TOKEN}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(commandArray)
+          });
+          return await res.json();
+        };
+
+        if (request.method === "POST") {
+          const body = await request.json();
+          const { postId, userId, action } = body;
+
+          if (action === 'like') {
+            // SADD adds the user to the Set of likes for this post
+            await redisCommand(["SADD", `post:likes:${postId}`, userId]);
+          } else if (action === 'unlike') {
+            // SREM removes the user from the Set
+            await redisCommand(["SREM", `post:likes:${postId}`, userId]);
+          }
+
+          // SCARD gets the total count of likes instantly
+          const countRes = await redisCommand(["SCARD", `post:likes:${postId}`]);
+          
+          return new Response(JSON.stringify({ success: true, likes: countRes.result }), {
+            headers: { ...cors, "Content-Type": "application/json" }
+          });
+        }
+
+        if (request.method === "GET") {
+          const postId = url.searchParams.get("postId");
+          const countRes = await redisCommand(["SCARD", `post:likes:${postId}`]);
+          return new Response(JSON.stringify({ success: true, likes: countRes.result }), {
+            headers: { ...cors, "Content-Type": "application/json" }
+          });
+        }
+      }

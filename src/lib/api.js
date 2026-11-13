@@ -35,3 +35,12 @@ export const getRankedFeed = async (userId) => {
   const json = await res.json();
   return json.data || [];
 };
+
+export const toggleLikeAPI = async (postId, userId, action) => {
+  const res = await fetch(`${API_BASE_URL}/api/likes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ postId, userId, action })
+  });
+  return await res.json();
+};
