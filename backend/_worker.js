@@ -115,10 +115,9 @@ export default {
         }
       }
 
-      // 4. LIKES LIST (Who liked this post?)
+      // 4. LIKES LIST (FIXED: Removed avatar_url)
       if (path === "/api/likes/list" && request.method === "GET") {
         const postId = url.searchParams.get("postId");
-        // Get User IDs from Redis
         const redisRes = await fetch(env.UPSTASH_REDIS_URL, {
           method: 'POST',
           headers: { Authorization: `Bearer ${env.UPSTASH_REDIS_TOKEN}`, 'Content-Type': 'application/json' },
@@ -131,9 +130,9 @@ export default {
           return new Response(JSON.stringify({ success: true, data: [] }), { headers: { ...cors, "Content-Type": "application/json" } });
         }
 
-        // Get Profiles from Neon
         const placeholders = userIds.map((_, i) => `$${i + 1}`).join(',');
-        const profiles = await queryDatabase(`SELECT id, display_name, username, avatar_url FROM profiles WHERE id IN (${placeholders})`, userIds);
+        // FIXED QUERY HERE: Removed avatar_url
+        const profiles = await queryDatabase(`SELECT id, display_name, username FROM profiles WHERE id IN (${placeholders})`, userIds);
         
         return new Response(JSON.stringify({ success: true, data: profiles.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
       }
