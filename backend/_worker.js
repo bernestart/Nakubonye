@@ -90,22 +90,29 @@ export default {
         }
       }
 
-      // 3. COMMUNITY POSTS (NEW - TAO Architecture)
+      // 3. COMMUNITY POSTS (PRIVACY SECURED)
       if (path === "/api/community/posts" && request.method === "GET") {
-        const communityId = url.searchParams.get("communityId");
-        if (!communityId) return new Response(JSON.stringify({ success: false, error: "communityId required" }), { status: 400, headers: cors });
+        const idsParam = url.searchParams.get("communityIds");
+        const userId = url.searchParams.get("userId"); 
+        
+        if (!idsParam || !userId) return new Response(JSON.stringify({ success: false, error: "communityIds and userId required" }), { status: 400, headers: cors });
 
+        const communityIds = idsParam.split(',').map(Number);
+
+        // SECURITY: Join with community_memberships to ensure the user is actually a member!
         const data = await queryDatabase(`
-          SELECT id, author_id, community_id, content, image_path, image_paths, created_at, pinned_until, is_announcement
-          FROM community_posts 
-          WHERE community_id = $1 AND deleted_at IS NULL
-          ORDER BY created_at DESC LIMIT 30
-        `, [communityId]);
+          SELECT cp.id, cp.author_id, cp.community_id, cp.content, cp.image_path, cp.image_paths, cp.created_at, cp.pinned_until, cp.is_announcement
+          FROM community_posts cp
+          JOIN community_memberships cm ON cm.community_id = cp.community_id
+          WHERE cp.community_id = ANY($1::bigint[]) 
+            AND cp.deleted_at IS NULL
+            AND cm.user_id = $2 
+          ORDER BY cp.created_at DESC LIMIT 30
+        `, [communityIds, userId]);
 
         const postsWithLikes = [];
         for (const post of data.rows) {
-          // Note: Using the same Redis likes key for community posts
-          const likesCount = await getRedisLikes(post.id); 
+          const likesCount = await getRedisLikes(post.id);
           postsWithLikes.push({ ...post, likes_count: likesCount });
         }
         return new Response(JSON.stringify({ success: true, data: postsWithLikes }), { headers: { ...cors, "Content-Type": "application/json" } });

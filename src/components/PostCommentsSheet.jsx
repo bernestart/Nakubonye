@@ -70,10 +70,31 @@ export default function PostCommentsSheet({ postId, source = "community", onClos
     })()
   }, [postId, source])
 
-  const load = useCallback(async () => {
+      const load = useCallback(async () => {
     setLoading(true)
+    
+    // META-SCALE: Fetch personal comments from Cloudflare
+    if (source === "personal") {
+      try {
+        const res = await fetch(`https://nakubonye.bernestart.workers.dev/api/comments?postId=${postId}`);
+        const json = await res.json();
+        if (json.success) {
+          const list = json.data.slice().sort((a, b) => {
+            return new Date(a.created_at) - new Date(b.created_at);
+          });
+          setComments(list);
+          onCountChangeRef.current?.(list.filter((c) => !c.deleted_at).length);
+          setLoading(false);
+          return;
+        }
+      } catch (e) {
+        console.error("Failed to load Cloudflare comments", e);
+      }
+    }
+
+    // Fallback to Supabase for community comments
     const { data: rows } = await supabase
-      .from(table)
+      .from(commentTable)
       .select("id, user_id, content, created_at, reply_to_id, edited_at, deleted_at, pinned_at")
       .eq("post_id", postId)
       .order("created_at", { ascending: true })

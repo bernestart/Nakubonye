@@ -1,4 +1,4 @@
-import { getRankedFeed, toggleLikeAPI } from '../lib/api';
+import { getRankedFeed, getCommunityPosts, toggleLikeAPI } from '../lib/api';
 import { AnimatePresence } from "framer-motion";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
@@ -239,13 +239,13 @@ export default function Feed() {
     // 3a. Community posts (only if user has communities)
     let communityPosts = []
     if (myCommIds.length > 0) {
-      const { data: rows, error: pErr } = await supabase
-        .from("community_posts")
-        .select("id, community_id, author_id, content, image_path, image_paths, created_at, pinned_until")
-        .in("community_id", myCommIds)
-        .order("created_at", { ascending: false })
-        .limit(20)
-      if (pErr) { setError(pErr.message); setLoading(false); return }
+      let rows = [];
+        try {
+          // Pass myId to the API for security verification
+          rows = await getCommunityPosts(myCommIds, myId);
+        } catch (err) {
+          console.error("Community Feed API Error:", err);
+        }
       communityPosts = (rows || []).map((r) => ({ ...r, _source: "community" }))
     }
 

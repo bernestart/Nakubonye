@@ -56,12 +56,12 @@ export default function PostDetail() {
       try {
         let row = null
         if (source === "personal") {
-          const { data } = await supabase
-            .from("user_posts")
-            .select("id, user_id, content, image_path, image_paths, audience, created_at")
-            .lte("publish_at", new Date().toISOString())
-            .eq("id", id).maybeSingle()
-          row = data ? { ...data, _source: "personal", author_id: data.user_id } : null
+          // META-SCALE: Fetch from Cloudflare
+          const res = await fetch(`https://nakubonye.bernestart.workers.dev/api/posts?id=${id}`);
+          const json = await res.json();
+          if (json.success && json.data) {
+            row = { ...json.data, _source: "personal", author_id: json.data.user_id };
+          }
         } else if (source === "community") {
           const { data } = await supabase
             .from("community_posts")

@@ -17,12 +17,18 @@ export default function PostLikesModal({ postId, source, count, onClose }) {
     ;(async () => {
       setLoading(true)
       const table = source === "personal" ? "user_post_likes" : "community_post_reactions"
-      const { data: rows } = await supabase
-        .from(table)
-        .select("user_id, reaction")
-        .eq("post_id", postId)
-        .order("created_at", { ascending: false })
-        .limit(200)
+      // META-SCALE: Get User IDs from Cloudflare (Redis), but fetch avatars from Supabase
+      let rows = [];
+      if (table === "user_post_likes") {
+        const res = await fetch(`https://nakubonye.bernestart.workers.dev/api/likes/list?postId=${postId}`);
+        const json = await res.json();
+        if (json.success && json.data) {
+          rows = json.data.map(u => ({ user_id: u.id, reaction: '❤️' }));
+        }
+      } else {
+        const res = await supabase.from(table).select("user_id, reaction").eq("post_id", postId).order("created_at", { ascending: false }).limit(200);
+        rows = res.data || [];
+      }
 
       const ids = [...new Set((rows || []).map((r) => r.user_id))].filter(Boolean)
       if (ids.length === 0) { setLikers([]); setLoading(false); return }

@@ -44,3 +44,10 @@ export const toggleLikeAPI = async (postId, userId, action) => {
   });
   return await res.json();
 };
+
+export const getCommunityPosts = async (communityIds, userId) => {
+  const idsString = communityIds.join(',');
+  const res = await fetch(`${API_BASE_URL}/api/community/posts?communityIds=${idsString}&userId=${userId}`);
+  const json = await res.json();
+  return json.data || [];
+};
