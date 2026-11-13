@@ -1770,7 +1770,7 @@ export default function Feed() {
                   if (paths.length === 0) return null
                   return (
                     <PostImages
-                      paths={paths}
+                      paths={Array.isArray(p.image_paths) && p.image_paths.length > 0 ? p.image_paths : (p.image_path ? [p.image_path] : [])}
                       alts={p.image_alts || []}
                       bucket="community-media"
                       onDoubleTap={() => toggleLike(p.id, p._source)}

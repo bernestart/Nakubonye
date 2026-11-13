@@ -63,11 +63,12 @@ export default function PostDetail() {
             row = { ...json.data, _source: "personal", author_id: json.data.user_id };
           }
         } else if (source === "community") {
-          const { data } = await supabase
-            .from("community_posts")
-            .select("id, author_id, community_id, content, image_path, image_paths, created_at")
-            .eq("id", id).maybeSingle()
-          row = data ? { ...data, _source: "community" } : null
+          // META-SCALE: Fetch Community Post from Cloudflare
+          const res = await fetch(`https://nakubonye.bernestart.workers.dev/api/community/posts?id=${id}`);
+          const json = await res.json();
+          if (json.success && json.data) {
+            row = { ...json.data, _source: "community", author_id: json.data.author_id };
+          }
         }
         if (cancelled) return
         if (!row) { setError("Post not found"); setLoading(false); return }
