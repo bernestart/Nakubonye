@@ -52,7 +52,7 @@ export default {
         return new Response(JSON.stringify({ success: true, data: postsWithLikes }), { headers: { ...cors, "Content-Type": "application/json" } });
       }
 
-      // 2. POSTS
+      // 2. POSTS (CREATE & GET & SINGLE)
       if (path === "/api/posts") {
         if (request.method === "POST") {
           const body = await request.json();
@@ -66,12 +66,21 @@ export default {
         }
 
         if (request.method === "GET") {
+          const singlePostId = url.searchParams.get("id");
+          if (singlePostId) {
+            const data = await queryDatabase(`SELECT * FROM user_posts WHERE id = $1`, [singlePostId]);
+            if (data.rows.length === 0) return new Response(JSON.stringify({ success: false, error: "Not found" }), { status: 404, headers: cors });
+            const likesCount = await getRedisLikes(singlePostId);
+            return new Response(JSON.stringify({ success: true, data: { ...data.rows[0], likes_count: likesCount } }), { headers: { ...cors, "Content-Type": "application/json" } });
+          }
+
           const userId = url.searchParams.get("userId");
           let query = `SELECT id, content, image_path, created_at, audience, user_id FROM user_posts WHERE is_active = true`;
           let params = [];
           if (userId) { query += ` AND user_id = $1`; params.push(userId); }
           query += ` ORDER BY created_at DESC LIMIT 60`;
           const data = await queryDatabase(query, params);
+          
           const postsWithLikes = [];
           for (const post of data.rows) {
             const likesCount = await getRedisLikes(post.id);
@@ -81,7 +90,7 @@ export default {
         }
       }
 
-      // 3. LIKES
+      // 3. LIKES MICROSERVICE (Toggle & List)
       if (path === "/api/likes") {
         const redisCommand = async (commandArray) => {
           const res = await fetch(env.UPSTASH_REDIS_URL, {
@@ -106,29 +115,40 @@ export default {
         }
       }
 
-      // 4. COMMENTS
+      // 4. LIKES LIST (Who liked this post?)
+      if (path === "/api/likes/list" && request.method === "GET") {
+        const postId = url.searchParams.get("postId");
+        // Get User IDs from Redis
+        const redisRes = await fetch(env.UPSTASH_REDIS_URL, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${env.UPSTASH_REDIS_TOKEN}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(["SMEMBERS", `post:likes:${postId}`])
+        });
+        const redisData = await redisRes.json();
+        const userIds = redisData.result || [];
+
+        if (userIds.length === 0) {
+          return new Response(JSON.stringify({ success: true, data: [] }), { headers: { ...cors, "Content-Type": "application/json" } });
+        }
+
+        // Get Profiles from Neon
+        const placeholders = userIds.map((_, i) => `$${i + 1}`).join(',');
+        const profiles = await queryDatabase(`SELECT id, display_name, username, avatar_url FROM profiles WHERE id IN (${placeholders})`, userIds);
+        
+        return new Response(JSON.stringify({ success: true, data: profiles.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
+      }
+
+      // 5. COMMENTS
       if (path === "/api/comments") {
         if (request.method === "POST") {
           const body = await request.json();
-          const { postId, userId, content, replyToId } = body;
-          
-          const insertQuery = `
-            INSERT INTO user_post_comments (post_id, user_id, content, reply_to_id) 
-            VALUES ($1, $2, $3, $4) RETURNING id, content, created_at, user_id, reply_to_id;
-          `;
-          const data = await queryDatabase(insertQuery, [postId, userId, content, replyToId || null]);
-          
+          const insertQuery = `INSERT INTO user_post_comments (post_id, user_id, content, reply_to_id) VALUES ($1, $2, $3, $4) RETURNING id, content, created_at, user_id, reply_to_id;`;
+          const data = await queryDatabase(insertQuery, [body.postId, body.userId, body.content, body.replyToId || null]);
           return new Response(JSON.stringify({ success: true, data: data.rows[0] }), { headers: { ...cors, "Content-Type": "application/json" } });
         }
         if (request.method === "GET") {
           const postId = url.searchParams.get("postId");
-          const data = await queryDatabase(`
-            SELECT c.id, c.content, c.created_at, c.user_id, c.reply_to_id, p.display_name, p.username
-            FROM user_post_comments c
-            LEFT JOIN profiles p ON p.id = c.user_id
-            WHERE c.post_id = $1 AND c.deleted_at IS NULL
-            ORDER BY c.created_at ASC;
-          `, [postId]);
+          const data = await queryDatabase(`SELECT c.id, c.content, c.created_at, c.user_id, c.reply_to_id, p.display_name, p.username FROM user_post_comments c LEFT JOIN profiles p ON p.id = c.user_id WHERE c.post_id = $1 AND c.deleted_at IS NULL ORDER BY c.created_at ASC;`, [postId]);
           return new Response(JSON.stringify({ success: true, data: data.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
         }
       }
