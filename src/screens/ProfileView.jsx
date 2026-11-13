@@ -280,7 +280,7 @@ export default function ProfileView() {
     }
 
     const isOwn = userId === myId
-    const personal = (personalRes.data || [])
+    const personal = (Array.isArray(personalRes) ? personalRes : (personalRes.data || []))
       .filter((p) => {
         if (isOwn) return true
         const aud = p.audience || 'public'
@@ -292,7 +292,7 @@ export default function ProfileView() {
         }
         return false
       })
-      .map((p) => ({ ...p, _source: 'personal' }))
+      .map((p) => ({ ...p, _source: 'personal', author_id: p.user_id }))
 
     const community = (communityRes.data || [])
       .filter((p) => {
