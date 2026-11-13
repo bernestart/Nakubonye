@@ -16,118 +16,33 @@ export default {
       const endpoint = `https://${dbUrl.hostname}/sql`;
       const res = await fetch(endpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Neon-Connection-String": env.DATABASE_URL
-        },
+        headers: { "Content-Type": "application/json", "Neon-Connection-String": env.DATABASE_URL },
         body: JSON.stringify({ query: sqlQuery, params: params })
       });
       if (!res.ok) throw new Error(await res.text());
       return await res.json();
     }
 
-    async function getRedisLikes(postId) {
+    // DEBUG HELPER
+    async function redisCommand(commandArray) {
+      if (!env.UPSTASH_REDIS_URL) return { error: "UPSTASH_REDIS_URL is missing in Cloudflare!" };
+      if (!env.UPSTASH_REDIS_TOKEN) return { error: "UPSTASH_REDIS_TOKEN is missing in Cloudflare!" };
+      
       try {
-        const redisRes = await fetch(env.UPSTASH_REDIS_URL, {
+        const res = await fetch(env.UPSTASH_REDIS_URL, {
           method: 'POST',
           headers: { Authorization: `Bearer ${env.UPSTASH_REDIS_TOKEN}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify(["SCARD", `post:likes:${postId}`])
+          body: JSON.stringify(commandArray)
         });
-        const redisData = await redisRes.json();
-        return redisData.result || 0;
-      } catch (e) { return 0; }
+        return await res.json();
+      } catch (err) {
+        return { error: "FETCH_FAILED", details: err.message };
+      }
     }
 
     try {
-      // 1. GET RANKED FEED (With Redis Likes)
-      if (path === "/api/feed" && request.method === "GET") {
-        const userId = url.searchParams.get("userId");
-        const limit = url.searchParams.get("limit") || 20;
-        const offset = url.searchParams.get("offset") || 0;
-        
-        if (!userId) return new Response(JSON.stringify({ success: false, error: "userId is required" }), { status: 400, headers: cors });
-
-        const data = await queryDatabase(
-          `SELECT * FROM get_ranked_feed($1::uuid, $2::integer, $3::integer)`,
-          [userId, limit, offset]
-        );
-
-        const postsWithLikes = [];
-        for (const post of data.rows) {
-          const likesCount = await getRedisLikes(post.post_id);
-          postsWithLikes.push({ ...post, likes_count: likesCount });
-        }
-
-        return new Response(JSON.stringify({ success: true, data: postsWithLikes }), {
-          headers: { ...cors, "Content-Type": "application/json" }
-        });
-      }
-
-      // 2. POSTS (CREATE & GET) - Used for ProfileView
-      if (path === "/api/posts") {
-        if (request.method === "POST") {
-          const body = await request.json();
-          const insertQuery = `
-            INSERT INTO user_posts (
-              user_id, content, image_path, image_paths, audience,
-              reshared_from_type, reshared_from_id, reshared_from_snapshot,
-              reshared_include_original, location_text, location,
-              feeling_text, publish_at, who_can_comment, ai_label,
-              share_to_story, tagged_user_ids, background_style, image_alts
-            ) VALUES (
-              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::geography, $12, $13, $14, $15, $16, $17, $18, $19
-            ) RETURNING *; 
-          `;
-          const params = [
-            body.user_id, body.content, body.image_path, body.image_paths || [], 
-            body.audience || 'public', body.reshared_from_type, body.reshared_from_id, 
-            body.reshared_from_snapshot ? JSON.stringify(body.reshared_from_snapshot) : null, 
-            body.reshared_include_original, body.location_text, body.location, 
-            body.feeling_text, body.publish_at, body.who_can_comment, body.ai_label, 
-            body.share_to_story, body.tagged_user_ids || [], body.background_style, 
-            body.image_alts ? JSON.stringify(body.image_alts) : null
-          ];
-          const data = await queryDatabase(insertQuery, params);
-          return new Response(JSON.stringify({ success: true, data: data.rows[0] }), { headers: { ...cors, "Content-Type": "application/json" } });
-        }
-
-        if (request.method === "GET") {
-          const userId = url.searchParams.get("userId");
-          let query = `SELECT id, content, image_path, created_at, audience, user_id FROM user_posts WHERE is_active = true`;
-          let params = [];
-          
-          if (userId) {
-            query += ` AND user_id = $1`;
-            params.push(userId);
-          }
-          query += ` ORDER BY created_at DESC LIMIT 60`;
-
-          const data = await queryDatabase(query, params);
-
-          // FETCH LIKES FROM REDIS FOR PROFILE POSTS
-          const postsWithLikes = [];
-          for (const post of data.rows) {
-            const likesCount = await getRedisLikes(post.id);
-            postsWithLikes.push({ ...post, likes_count: likesCount });
-          }
-
-          return new Response(JSON.stringify({ success: true, data: postsWithLikes }), {
-            headers: { ...cors, "Content-Type": "application/json" }
-          });
-        }
-      }
-
-      // 3. LIKES MICROSERVICE (Redis)
+      // LIKES MICROSERVICE
       if (path === "/api/likes") {
-        const redisCommand = async (commandArray) => {
-          const res = await fetch(env.UPSTASH_REDIS_URL, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${env.UPSTASH_REDIS_TOKEN}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify(commandArray)
-          });
-          return await res.json();
-        };
-
         if (request.method === "POST") {
           const body = await request.json();
           const { postId, userId, action } = body;
@@ -139,18 +54,27 @@ export default {
           }
 
           const countRes = await redisCommand(["SCARD", `post:likes:${postId}`]);
-          return new Response(JSON.stringify({ success: true, likes: countRes.result }), { headers: { ...cors, "Content-Type": "application/json" } });
+          
+          // RETURN EXACTLY WHAT UPSTASH SAID
+          return new Response(JSON.stringify({ 
+            success: true, 
+            upstash_raw_response: countRes, 
+            likes: countRes.result 
+          }), { headers: { ...cors, "Content-Type": "application/json" } });
         }
 
         if (request.method === "GET") {
           const postId = url.searchParams.get("postId");
           const countRes = await redisCommand(["SCARD", `post:likes:${postId}`]);
-          return new Response(JSON.stringify({ success: true, likes: countRes.result }), { headers: { ...cors, "Content-Type": "application/json" } });
+          return new Response(JSON.stringify({ 
+            success: true, 
+            upstash_raw_response: countRes, 
+            likes: countRes.result 
+          }), { headers: { ...cors, "Content-Type": "application/json" } });
         }
       }
 
-      return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
-
+      return new Response(JSON.stringify({ success: true, message: "Gateway Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
     }
