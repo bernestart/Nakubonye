@@ -26,6 +26,18 @@ export default {
       return await res.json();
     }
 
+    async function getRedisLikes(postId) {
+      try {
+        const redisRes = await fetch(env.UPSTASH_REDIS_URL, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${env.UPSTASH_REDIS_TOKEN}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(["SCARD", `post:likes:${postId}`])
+        });
+        const redisData = await redisRes.json();
+        return redisData.result || 0;
+      } catch (e) { return 0; }
+    }
+
     try {
       // 1. GET RANKED FEED (With Redis Likes)
       if (path === "/api/feed" && request.method === "GET") {
@@ -33,34 +45,16 @@ export default {
         const limit = url.searchParams.get("limit") || 20;
         const offset = url.searchParams.get("offset") || 0;
         
-        if (!userId) {
-          return new Response(JSON.stringify({ success: false, error: "userId is required" }), { status: 400, headers: cors });
-        }
+        if (!userId) return new Response(JSON.stringify({ success: false, error: "userId is required" }), { status: 400, headers: cors });
 
-        // Fetch posts from Neon
         const data = await queryDatabase(
           `SELECT * FROM get_ranked_feed($1::uuid, $2::integer, $3::integer)`,
           [userId, limit, offset]
         );
 
-        // Fetch Like Counts from Redis for these specific posts
         const postsWithLikes = [];
         for (const post of data.rows) {
-          let likesCount = 0;
-          try {
-            const redisRes = await fetch(env.UPSTASH_REDIS_URL, {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${env.UPSTASH_REDIS_TOKEN}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(["SCARD", `post:likes:${post.post_id}`])
-            });
-            const redisData = await redisRes.json();
-            likesCount = redisData.result || 0;
-          } catch (e) {
-            console.error("Redis error:", e);
-          }
+          const likesCount = await getRedisLikes(post.post_id);
           postsWithLikes.push({ ...post, likes_count: likesCount });
         }
 
@@ -69,11 +63,10 @@ export default {
         });
       }
 
-      // 2. POSTS (CREATE & GET)
+      // 2. POSTS (CREATE & GET) - Used for ProfileView
       if (path === "/api/posts") {
         if (request.method === "POST") {
           const body = await request.json();
-          
           const insertQuery = `
             INSERT INTO user_posts (
               user_id, content, image_path, image_paths, audience,
@@ -85,7 +78,6 @@ export default {
               $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::geography, $12, $13, $14, $15, $16, $17, $18, $19
             ) RETURNING *; 
           `;
-
           const params = [
             body.user_id, body.content, body.image_path, body.image_paths || [], 
             body.audience || 'public', body.reshared_from_type, body.reshared_from_id, 
@@ -95,11 +87,8 @@ export default {
             body.share_to_story, body.tagged_user_ids || [], body.background_style, 
             body.image_alts ? JSON.stringify(body.image_alts) : null
           ];
-
           const data = await queryDatabase(insertQuery, params);
-          return new Response(JSON.stringify({ success: true, data: data.rows[0] }), { 
-            headers: { ...cors, "Content-Type": "application/json" } 
-          });
+          return new Response(JSON.stringify({ success: true, data: data.rows[0] }), { headers: { ...cors, "Content-Type": "application/json" } });
         }
 
         if (request.method === "GET") {
@@ -114,7 +103,15 @@ export default {
           query += ` ORDER BY created_at DESC LIMIT 60`;
 
           const data = await queryDatabase(query, params);
-          return new Response(JSON.stringify({ success: true, data: data.rows }), {
+
+          // FETCH LIKES FROM REDIS FOR PROFILE POSTS
+          const postsWithLikes = [];
+          for (const post of data.rows) {
+            const likesCount = await getRedisLikes(post.id);
+            postsWithLikes.push({ ...post, likes_count: likesCount });
+          }
+
+          return new Response(JSON.stringify({ success: true, data: postsWithLikes }), {
             headers: { ...cors, "Content-Type": "application/json" }
           });
         }
@@ -125,10 +122,7 @@ export default {
         const redisCommand = async (commandArray) => {
           const res = await fetch(env.UPSTASH_REDIS_URL, {
             method: 'POST',
-            headers: {
-              Authorization: `Bearer ${env.UPSTASH_REDIS_TOKEN}`,
-              'Content-Type': 'application/json'
-            },
+            headers: { Authorization: `Bearer ${env.UPSTASH_REDIS_TOKEN}`, 'Content-Type': 'application/json' },
             body: JSON.stringify(commandArray)
           });
           return await res.json();
@@ -145,30 +139,20 @@ export default {
           }
 
           const countRes = await redisCommand(["SCARD", `post:likes:${postId}`]);
-          
-          return new Response(JSON.stringify({ success: true, likes: countRes.result }), {
-            headers: { ...cors, "Content-Type": "application/json" }
-          });
+          return new Response(JSON.stringify({ success: true, likes: countRes.result }), { headers: { ...cors, "Content-Type": "application/json" } });
         }
 
         if (request.method === "GET") {
           const postId = url.searchParams.get("postId");
           const countRes = await redisCommand(["SCARD", `post:likes:${postId}`]);
-          return new Response(JSON.stringify({ success: true, likes: countRes.result }), {
-            headers: { ...cors, "Content-Type": "application/json" }
-          });
+          return new Response(JSON.stringify({ success: true, likes: countRes.result }), { headers: { ...cors, "Content-Type": "application/json" } });
         }
       }
 
-      // DEFAULT / HEALTH CHECK
-      return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), {
-        headers: { ...cors, "Content-Type": "application/json" }
-      });
+      return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
 
     } catch (err) {
-      return new Response(JSON.stringify({ success: false, error: err.message }), {
-        status: 500, headers: { ...cors, "Content-Type": "application/json" }
-      });
+      return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
     }
   }
 };
