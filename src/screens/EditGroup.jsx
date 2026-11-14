@@ -1,3 +1,4 @@
+import { uploadMedia, getMediaUrl } from '../lib/api';
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft, Camera } from "lucide-react"
@@ -67,10 +68,9 @@ export default function EditGroup() {
       let nextUrl = avatarUrl
       if (avatarFile) {
         const ext = (avatarFile.name.split(".").pop() || "jpg").toLowerCase()
-        const path = `group-avatars/${crypto.randomUUID()}.${ext}`
-        const { error: upErr } = await supabase.storage
-          .from("chat-media")
-          .upload(path, avatarFile, { upsert: false, contentType: avatarFile.type })
+        let path = ""
+        path = await uploadMedia(avatarFile);
+        const upErr = null; // Telegram handles errors internally
         if (upErr) throw new Error(upErr.message)
         const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
         nextUrl = pub?.publicUrl || nextUrl

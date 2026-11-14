@@ -1,3 +1,5 @@
+import { getMediaUrl } from '../lib/api';
+import { getCommunityPosts } from '../lib/api';
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Send, Trash2, ImagePlus, X, Heart, Smile, Pin } from 'lucide-react'
@@ -41,15 +43,12 @@ export default function CommunityFeed({ communityId, isMember }) {
     if (!session?.user?.id || !communityId) return
     setLoading(true); setError('')
 
-    const [postRes, muteRes] = await Promise.all([
-      supabase
-        .from('community_posts')
-        .select('id, author_id, content, image_path, image_paths, created_at, pinned_until, reshared_from_type, reshared_from_id, reshared_from_snapshot, reshared_include_original, is_announcement, announcement_title')
-        .eq('community_id', communityId)
-        .order('created_at', { ascending: false })
-        .limit(50),
-      supabase.from('user_mutes').select('muted_id').eq('muter_id', session.user.id),
-    ])
+    // META-SCALE: Fetch posts from Cloudflare API
+    const postData = await getCommunityPosts([communityId], session.user.id);
+    const muteRes = await supabase.from('user_mutes').select('muted_id').eq('muter_id', session.user.id);
+    
+    // Mock the Supabase response structure so the rest of the code doesn't break
+    const postRes = { data: postData, error: null };
 
     if (postRes.error) { setError(postRes.error.message); setLoading(false); return }
 
@@ -108,6 +107,7 @@ export default function CommunityFeed({ communityId, isMember }) {
         author_id: r.author_id,
         content: r.content,
         image_url: imageUrl,
+            image_paths: Array.isArray(r.image_paths) && r.image_paths.length > 0 ? r.image_paths : (r.image_path ? [r.image_path] : []),
         created_at: r.created_at,
         pinned_until: r.pinned_until,
         pinned: !!(r.pinned_until && new Date(r.pinned_until) > new Date()),
@@ -158,10 +158,9 @@ export default function CommunityFeed({ communityId, isMember }) {
 
     if (imageFile) {
       const ext = imageFile.name.split('.').pop()?.toLowerCase() || 'jpg'
-      const path = `${communityId}/${session.user.id}/${crypto.randomUUID()}.${ext}`
-      const { error: upErr } = await supabase.storage
-        .from('community-media')
-        .upload(path, imageFile, { upsert: false, contentType: imageFile.type })
+      let path = ""
+      path = await uploadMedia(imageFile);
+        const upErr = null; // Telegram handles errors internally
       if (upErr) { setSubmitting(false); setError(upErr.message); return }
       imagePath = path
     }

@@ -100,6 +100,10 @@ export default function PostDetail() {
           }
         }
 
+        // FIX: Ensure single image_path becomes an array for the UI
+        if (row.image_path && (!row.image_paths || row.image_paths.length === 0)) {
+          row.image_paths = [row.image_path];
+        }
         setPost(row)
 
         const authorId = row.author_id || row.user_id
@@ -289,7 +293,7 @@ export default function PostDetail() {
                 ? post.image_paths
                 : (post.image_path ? [post.image_path] : [])
               if (paths.length === 0) return null
-              const urls = paths.map((p) => supabase.storage.from("community-media").getPublicUrl(p).data?.publicUrl)
+              const urls = paths.map((p) => `https://nakubonye.bernestart.workers.dev/api/media/${p}`)
               const idx = Math.min(galleryIdx, urls.length - 1)
               return (
                 <div className="relative">

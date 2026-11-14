@@ -1,3 +1,4 @@
+import { uploadMedia } from '../lib/api';
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { ArrowLeft, Search, X, Camera, Check } from "lucide-react"
@@ -80,10 +81,9 @@ export default function CreateGroup() {
       let avatarUrl = null
       if (avatarFile) {
         const ext = (avatarFile.name.split(".").pop() || "jpg").toLowerCase()
-        const path = `group-avatars/${crypto.randomUUID()}.${ext}`
-        const { error: upErr } = await supabase.storage.from("chat-media").upload(path, avatarFile, { upsert: false, contentType: avatarFile.type })
+        const path = await uploadMedia(avatarFile);
         if (upErr) throw new Error(upErr.message)
-        const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
+        const pub = { publicUrl: path }; // Cloudflare will proxy it
         avatarUrl = pub?.publicUrl || null
       }
 

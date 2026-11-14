@@ -1,3 +1,4 @@
+import { getMediaUrl } from '../lib/api';
 import { useState } from "react"
 import { supabase } from "../lib/supabase"
 import ImageLightbox from "./chat/ImageLightbox"
@@ -19,7 +20,12 @@ export default function PostImages({ paths = [], bucket = "community-media", onD
 
   const urls = paths.map((p) => {
     if (typeof p === 'string' && p.startsWith('http')) return p;
-    return supabase.storage.from(bucket).getPublicUrl(p).data?.publicUrl;
+    // FIX: If it's a Telegram file_id (no slashes), use Cloudflare Proxy
+    if (typeof p === 'string' && !p.includes('/')) {
+      return `https://nakubonye.bernestart.workers.dev/api/media/${p}`;
+    }
+    // Otherwise, it's an old Supabase path
+    return getMediaUrl(p, bucket);
   }).filter(Boolean)
 
   if (urls.length === 0) return null

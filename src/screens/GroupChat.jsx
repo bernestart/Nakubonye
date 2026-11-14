@@ -1,3 +1,4 @@
+import { uploadMedia } from '../lib/api';
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { Timer, Search, ArrowLeft, Send, Paperclip, X, MoreVertical, Users, Camera, Trash2, Flag, LogOut, UserPlus , Pencil , Link2 , Bell , Mic, Square , Pin , Eraser} from "lucide-react"
@@ -334,10 +335,9 @@ export default function GroupChat() {
     const file = e.target.files?.[0]; if (!file) return
     if (file.size > 15 * 1024 * 1024) { setError("File too large"); return }
     setSending(true)
-    const path = `${groupId}/${crypto.randomUUID()}.${file.name.split('.').pop()}`
-    const { error: upErr } = await supabase.storage.from('chat-media').upload(path, file, { contentType: file.type })
+    const path = await uploadMedia(file);
     if (upErr) { setError(upErr.message); setSending(false); return }
-    const { data: pub } = supabase.storage.from('chat-media').getPublicUrl(path)
+    const pub = { publicUrl: path }; // Cloudflare will proxy it
     const payload = { group_id: groupId, sender_id: myId, content: '', media_url: pub?.publicUrl, media_type: file.type, media_name: file.name }
     if (disappearingTimer) payload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
     if (replyingTo?.id) payload.reply_to_id = replyingTo.id
@@ -384,12 +384,9 @@ export default function GroupChat() {
 
     setBusy(true)
     const ext = result.mimeType?.includes("mp4") ? "mp4" : "webm";
-    const path = "group-media/" + groupId + "/" + crypto.randomUUID() + "." + ext
-    const { error: upErr } = await supabase.storage
-      .from("chat-media")
-      .upload(path, result.blob, { upsert: false, contentType: result.mimeType })
+    const path = await uploadMedia(result.blob);
     if (upErr) { setBusy(false); setError(upErr.message); return }
-    const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
+    const pub = { publicUrl: path }; // Cloudflare will proxy it
 
     const { data: inserted, error: sendErr } = await supabase
       .from("group_messages")
@@ -468,12 +465,9 @@ export default function GroupChat() {
     let mediaUrl = null, mediaType = null, mediaName = null
     if (attachment) {
       const ext = (attachment.name.split(".").pop() || "jpg").toLowerCase()
-      const path = `group-media/${groupId}/${crypto.randomUUID()}.${ext}`
-      const { error: upErr } = await supabase.storage
-        .from("chat-media")
-        .upload(path, attachment, { upsert: false, contentType: attachment.type })
+      const path = await uploadMedia(attachment);
       if (upErr) { setBusy(false); setError(upErr.message); return }
-      const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
+      const pub = { publicUrl: path }; // Cloudflare will proxy it
       mediaUrl = pub?.publicUrl || null
       mediaType = attachment.type
       mediaName = attachment.name

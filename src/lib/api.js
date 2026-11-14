@@ -51,3 +51,30 @@ export const getCommunityPosts = async (communityIds, userId) => {
   const json = await res.json();
   return json.data || [];
 };
+
+import { supabase } from "./supabase"; // Ensure supabase is imported here
+
+export const getMediaUrl = (path, bucket = "community-media") => {
+  if (!path) return null;
+  if (typeof path === 'string' && path.startsWith('http')) return path;
+  
+  // If it's a Telegram file_id (no slashes), use Cloudflare Proxy
+  if (typeof path === 'string' && !path.includes('/')) {
+    return `https://nakubonye.bernestart.workers.dev/api/media/${path}`;
+  }
+  
+  // Fallback to Supabase for old legacy files
+  return supabase.storage.from(bucket).getPublicUrl(path).data?.publicUrl;
+};
+
+export const uploadMedia = async (file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${API_BASE_URL}/api/upload`, {
+    method: "POST",
+    body: formData
+  });
+  const json = await res.json();
+  if (!json.success) throw new Error(json.error || "Upload failed");
+  return json.file_id; // Returns the Telegram file_id
+};

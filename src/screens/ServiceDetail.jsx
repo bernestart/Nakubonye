@@ -1,3 +1,4 @@
+import { getMediaUrl } from '../lib/api';
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, MapPin, Clock, MessageCircle, Calendar, ChevronLeft, ChevronRight, Share2, Video, MoreVertical, Edit3, Trash2, Tag } from 'lucide-react'
@@ -129,7 +130,7 @@ export default function ServiceDetail() {
   const photos = service.image_paths || []
   const isOwner = service.provider_id === myId
   const photoUrl = photos[photoIdx]
-    ? supabase.storage.from('service-media').getPublicUrl(photos[photoIdx]).data?.publicUrl
+    ? getMediaUrl(photos[photoIdx], 'service-media')
     : null
   const providerName = provider?.display_name || provider?.username || 'Provider'
   const providerAvatar = provider?.photo_url ? publicPhotoUrl(provider.photo_url) : null

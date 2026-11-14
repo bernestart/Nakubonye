@@ -1,3 +1,4 @@
+import { getMediaUrl } from '../lib/api';
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Plus, MoreVertical, Eye, Trash2, Edit3, MapPin, Tag } from 'lucide-react'
@@ -148,7 +149,7 @@ export default function MyListings() {
 
 function MyListingRow({ listing, onOpen, onMenu }) {
   const img = listing.image_paths?.[0]
-    ? supabase.storage.from('listing-media').getPublicUrl(listing.image_paths[0]).data?.publicUrl
+    ? getMediaUrl(listing.image_paths[0], 'listing-media')
     : null
   const sold = listing.status === 'sold'
   return (

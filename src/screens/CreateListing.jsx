@@ -1,3 +1,4 @@
+import { uploadMedia } from '../lib/api';
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, ImagePlus, X, MapPin, DollarSign, AlertCircle } from 'lucide-react'
@@ -80,10 +81,7 @@ export default function CreateListing() {
       const uploadedPaths = []
       for (const f of imageFiles) {
         const ext = (f.name.split('.').pop() || 'jpg').toLowerCase()
-        const path = `${myId}/${crypto.randomUUID()}.${ext}`
-        const { error: upErr } = await supabase.storage
-          .from('listing-media')
-          .upload(path, f, { upsert: false, contentType: f.type })
+        const path = await uploadMedia(f);
         if (upErr) throw new Error(upErr.message)
         uploadedPaths.push(path)
       }

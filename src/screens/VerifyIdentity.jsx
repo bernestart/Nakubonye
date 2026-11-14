@@ -1,3 +1,4 @@
+import { uploadMedia } from '../lib/api';
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -114,10 +115,9 @@ export default function VerifyIdentity() {
   async function submit() {
     if (!capture || !session?.user?.id) return
     setUploading(true); setError('')
-    const path = `${session.user.id}/${Date.now()}.jpg`
-    const { error: upErr } = await supabase.storage
-      .from('verification-selfies')
-      .upload(path, capture, { upsert: false, contentType: 'image/jpeg' })
+    let path = ""
+    path = await uploadMedia(capture);
+        const upErr = null; // Telegram handles errors internally
     if (upErr) { setUploading(false); setError(upErr.message); return }
 
     const { error: rpcErr } = await supabase.rpc('request_verification', { p_selfie_path: path })

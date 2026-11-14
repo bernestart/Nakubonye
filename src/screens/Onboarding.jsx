@@ -1,3 +1,4 @@
+import { uploadMedia } from '../lib/api';
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Heart, Users, User, Sparkles, Check } from 'lucide-react'
@@ -6,7 +7,7 @@ import { useAuth } from '../lib/auth'
 import { Button, Field, Input, Textarea } from '../components/UI'
 import BrandGlow from '../components/BrandGlow'
 
-const STEPS = ['Identity', 'About you', 'Preferences', 'Looking for', 'Where & bio', 'Interests', 'Photo']
+const STEPS = ['Identity', 'About you', 'Where & bio', 'Interests', 'Photo']
 
 const LOOKING_FOR_OPTIONS = [
   {
@@ -80,6 +81,7 @@ export default function Onboarding() {
 
   // Photo
   const [photoFile, setPhotoFile] = useState(null)
+  const [coverFile, setCoverFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState('')
 
   const OB_KEY = 'nakubonye_onboarding_v1'
@@ -113,7 +115,7 @@ export default function Onboarding() {
     try {
       const d = {
         step,
-        displayName, username, dob, gender,
+        displayName, username, dob, gender: gender || profile?.gender: gender || profile?.gender,
         preferredGender, minAge, maxAge, lookingFor,
         city, country, bio,
         selectedInterests,
@@ -121,7 +123,7 @@ export default function Onboarding() {
       localStorage.setItem(OB_KEY, JSON.stringify(d))
     } catch (e) { /* ignore */ }
   }, [
-    step, displayName, username, dob, gender,
+    step, displayName, username, dob, gender: gender || profile?.gender: gender || profile?.gender,
     preferredGender, minAge, maxAge, lookingFor,
     city, country, bio, selectedInterests,
   ])
@@ -149,7 +151,7 @@ export default function Onboarding() {
 
     supabase
       .from('discovery_preferences')
-      .select('preferred_gender, min_age, max_age')
+      .select('preferred_gender: gender || profile?.gender: gender || profile?.gender, min_age, max_age')
       .eq('user_id', session.user.id)
       .maybeSingle()
       .then(({ data }) => {
@@ -183,11 +185,11 @@ export default function Onboarding() {
       }
     }
     if (step === 2) {
-      if (!dob) { setError('Please enter your date of birth.'); return false }
+      
       const age = calcAge(dob)
       if (age === null || age < 18) { setError('You must be 18 or older.'); return false }
       if (age > 100) { setError('Please enter a valid date of birth.'); return false }
-      if (!gender) { setError('Please select your gender.'); return false }
+      
     }
     if (step === 3) {
       if (!preferredGender) { setError('Please choose who you want to meet.'); return false }
@@ -265,8 +267,8 @@ export default function Onboarding() {
       .update({
         display_name: displayName.trim(),
         username: username.trim().toLowerCase(),
-        date_of_birth: dob,
-        gender,
+        date_of_birth: dob || profile?.date_of_birth,
+        gender: gender || profile?.gender: gender || profile?.gender,
         looking_for: lookingFor,
         city: city.trim(),
         country: country.trim() || 'Burundi',
@@ -301,12 +303,7 @@ export default function Onboarding() {
 
     // 4. Photo
     if (photoFile) {
-      const ext = photoFile.name.split('.').pop()?.toLowerCase() || 'jpg'
-      const path = `${userId}/${crypto.randomUUID()}.${ext}`
-      const { error: uErr } = await supabase.storage
-        .from('profile-photos')
-        .upload(path, photoFile, { upsert: false, contentType: photoFile.type })
-      if (uErr) { setBusy(false); setError(uErr.message); return }
+      const path = await uploadMedia(photoFile);
 
       await supabase
         .from('profile_photos')
@@ -375,7 +372,7 @@ export default function Onboarding() {
           </Section>
         )}
 
-        {step === 2 && (
+        {false && (
           <Section
             title="About you"
             sub="Nakubonye is for adults only. Your age shows on your profile."
@@ -413,7 +410,7 @@ export default function Onboarding() {
           </Section>
         )}
 
-        {step === 3 && (
+        {false && (
           <Section
             title="Who do you want to meet?"
             sub="This decides who shows up in Discover. You can change it later."
@@ -471,7 +468,7 @@ export default function Onboarding() {
           </Section>
         )}
 
-        {step === 4 && (
+        {false && (
           <Section
             title="What are you looking for?"
             sub="Honesty here means better connections."

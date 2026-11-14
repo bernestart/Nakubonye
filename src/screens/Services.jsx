@@ -1,3 +1,4 @@
+import { getMediaUrl } from '../lib/api';
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -279,7 +280,7 @@ function MyServicesTab({ nav, myId }) {
 
 function MyServiceRow({ service, onOpen, onMenu }) {
   const img = service.image_paths?.[0]
-    ? supabase.storage.from('service-media').getPublicUrl(service.image_paths[0]).data?.publicUrl
+    ? getMediaUrl(service.image_paths[0], 'service-media')
     : null
   const paused = service.status !== 'active'
   return (
@@ -513,7 +514,7 @@ function BookingCard({ booking, myId, peopleMap, servicesMap, busy, onOpenChat, 
 /* ======================= SHARED ======================= */
 function ServiceCard({ service, onClick }) {
   const img = service.image_paths?.[0]
-    ? supabase.storage.from('service-media').getPublicUrl(service.image_paths[0]).data?.publicUrl
+    ? getMediaUrl(service.image_paths[0], 'service-media')
     : null
   const providerName = service.provider?.display_name || service.provider?.username || 'Provider'
   const avatar = service.provider?.photo_url ? publicPhotoUrl(service.provider.photo_url) : null

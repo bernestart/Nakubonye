@@ -654,7 +654,7 @@ export default function EditProfile() {
             </Field>
             <Field label="Date of birth" hint="Used to calculate your age. Hidden if you enable 'Hide my age'.">
               <input
-                type="date"
+                type="text" placeholder="DD/MM/YYYY"
                 value={dateOfBirth || ''}
                 onChange={(e) => setDateOfBirth(e.target.value)}
                 max={new Date().toISOString().slice(0,10)}

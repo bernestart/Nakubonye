@@ -1,3 +1,4 @@
+import { uploadMedia, getMediaUrl } from '../lib/api';
 import { useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { X, ImagePlus } from "lucide-react"
@@ -58,10 +59,9 @@ export default function EventComposer({ communityId, onClose, onCreated, existin
     if (coverFile) {
       try {
         const ext = coverFile.name.split(".").pop()?.toLowerCase() || "jpg"
-        const path = `events/${myId}/${crypto.randomUUID()}.${ext}`
-        const { error: upErr } = await supabase.storage
-          .from("community-media")
-          .upload(path, coverFile, { upsert: false, contentType: coverFile.type })
+        let path = ""
+        path = await uploadMedia(coverFile);
+        const upErr = null; // Telegram handles errors internally
         if (upErr) throw upErr
         const { data: pub } = supabase.storage.from("community-media").getPublicUrl(path)
         coverUrl = pub?.publicUrl || null

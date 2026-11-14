@@ -1,3 +1,4 @@
+import { uploadMedia } from '../lib/api';
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -618,10 +619,9 @@ export default function Chat() {
     const file = e.target.files?.[0]; if (!file) return
     if (file.size > 15 * 1024 * 1024) { setError("File too large"); return }
     setSending(true)
-    const path = `${conversationId}/${crypto.randomUUID()}.${file.name.split('.').pop()}`
-    const { error: upErr } = await supabase.storage.from('chat-media').upload(path, file, { contentType: file.type })
+    const path = await uploadMedia(file);
     if (upErr) { setError(upErr.message); setSending(false); return }
-    const { data: pub } = supabase.storage.from('chat-media').getPublicUrl(path)
+    const pub = { publicUrl: path }; // Cloudflare will proxy it
     const payload = { conversation_id: conversationId, sender_id: myId, content: '', media_url: pub?.publicUrl, media_type: file.type, media_name: file.name }
     if (disappearingTimer) payload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
     if (replyingTo?.id) payload.reply_to_id = replyingTo.id
@@ -644,10 +644,9 @@ export default function Chat() {
       if (!res) return
       if (res.duration < 1) { setError('Recording too short.'); return }
       setSending(true)
-      const path = `${conversationId}/${crypto.randomUUID()}.webm`
-      const { error: upErr } = await supabase.storage.from('chat-media').upload(path, res.blob, { upsert: false, contentType: res.mimeType })
+      const path = await uploadMedia(res.blob);
       if (upErr) { setError(upErr.message); setSending(false); return }
-      const { data: pub } = supabase.storage.from('chat-media').getPublicUrl(path)
+      const pub = { publicUrl: path }; // Cloudflare will proxy it
       const payload = { 
         conversation_id: conversationId, 
         sender_id: myId, 
@@ -740,10 +739,9 @@ export default function Chat() {
       let mediaUrl = null, mediaType = null, mediaName = null
       if (attachment) {
         const ext = attachment.name.split(".").pop()?.toLowerCase() || "jpg"
-        const path = "request-media/" + crypto.randomUUID() + "." + ext
-        const { error: upErr } = await supabase.storage.from("chat-media").upload(path, attachment, { upsert: false, contentType: attachment.type })
+        const path = await uploadMedia(attachment);
         if (upErr) { setSending(false); setError(upErr.message); return }
-        const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
+        const pub = { publicUrl: path }; // Cloudflare will proxy it
         mediaUrl = pub?.publicUrl || null
         mediaType = attachment.type
         mediaName = attachment.name
@@ -772,10 +770,9 @@ export default function Chat() {
     let mediaUrl = null, mediaType = null, mediaName = null
     if (attachment) {
       const ext = attachment.name.split('.').pop()?.toLowerCase() || 'jpg'
-      const path = `${conversationId}/${crypto.randomUUID()}.${ext}`
-      const { error: upErr } = await supabase.storage.from('chat-media').upload(path, attachment, { upsert: false, contentType: attachment.type })
+      const path = await uploadMedia(attachment);
       if (upErr) { setSending(false); setError(friendlyError(upErr)); return }
-      const { data: pub } = supabase.storage.from('chat-media').getPublicUrl(path)
+      const pub = { publicUrl: path }; // Cloudflare will proxy it
       mediaUrl = pub?.publicUrl || null
       mediaType = attachment.type
       mediaName = attachment.name

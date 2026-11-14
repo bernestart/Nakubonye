@@ -1,3 +1,4 @@
+import { getMediaUrl } from '../lib/api';
 import { getRankedFeed, getCommunityPosts, toggleLikeAPI } from '../lib/api';
 import { AnimatePresence } from "framer-motion";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react"
@@ -246,7 +247,13 @@ export default function Feed() {
         } catch (err) {
           console.error("Community Feed API Error:", err);
         }
-      communityPosts = (rows || []).map((r) => ({ ...r, _source: "community" }))
+      communityPosts = (rows || []).map((r) => {
+          // FIX: Ensure image_path is converted to image_paths array for the UI
+          const paths = Array.isArray(r.image_paths) && r.image_paths.length > 0 
+            ? r.image_paths 
+            : (r.image_path ? [r.image_path] : []);
+          return { ...r, _source: "community", image_paths: paths };
+        });
     }
 
     // 3b. Personal posts (from me + matches + people I follow)
@@ -1611,7 +1618,7 @@ export default function Feed() {
             // LISTING render
             if (p._source === "listing") {
               const img = p.image_paths?.[0]
-                ? supabase.storage.from("listing-media").getPublicUrl(p.image_paths[0]).data?.publicUrl
+                ? getMediaUrl(p.image_paths[0], "listing-media")
                 : null
               return (
                 <Fragment key={"listing-" + p.id}>
@@ -1638,7 +1645,7 @@ export default function Feed() {
             // SERVICE render
             if (p._source === "service") {
               const img = p.image_paths?.[0]
-                ? supabase.storage.from("service-media").getPublicUrl(p.image_paths[0]).data?.publicUrl
+                ? getMediaUrl(p.image_paths[0], "service-media")
                 : null
               return (
                 <Fragment key={"service-" + p.id}>
@@ -1669,7 +1676,7 @@ export default function Feed() {
             const comm = communities.get(p.community_id)
             const photoPath = photos.get(p.author_id)
             const name = prof?.display_name || prof?.username || "Someone"
-            const imageUrl = p.image_path ? supabase.storage.from("community-media").getPublicUrl(p.image_path).data?.publicUrl : null
+            const imageUrl = p.image_path ? `https://nakubonye.bernestart.workers.dev/api/media/${p.image_path}` : null
             return (
               <Fragment key={p.id}>
               <article ref={observePost} data-post-id={p.id} data-post-key={p._source + ":" + p.id} className="mb-2 rounded-xl bg-white/[0.03] border border-white/8 overflow-hidden">
@@ -2178,7 +2185,7 @@ function EmptyFeed({ nav, suggested, myId }) {
           </div>
           <div className="grid grid-cols-2 gap-2">
             {listings.map((l) => {
-              const img = l.image_paths?.[0] ? supabase.storage.from("listing-media").getPublicUrl(l.image_paths[0]).data?.publicUrl : null
+              const img = l.image_paths?.[0] ? getMediaUrl(l.image_paths[0], "listing-media") : null
               return (
                 <button key={l.id} onClick={() => { tap("light"); nav("/marketplace/" + l.id) }}
                   className="rounded-xl overflow-hidden bg-white/[0.03] border border-white/8 text-left active:opacity-90">
@@ -2206,7 +2213,7 @@ function EmptyFeed({ nav, suggested, myId }) {
           </div>
           <div className="flex flex-col gap-2">
             {services.map((s) => {
-              const img = s.image_paths?.[0] ? supabase.storage.from("service-media").getPublicUrl(s.image_paths[0]).data?.publicUrl : null
+              const img = s.image_paths?.[0] ? getMediaUrl(s.image_paths[0], "service-media") : null
               return (
                 <button key={s.id} onClick={() => { tap("light"); nav("/services/" + s.id) }}
                   className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.03] border border-white/8 text-left active:opacity-90">

@@ -12,6 +12,8 @@ export default function SignUp() {
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [dateOfBirth, setDateOfBirth] = useState('')
+  const [gender, setGender] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -48,7 +50,7 @@ export default function SignUp() {
 
     await supabase
       .from('profiles')
-      .update({ display_name: dn, username: un })
+      .update({ display_name: dn, username: un, date_of_birth: dateOfBirth || null, gender: gender || null })
       .eq('id', signUpData.session.user.id)
 
     // Refresh the in-memory profile so Settings shows the real name/username
@@ -152,8 +154,21 @@ export default function SignUp() {
             </div>
           )}
 
-          <button
-            type="submit"
+          <div>
+            <label className="block text-white/70 text-[12.5px] font-semibold mb-2">Date of Birth</label>
+            <input type="text" placeholder="DD/MM/YYYY" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} required disabled={busy} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500" />
+          </div>
+          <div>
+            <label className="block text-white/70 text-[12.5px] font-semibold mb-2">Gender</label>
+            <select value={gender} onChange={(e) => setGender(e.target.value)} required disabled={busy} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500">
+              <option value="">Select...</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="non_binary">Non-binary</option>
+              <option value="prefer_not_to_say">Prefer not to say</option>
+            </select>
+          </div>
+          <button type="submit"
             disabled={busy}
             className="mt-2 w-full text-white font-bold text-[16px] rounded-full py-[16px] transition-transform active:scale-[0.98] disabled:opacity-60"
             style={{

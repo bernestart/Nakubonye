@@ -222,11 +222,11 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
         const f = files[i]
         const ext = (f.name.split(".").pop() || "jpg").toLowerCase()
         const path = `${myId}/${crypto.randomUUID()}.${ext}`
-        const { error: upErr } = await supabase.storage
-          .from("community-media")
-          .upload(path, f, { upsert: false, contentType: f.type })
-        if (upErr) throw new Error(upErr.message)
-        uploadedPaths.push(path)
+        // META-SCALE: Upload directly to Telegram via Cloudflare
+        const formData = new FormData();
+        formData.append("file", f);
+        const fileId = await uploadMedia(f);
+        uploadedPaths.push(fileId); // Save the Telegram file_id
       }
       const location = await getCurrentLocation()
         const scheduledFor = publishAt && new Date(publishAt).getTime() > Date.now() + 60_000
@@ -605,7 +605,7 @@ export default function PostComposer({ onClose, onDone, onOptimistic, onResolve,
             )}
             {(reshareRef.snapshot.image_path || reshareRef.snapshot.image_paths?.[0]) && (
               <img
-                src={supabase.storage.from("community-media").getPublicUrl(reshareRef.snapshot.image_path || reshareRef.snapshot.image_paths[0]).data?.publicUrl}
+                src={`https://nakubonye.bernestart.workers.dev/api/media/${reshareRef.snapshot.image_path || reshareRef.snapshot.image_paths[0]}`}
                 alt=""
                 className="mt-2 rounded-xl max-h-48 w-full object-cover"
               />

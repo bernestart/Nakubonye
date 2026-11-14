@@ -1,3 +1,4 @@
+import { getMediaUrl } from '../lib/api';
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Heart, MessageCircle, Share2 } from "lucide-react"
@@ -38,7 +39,7 @@ export default function ResharedPost({ snapshot }) {
   if (!snapshot) return null
   const name = author?.display_name || author?.username || "Someone"
   const image = snapshot.image_path
-    ? supabase.storage.from("community-media").getPublicUrl(snapshot.image_path).data?.publicUrl
+    ? getMediaUrl(snapshot.image_path, "community-media")
     : null
 
   return (

@@ -1,3 +1,4 @@
+import { getMediaUrl } from '../lib/api';
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Search, Plus, MapPin, Store, Heart, Trash2, MoreVertical, Eye, Edit3, Tag, Filter } from 'lucide-react'
@@ -352,7 +353,7 @@ function MyListingsTab({ nav, myId }) {
 
 function MyListingRow({ listing, onOpen, onMenu }) {
   const img = listing.image_paths?.[0]
-    ? supabase.storage.from('listing-media').getPublicUrl(listing.image_paths[0]).data?.publicUrl
+    ? getMediaUrl(listing.image_paths[0], 'listing-media')
     : null
   const sold = listing.status === 'sold'
   return (
@@ -428,7 +429,7 @@ function SavedTab({ nav, myId }) {
 /* ============================== SHARED ============================== */
 function ListingCard({ listing, onClick }) {
   const img = listing.image_paths?.[0]
-    ? supabase.storage.from('listing-media').getPublicUrl(listing.image_paths[0]).data?.publicUrl
+    ? getMediaUrl(listing.image_paths[0], 'listing-media')
     : null
   return (
     <button

@@ -1,3 +1,4 @@
+import { getMediaUrl } from '../lib/api';
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
@@ -192,7 +193,7 @@ export default function Saved() {
           <div className="px-3 grid grid-cols-2 gap-2">
             {listings.map((l) => {
               const img = l.image_paths?.[0]
-                ? supabase.storage.from("listing-media").getPublicUrl(l.image_paths[0]).data?.publicUrl
+                ? getMediaUrl(l.image_paths[0], "listing-media")
                 : null
               return (
                 <button

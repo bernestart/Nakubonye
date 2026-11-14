@@ -34,21 +34,18 @@ export default function Welcome() {
 
         {/* Tagline */}
         <p className="text-purple-100/90 text-[19px] leading-[1.45] max-w-[300px] mb-10 font-semibold">
-          Somebody is
+          Connect with your world.
           <br />
-          looking for you.
+          Share moments. Build communities.
         </p>
 
-        {/* Three hearts */}
-        <div className="flex items-end justify-center gap-2 mb-12">
-          <span className="text-[36px] leading-none opacity-90">❤️</span>
-          <span
-            className="text-[64px] leading-none"
-            style={{ filter: 'drop-shadow(0 8px 24px rgba(236,72,153,0.55))' }}
-          >
-            💗
+        {/* Global Connections */}
+        <div className="flex items-center justify-center gap-4 mb-12 opacity-80">
+          <span className="text-[28px] leading-none">🌍</span>
+          <span className="text-[38px] leading-none" style={{ filter: 'drop-shadow(0 8px 24px rgba(168,85,247,0.45))' }}>
+            🤝
           </span>
-          <span className="text-[32px] leading-none opacity-90 -ml-1">💕</span>
+          <span className="text-[28px] leading-none">✨</span>
         </div>
       </main>
 

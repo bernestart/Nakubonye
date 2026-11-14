@@ -1,3 +1,4 @@
+import { getMediaUrl } from '../lib/api';
 import { useCallback, useEffect, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import {
@@ -496,7 +497,7 @@ export default function Search() {
             <div className="flex flex-col gap-1.5">
               {posts.slice(0, tab === "top" ? 4 : posts.length).map((p) => {
                 const img = p.image_path
-                  ? supabase.storage.from(p._source === "personal" ? "community-media" : "community-media").getPublicUrl(p.image_path).data?.publicUrl
+                  ? getMediaUrl(p.image_path, p._source === "personal" ? "community-media" : "community-media")
                   : null
                 return (
                   <button
@@ -582,7 +583,7 @@ export default function Search() {
             <div className="grid grid-cols-2 gap-2">
               {listings.slice(0, tab === "top" ? 4 : listings.length).map((l) => {
                 const img = l.image_paths?.[0]
-                  ? supabase.storage.from("listing-media").getPublicUrl(l.image_paths[0]).data?.publicUrl
+                  ? getMediaUrl(l.image_paths[0], "listing-media")
                   : null
                 return (
                   <button
@@ -617,7 +618,7 @@ export default function Search() {
             <div className="flex flex-col gap-1.5">
               {services.slice(0, tab === "top" ? 3 : services.length).map((s) => {
                 const img = s.image_paths?.[0]
-                  ? supabase.storage.from("service-media").getPublicUrl(s.image_paths[0]).data?.publicUrl
+                  ? getMediaUrl(s.image_paths[0], "service-media")
                   : null
                 return (
                   <button

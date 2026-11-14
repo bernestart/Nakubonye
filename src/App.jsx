@@ -1,5 +1,7 @@
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
+import { StatusBar } from '@capacitor/status-bar';
+import { Capacitor } from '@capacitor/core';
 import { useSafeArea } from './lib/useSafeArea'
 import { AuthProvider, useAuth } from './lib/auth'
 import { SettingsProvider } from './lib/settings.jsx'
@@ -228,6 +230,12 @@ function PresenceKeeper() {
 }
 
 export default function App() {
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      StatusBar.setOverlaysWebView({ overlay: false });
+    }
+  }, []);
+
   useSafeArea();
   return (
     <AuthProvider>

@@ -1,3 +1,4 @@
+import { getMediaUrl } from '../lib/api';
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, MapPin, Tag, Heart, MessageCircle, Share2, MoreVertical, ChevronLeft, ChevronRight, Edit3, Trash2 } from 'lucide-react'
@@ -192,7 +193,7 @@ export default function ListingDetail() {
   const photos = listing.image_paths || []
   const isOwner = listing.seller_id === myId
   const photoUrl = photos[photoIdx]
-    ? supabase.storage.from('listing-media').getPublicUrl(photos[photoIdx]).data?.publicUrl
+    ? getMediaUrl(photos[photoIdx], 'listing-media')
     : null
   const sellerName = seller?.display_name || seller?.username || 'Seller'
   const sellerAvatar = seller?.photo_url ? publicPhotoUrl(seller.photo_url) : null

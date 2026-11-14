@@ -1,3 +1,4 @@
+import { getMediaUrl } from '../lib/api';
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { ArrowLeft, Share2, Heart } from "lucide-react"
@@ -152,7 +153,7 @@ export default function Memories() {
                         >
                           {it.image_path && (
                             <img
-                              src={supabase.storage.from("community-media").getPublicUrl(it.image_path).data?.publicUrl}
+                              src={getMediaUrl(it.image_path, "community-media")}
                               alt=""
                               className="w-full max-h-[300px] object-cover"
                             />

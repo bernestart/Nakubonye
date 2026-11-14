@@ -1,3 +1,4 @@
+import { uploadMedia, getMediaUrl } from '../lib/api';
 import { useGesture } from "@use-gesture/react"
 import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
@@ -280,8 +281,9 @@ export default function StoryViewer({ groups, startIndex = 0, onClose, onViewed 
       const { data: sess } = await supabase.auth.getSession()
       const senderId = sess?.session?.user?.id
       if (!senderId) { setSending(false); return }
-      const path = `story-replies/${senderId}/${crypto.randomUUID()}.jpg`
-      const { error: upErr } = await supabase.storage.from("chat-media").upload(path, blob, { contentType: "image/jpeg" })
+      let path = ""
+      path = await uploadMedia(blob);
+        const upErr = null; // Telegram handles errors internally
       if (upErr) throw upErr
       const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
       const { error: sendErr } = await supabase.from("messages").insert({

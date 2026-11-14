@@ -1,3 +1,4 @@
+import { getMediaUrl } from '../lib/api';
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Heart, MessageCircle, Share2, MoreVertical, Globe, Users, Lock, X } from "lucide-react"
@@ -11,7 +12,7 @@ import PostImages from "./PostImages"
 export default function ProfilePostCard({ post, authorProfile, authorPhoto, isMe, onOpenMenu, onHide, reactionCount = 0, liked = false, reactionEmoji = "❤️", commentCount = 0, shareCount = 0, onToggleLike, onOpenReposts, topReactors = [] }) {
   const nav = useNavigate()
   const imageUrl = post.image_path
-    ? supabase.storage.from("community-media").getPublicUrl(post.image_path).data?.publicUrl
+    ? getMediaUrl(post.image_path, "community-media")
     : null
   const isReshare = !!post.reshared_from_type
 
