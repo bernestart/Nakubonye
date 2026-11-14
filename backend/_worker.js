@@ -36,7 +36,32 @@ export default {
     }
 
     try {
-      // 1. GET RANKED FEED
+      // 1. MEDIA MICROSERVICE (Telegram Upload)
+      if (path === "/api/upload" && request.method === "POST") {
+        const formData = await request.formData();
+        const file = formData.get("file");
+        if (!file) return new Response(JSON.stringify({ success: false, error: "No file provided" }), { status: 400, headers: cors });
+
+        const tgFormData = new FormData();
+        tgFormData.append("chat_id", env.TG_CHAT_ID);
+        tgFormData.append("document", file); 
+
+        const tgRes = await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/sendDocument`, {
+          method: "POST",
+          body: tgFormData
+        });
+
+        const tgData = await tgRes.json();
+        if (!tgData.ok) throw new Error(tgData.description || "Telegram upload failed");
+
+        const fileId = tgData.result.document.file_id;
+
+        return new Response(JSON.stringify({ success: true, file_id: fileId }), {
+          headers: { ...cors, "Content-Type": "application/json" }
+        });
+      }
+
+      // 2. GET RANKED FEED
       if (path === "/api/feed" && request.method === "GET") {
         const userId = url.searchParams.get("userId");
         const limit = url.searchParams.get("limit") || 20;
@@ -52,7 +77,7 @@ export default {
         return new Response(JSON.stringify({ success: true, data: postsWithLikes }), { headers: { ...cors, "Content-Type": "application/json" } });
       }
 
-      // 2. POSTS (Personal)
+      // 3. POSTS (Personal)
       if (path === "/api/posts") {
         if (request.method === "POST") {
           const body = await request.json();
@@ -90,11 +115,9 @@ export default {
         }
       }
 
-      // 3. COMMUNITY POSTS (Feed & Single)
+      // 4. COMMUNITY POSTS
       if (path === "/api/community/posts" && request.method === "GET") {
         const singlePostId = url.searchParams.get("id");
-        
-        // FETCH SINGLE POST (For PostDetail)
         if (singlePostId) {
           const data = await queryDatabase(`SELECT * FROM community_posts WHERE id = $1 AND deleted_at IS NULL`, [singlePostId]);
           if (data.rows.length === 0) return new Response(JSON.stringify({ success: false, error: "Not found" }), { status: 404, headers: cors });
@@ -102,13 +125,11 @@ export default {
           return new Response(JSON.stringify({ success: true, data: { ...data.rows[0], likes_count: likesCount } }), { headers: { ...cors, "Content-Type": "application/json" } });
         }
 
-        // FETCH MULTIPLE COMMUNITIES (For Feed)
         const idsParam = url.searchParams.get("communityIds");
         const userId = url.searchParams.get("userId"); 
         if (!idsParam || !userId) return new Response(JSON.stringify({ success: false, error: "communityIds and userId required" }), { status: 400, headers: cors });
 
         const communityIds = idsParam.split(',').map(Number);
-
         const data = await queryDatabase(`
           SELECT cp.id, cp.author_id, cp.community_id, cp.content, cp.image_path, cp.image_paths, cp.created_at, cp.pinned_until, cp.is_announcement
           FROM community_posts cp
@@ -127,7 +148,7 @@ export default {
         return new Response(JSON.stringify({ success: true, data: postsWithLikes }), { headers: { ...cors, "Content-Type": "application/json" } });
       }
 
-      // 4. LIKES
+      // 5. LIKES
       if (path === "/api/likes") {
         const redisCommand = async (commandArray) => {
           const res = await fetch(env.UPSTASH_REDIS_URL, {
@@ -152,7 +173,7 @@ export default {
         }
       }
 
-      // 5. LIKES LIST
+      // 6. LIKES LIST
       if (path === "/api/likes/list" && request.method === "GET") {
         const postId = url.searchParams.get("postId");
         const redisRes = await fetch(env.UPSTASH_REDIS_URL, {
@@ -170,7 +191,7 @@ export default {
         return new Response(JSON.stringify({ success: true, data: profiles.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
       }
 
-      // 6. COMMENTS
+      // 7. COMMENTS
       if (path === "/api/comments") {
         if (request.method === "POST") {
           const body = await request.json();
