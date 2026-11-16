@@ -1,3 +1,4 @@
+import { uploadMedia } from '../lib/api';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Timer, Search, Send, Sparkles, Paperclip, Camera, X , Mic, Square , Pin , MoreVertical , Eraser , Bell, BellOff , Flag, Trash2} from 'lucide-react'
@@ -101,16 +102,17 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
     setIsMuted(!!muteRes.data)
     setDisappearingTimer(communityRes.data?.disappearing_timer_seconds || null)
 
-    const { data: rows, error: err } = await supabase
-      .from('community_messages')
-      .select('id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, created_at, highlighted_until, metadata, expires_at, view_once, viewed_by')
-      .eq('community_id', communityId)
-      .order('created_at', { ascending: true })
-      .limit(200)
+    // META-SCALE: Fetch from Cloudflare API
+    let rows = [];
+    try {
+      const res = await fetch(`https://nakubonye.bernestart.workers.dev/api/community/messages?communityId=${communityId}`);
+      const json = await res.json();
+      if (json.success) rows = json.data;
+    } catch (err) {
+      console.error("Failed to load messages", err);
+    }
 
-    if (err) { setError(err.message); setLoading(false); return }
-
-    const list = rows || []
+    const list = rows || [];
     const __now = Date.now()
     setMessages(list.filter((m) => !m.expires_at || new Date(m.expires_at).getTime() > __now))
 
@@ -310,15 +312,38 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
     const file = e.target.files?.[0]; if (!file) return
     if (file.size > 15 * 1024 * 1024) { setError("File too large"); return }
     setSending(true)
-    const path = `community/${communityId}/${crypto.randomUUID()}.${file.name.split('.').pop()}`
-    const { error: upErr } = await supabase.storage.from('chat-media').upload(path, file, { contentType: file.type })
-    if (upErr) { setError(upErr.message); setSending(false); return }
-    const { data: pub } = supabase.storage.from('chat-media').getPublicUrl(path)
-    const payload = { community_id: communityId, sender_id: myId, content: '', media_url: pub?.publicUrl, media_type: file.type, media_name: file.name }
-    if (disappearingTimer) payload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
-    if (replyingTo?.id) payload.reply_to_id = replyingTo.id
-    const { data: inserted, error: sendErr } = await supabase.from('community_messages').insert(payload).select().single()
-    if (sendErr) setError(sendErr.message); else if (inserted) setMessages(cur => [...cur, inserted])
+    // META-SCALE: Upload to Telegram and save to Neon
+    let fileId = "";
+    try {
+      fileId = await uploadMedia(file);
+    } catch (upErr) {
+      setError(upErr.message); setSending(false); return;
+    }
+    
+    const payload = { 
+      communityId, 
+      senderId: myId, 
+      content: '', 
+      mediaUrl: fileId, 
+      mediaType: file.type, 
+      mediaName: file.name 
+    };
+    
+    try {
+      const res = await fetch("https://nakubonye.bernestart.workers.dev/api/community/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      if (json.success && json.data) {
+        setMessages(cur => [...cur, json.data]);
+      } else {
+        setError(json.error || "Failed to send");
+      }
+    } catch (err) {
+      setError(err.message);
+    }
     setSending(false); setReplyingTo(null); if (docInputRef.current) docInputRef.current.value = ''
   }
 
