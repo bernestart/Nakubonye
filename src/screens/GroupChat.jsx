@@ -212,22 +212,17 @@ export default function GroupChat() {
   // Realtime
   useEffect(() => {
     if (!groupId) return
-    const ch = supabase
-      .channel("group-" + groupId)
-      .on("postgres_changes",
-        { event: "INSERT", schema: "public", table: "group_messages", filter: "group_id=eq." + groupId },
-        (payload) => {
-          const m = payload.new
-          setMessages((cur) => cur.some((x) => x.id === m.id) ? cur : [...cur, m])
-        })
-      .on("postgres_changes",
-        { event: "UPDATE", schema: "public", table: "group_messages", filter: "group_id=eq." + groupId },
-        (payload) => {
-          const m = payload.new
-          setMessages((cur) => cur.map((x) => x.id === m.id ? { ...x, ...m } : x))
-        })
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    // META-SCALE: Cloudflare WebSocket for Groups
+    const ws = new WebSocket(`wss://nakubonye.bernestart.workers.dev/api/ws/group-${groupId}`);
+    
+    ws.onmessage = (event) => {
+      try {
+        const m = JSON.parse(event.data);
+        setMessages((cur) => cur.some((x) => x.id === m.id) ? cur : [...cur, m]);
+      } catch (e) { console.error("WS Error", e); }
+    };
+    
+    return () => { ws.close(); }
   }, [groupId])
 
   // Auto-scroll
@@ -341,7 +336,18 @@ export default function GroupChat() {
     const payload = { group_id: groupId, sender_id: myId, content: '', media_url: pub?.publicUrl, media_type: file.type, media_name: file.name }
     if (disappearingTimer) payload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
     if (replyingTo?.id) payload.reply_to_id = replyingTo.id
-    const { data: inserted, error: sendErr } = await supabase.from('group_messages').insert(payload).select().single()
+    // META-SCALE: Send to Cloudflare/Neon
+    let inserted = null;
+    let sendErr = null;
+    try {
+      const res = await fetch("https://nakubonye.bernestart.workers.dev/api/group/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      if (json.success) { inserted = json.data; } else { sendErr = new Error(json.error); }
+    } catch (err) { sendErr = err; }
     if (sendErr) setError(sendErr.message); else if (inserted) setMessages(cur => [...cur, inserted])
     setSending(false); setReplyingTo(null); if (docInputRef.current) docInputRef.current.value = ''
   }

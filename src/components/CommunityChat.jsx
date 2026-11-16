@@ -454,47 +454,52 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
   async function send() {
     const body = text.trim()
     if ((!body && !attachment) || sending || !myId) return
+
     setSending(true); tap('light')
 
     let mediaUrl = null, mediaType = null, mediaName = null
     if (attachment) {
-      const ext = (attachment.name.split(".").pop() || "jpg").toLowerCase()
-      const path = "community-media/" + communityId + "/" + crypto.randomUUID() + "." + ext
-      const { error: upErr } = await supabase.storage
-        .from("chat-media")
-        .upload(path, attachment, { upsert: false, contentType: attachment.type })
-      if (upErr) { setSending(false); setError(upErr.message); return }
-      const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
-      mediaUrl = pub?.publicUrl || null
-      mediaType = attachment.type
-      mediaName = attachment.name
+      try {
+        // META-SCALE: Upload attachment to Telegram
+        mediaUrl = await uploadMedia(attachment);
+        mediaType = attachment.type;
+        mediaName = attachment.name;
+      } catch (upErr) {
+        setSending(false); setError(upErr.message); return;
+      }
     }
 
     setText(""); const bodyToSend = body; clearAttachment()
 
-    const payload = {
-      community_id: communityId,
-      sender_id: myId,
-      content: bodyToSend || "",
+    // META-SCALE: Send to Neon via Cloudflare
+    try {
+      const res = await fetch("https://nakubonye.bernestart.workers.dev/api/community/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          communityId: communityId,
+          senderId: myId,
+          content: bodyToSend || "",
+          mediaUrl: mediaUrl,
+          mediaType: mediaType,
+          mediaName: mediaName,
+          replyToId: replyingTo?.id
+        })
+      });
+      const json = await res.json();
+      if (json.success && json.data) {
+        setMessages((cur) => cur.some((x) => x.id === json.data.id) ? cur : [...cur, json.data]);
+      } else {
+        setError(json.error || "Failed to send message");
+      }
+    } catch (err) {
+      setError(err.message);
     }
-    if (disappearingTimer) payload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
-    if (viewOnce && mediaUrl) { payload.view_once = true; payload.viewed_by = [] }
-    if (mediaUrl) { payload.media_url = mediaUrl; payload.media_type = mediaType; payload.media_name = mediaName }
-    if (replyingTo?.id) payload.reply_to_id = replyingTo.id
+    
     setReplyingTo(null)
-
-    const { error: err } = await supabase
-      .from('community_messages')
-      .insert(payload)
-
-    if (err) {
-      setError(err.message)
-      setText(bodyToSend)
-    } else {
-      load()
-    }
     setSending(false)
   }
+      
 
   async function highlightMessage(messageId) {
     if (!confirm('Highlight this message for 24 hours? Costs 25 coins.')) return

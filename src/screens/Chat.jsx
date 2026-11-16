@@ -626,7 +626,18 @@ export default function Chat() {
     if (disappearingTimer) payload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
     if (replyingTo?.id) payload.reply_to_id = replyingTo.id
     const finalPayload = { ...payload, view_once: viewOnce };
-    const { data: inserted, error: sendErr } = await supabase.from('messages').insert(finalPayload).select().single();
+    // META-SCALE: Send to Cloudflare/Neon
+    let inserted = null;
+    let sendErr = null;
+    try {
+      const res = await fetch("https://nakubonye.bernestart.workers.dev/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(finalPayload)
+      });
+      const json = await res.json();
+      if (json.success) { inserted = json.data; } else { sendErr = new Error(json.error); }
+    } catch (err) { sendErr = err; }
     if (!sendErr) setViewOnce(false); // Reset toggle after send
     if (sendErr) setError(sendErr.message); else if (inserted) setMessages(cur => [...cur, inserted])
     setSending(false); setReplyingTo(null); if (docInputRef.current) docInputRef.current.value = ''
