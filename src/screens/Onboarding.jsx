@@ -115,7 +115,7 @@ export default function Onboarding() {
     try {
       const d = {
         step,
-        displayName, username, dob, gender: gender || profile?.gender: gender || profile?.gender,
+        displayName, username, dob, gender,
         preferredGender, minAge, maxAge, lookingFor,
         city, country, bio,
         selectedInterests,
@@ -123,7 +123,7 @@ export default function Onboarding() {
       localStorage.setItem(OB_KEY, JSON.stringify(d))
     } catch (e) { /* ignore */ }
   }, [
-    step, displayName, username, dob, gender: gender || profile?.gender: gender || profile?.gender,
+    step, displayName, username, dob, gender,
     preferredGender, minAge, maxAge, lookingFor,
     city, country, bio, selectedInterests,
   ])
@@ -151,7 +151,7 @@ export default function Onboarding() {
 
     supabase
       .from('discovery_preferences')
-      .select('preferred_gender: gender || profile?.gender: gender || profile?.gender, min_age, max_age')
+      .select('preferred_gender, min_age, max_age')
       .eq('user_id', session.user.id)
       .maybeSingle()
       .then(({ data }) => {
@@ -268,7 +268,7 @@ export default function Onboarding() {
         display_name: displayName.trim(),
         username: username.trim().toLowerCase(),
         date_of_birth: dob || profile?.date_of_birth,
-        gender: gender || profile?.gender: gender || profile?.gender,
+        gender,
         looking_for: lookingFor,
         city: city.trim(),
         country: country.trim() || 'Burundi',
