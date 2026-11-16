@@ -90,6 +90,28 @@ export default {
         return obj.fetch(request);
       }
 
+      // ONLINE PRESENCE (Redis)
+      if (path === "/api/presence" && request.method === "POST") {
+        const body = await request.json();
+        if (body.isOnline) {
+          await redisCommand(["SET", `online:${body.userId}`, "true", "EX", 300]); 
+        } else {
+          await redisCommand(["DEL", `online:${body.userId}`]);
+        }
+        return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+      }
+
+      // TYPING INDICATOR (Redis)
+      if (path === "/api/typing" && request.method === "POST") {
+        const body = await request.json();
+        if (body.isTyping) {
+          await redisCommand(["SET", `typing:${body.roomId}:${body.userId}`, "true", "EX", 3]);
+        } else {
+          await redisCommand(["DEL", `typing:${body.roomId}:${body.userId}`]);
+        }
+        return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+      }
+
       // 0. MEDIA PROXY
       if (path.startsWith("/api/media/")) {
         const fileId = decodeURIComponent(path.split("/api/media/")[1]);
