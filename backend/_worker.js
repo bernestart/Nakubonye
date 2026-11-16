@@ -1,3 +1,38 @@
+export class ChatRoom {
+  constructor(state, env) {
+    this.state = state;
+    this.sessions = [];
+  }
+
+  async fetch(request) {
+    const upgradeHeader = request.headers.get('Upgrade');
+    if (!upgradeHeader || upgradeHeader !== 'websocket') {
+      return new Response('Expected Upgrade: websocket', { status: 426 });
+    }
+
+    const webSocketPair = new WebSocketPair();
+    const [client, server] = Object.values(webSocketPair);
+
+    this.sessions.push(server);
+    server.accept();
+
+    server.addEventListener('close', () => {
+      this.sessions = this.sessions.filter(s => s !== server);
+    });
+
+    server.addEventListener('message', (event) => {
+      // Broadcast message to everyone else in the room
+      this.sessions.forEach(s => {
+        if (s !== server) {
+          try { s.send(event.data); } catch (e) {}
+        }
+      });
+    });
+
+    return new Response(null, { status: 101, webSocket: client });
+  }
+}
+
 export default {
   async fetch(request, env) {
     const cors = {
@@ -36,6 +71,14 @@ export default {
     }
 
     try {
+      // WEBSOCKET ROUTE (Real-Time Chat)
+      if (path.startsWith("/api/ws/")) {
+        const roomId = path.split("/api/ws/")[1];
+        const id = env.CHAT_ROOMS.idFromName(roomId);
+        const obj = env.CHAT_ROOMS.get(id);
+        return obj.fetch(request);
+      }
+
       // 0. MEDIA PROXY
       if (path.startsWith("/api/media/")) {
         const fileId = decodeURIComponent(path.split("/api/media/")[1]);
