@@ -160,7 +160,36 @@ export default {
         return new Response(JSON.stringify({ success: true, data: postsWithLikes }), { headers: { ...cors, "Content-Type": "application/json" } });
       }
 
-      // 5. LIKES
+      // 5. COMMUNITY MESSAGES (CHAT)
+      if (path === "/api/community/messages") {
+        if (request.method === "POST") {
+          const body = await request.json();
+          const insertQuery = `
+            INSERT INTO community_messages (community_id, sender_id, content, media_url, media_type, media_name, voice_duration_seconds) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *;
+          `;
+          const data = await queryDatabase(insertQuery, [
+            body.communityId, body.senderId, body.content, body.mediaUrl, body.mediaType, body.mediaName, body.voiceDuration
+          ]);
+          return new Response(JSON.stringify({ success: true, data: data.rows[0] }), { headers: { ...cors, "Content-Type": "application/json" } });
+        }
+        if (request.method === "GET") {
+          const communityId = url.searchParams.get("communityId");
+          if (!communityId) return new Response(JSON.stringify({ success: false, error: "communityId required" }), { status: 400, headers: cors });
+          
+          const data = await queryDatabase(`
+            SELECT m.*, p.display_name, p.username 
+            FROM community_messages m
+            LEFT JOIN profiles p ON p.id = m.sender_id
+            WHERE m.community_id = $1 AND m.deleted_at IS NULL
+            ORDER BY m.created_at ASC LIMIT 50
+          `, [communityId]);
+
+          return new Response(JSON.stringify({ success: true, data: data.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
+        }
+      }
+
+      // 6. LIKES
       if (path === "/api/likes") {
         const redisCommand = async (commandArray) => {
           const res = await fetch(env.UPSTASH_REDIS_URL, {
@@ -185,7 +214,7 @@ export default {
         }
       }
 
-      // 6. LIKES LIST
+      // 7. LIKES LIST
       if (path === "/api/likes/list" && request.method === "GET") {
         const postId = url.searchParams.get("postId");
         const redisRes = await fetch(env.UPSTASH_REDIS_URL, {
@@ -203,7 +232,7 @@ export default {
         return new Response(JSON.stringify({ success: true, data: profiles.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
       }
 
-      // 7. COMMENTS
+      // 8. COMMENTS
       if (path === "/api/comments") {
         if (request.method === "POST") {
           const body = await request.json();
