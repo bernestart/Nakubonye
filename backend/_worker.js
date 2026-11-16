@@ -6,6 +6,16 @@ export class ChatRoom {
 
   async fetch(request) {
     const upgradeHeader = request.headers.get('Upgrade');
+    
+    // If it's a POST, it's a broadcast from the API
+    if (request.method === 'POST' && upgradeHeader !== 'websocket') {
+      const message = await request.text();
+      this.sessions.forEach(s => {
+        try { s.send(message); } catch (e) {}
+      });
+      return new Response("Broadcasted", { status: 200 });
+    }
+
     if (!upgradeHeader || upgradeHeader !== 'websocket') {
       return new Response('Expected Upgrade: websocket', { status: 426 });
     }
@@ -214,7 +224,24 @@ export default {
           const data = await queryDatabase(insertQuery, [
             body.communityId, body.senderId, body.content, body.mediaUrl, body.mediaType, body.mediaName, body.voiceDuration
           ]);
-          return new Response(JSON.stringify({ success: true, data: data.rows[0] }), { headers: { ...cors, "Content-Type": "application/json" } });
+          
+          const newMessage = data.rows[0];
+          newMessage.display_name = "User"; // Placeholder, you can join profiles later
+          
+          // META-SCALE: Broadcast to WebSocket Room
+          try {
+            const roomId = body.communityId.toString();
+            const id = env.CHAT_ROOMS.idFromName(roomId);
+            const obj = env.CHAT_ROOMS.get(id);
+            await obj.fetch("https://dummy.com/", {
+              method: "POST",
+              body: JSON.stringify(newMessage)
+            });
+          } catch (wsErr) {
+            console.error("Broadcast failed", wsErr);
+          }
+
+          return new Response(JSON.stringify({ success: true, data: newMessage }), { headers: { ...cors, "Content-Type": "application/json" } });
         }
         if (request.method === "GET") {
           const communityId = url.searchParams.get("communityId");
