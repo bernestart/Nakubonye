@@ -195,17 +195,20 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
   // Realtime
   useEffect(() => {
     if (!communityId) return
-    const ch = supabase
-      .channel('community-chat-' + communityId)
-      .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'community_messages',
-          filter: 'community_id=eq.' + communityId },
-        (payload) => {
-          const m = payload.new
-          setMessages((cur) => cur.some((x) => x.id === m.id) ? cur : [...cur, m])
-        })
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    // META-SCALE: Cloudflare WebSocket Connection
+    const ws = new WebSocket(`wss://nakubonye.bernestart.workers.dev/api/ws/${communityId}`);
+
+    ws.onmessage = (event) => {
+      try {
+        const newMsg = JSON.parse(event.data);
+        setMessages((cur) => {
+          if (cur.find(m => m.id === newMsg.id)) return cur;
+          return [...cur, newMsg];
+        });
+      } catch (e) { console.error("WS parse error", e); }
+    };
+
+    return () => { ws.close(); }
   }, [communityId])
 
   // Auto-scroll on new messages
@@ -392,20 +395,22 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
     if (upErr) { setSending(false); setError(upErr.message); return }
     const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
 
-    const voicePayload = {
-      community_id: communityId,
-      sender_id: myId,
-      content: "",
-      media_url: pub?.publicUrl || null,
-      media_type: result.mimeType,
-      media_name: "Voice · " + result.seconds + "s",
-          ...(viewOnce ? { view_once: true, viewed_by: [] } : {}),
-    }
-    if (disappearingTimer) voicePayload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
-    const { error: err } = await supabase.from("community_messages").insert(voicePayload)
-    setSending(false)
-    if (err) { setError(err.message); return }
-    load()
+        // META-SCALE: Upload Voice to Telegram & Save to Neon
+        let fileId = "";
+        try { fileId = await uploadMedia(result.blob); } catch (uploadErr) { setSending(false); setError(uploadErr.message); return; }
+        const voicePayload = { communityId, senderId: myId, content: "", mediaUrl: fileId, mediaType: result.mimeType, mediaName: "Voice · " + result.seconds + "s", voiceDuration: result.seconds };
+        try {
+          const res = await fetch("https://nakubonye.bernestart.workers.dev/api/community/messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(voicePayload)
+          });
+          const json = await res.json();
+          if (json.success && json.data) {
+            setMessages((cur) => cur.some((x) => x.id === json.data.id) ? cur : [...cur, json.data]);
+          } else { setError(json.error || "Failed to send voice"); }
+        } catch (err) { setError(err.message); }
+        setSending(false);
   }
 
   async function startVoice() {
@@ -429,11 +434,18 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
       metadata: { poll },
     }
     if (disappearingTimer) payload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
-    const { data: inserted, error: err } = await supabase
-      .from("community_messages")
-      .insert(payload)
-      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, created_at, highlighted_until, metadata, view_once, viewed_by")
-      .single()
+        // META-SCALE: Save Poll to Neon via Cloudflare
+        try {
+          const res = await fetch("https://nakubonye.bernestart.workers.dev/api/community/messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ communityId: payload.community_id, senderId: payload.sender_id, content: payload.content, metadata: payload.metadata })
+          });
+          const json = await res.json();
+          if (json.success && json.data) {
+            setMessages((cur) => cur.some((x) => x.id === json.data.id) ? cur : [...cur, json.data]);
+          } else { setError(json.error || "Failed to send poll"); }
+        } catch (err) { setError(err.message); }
     if (!err && inserted) {
       setMessages((cur) => cur.some((x) => x.id === inserted.id) ? cur : [...cur, inserted])
     }
