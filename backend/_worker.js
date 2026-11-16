@@ -10,6 +10,7 @@ export class ChatRoom {
     // If it's a POST, it's a broadcast from the API
     if (request.method === 'POST' && upgradeHeader !== 'websocket') {
       const message = await request.text();
+      // Broadcast any type of payload (message, reaction, typing, read receipt)
       this.sessions.forEach(s => {
         try { s.send(message); } catch (e) {}
       });

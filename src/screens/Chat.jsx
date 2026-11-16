@@ -429,56 +429,41 @@ export default function Chat() {
 
   useEffect(() => {
     if (!conversationId) return
-    const channel = supabase
-      .channel('chat-' + conversationId)
-      .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: 'conversation_id=eq.' + conversationId },
-        (payload) => {
-          const m = payload.new
-          setMessages((cur) => cur.some((x) => x.id === m.id) ? cur : [...cur, m])
+    // META-SCALE: Cloudflare WebSocket for Direct Messages
+    const ws = new WebSocket(`wss://nakubonye.bernestart.workers.dev/api/ws/dm-${conversationId}`);
+    
+    ws.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        
+        // 1. Handle New Messages / Edits
+        if (payload.type === 'message' || payload.new || payload.id) {
+          const m = payload.data || payload.new || payload;
+          setMessages((cur) => cur.some((x) => x.id === m.id) ? cur.map(x => x.id === m.id ? {...x, ...m} : x) : [...cur, m]);
+          
           if (m.sender_id !== myId) {
             supabase.from('conversation_reads').upsert(
               { conversation_id: conversationId, user_id: myId, last_read_at: new Date().toISOString() },
               { onConflict: 'conversation_id,user_id' }
-            )
+            );
           }
-        })
-      .on('postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'messages', filter: 'conversation_id=eq.' + conversationId },
-        (payload) => {
-          const m = payload.new
-          setMessages((cur) => cur.map((x) => x.id === m.id ? { ...x, ...m } : x))
-        })
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'message_reactions' },
-        async () => {
-          const ids = messagesRef.current.map((m) => m.id)
-          if (!ids.length) return
-          const { data: reacts } = await supabase
-            .from('message_reactions').select('message_id, user_id, reaction').in('message_id', ids)
-          const byMsg = {}
-          ;(reacts || []).forEach((r) => {
-            byMsg[r.message_id] = byMsg[r.message_id] || []
-            byMsg[r.message_id].push({ user_id: r.user_id, reaction: r.reaction })
-          })
-          setReactions(byMsg)
-        })
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'conversation_reads', filter: 'conversation_id=eq.' + conversationId },
-        async () => {
-          const { data: theirRead } = await supabase
-            .from('conversation_reads').select('last_read_at')
-            .eq('conversation_id', conversationId).eq('user_id', otherId).maybeSingle()
-          setTheirLastRead(theirRead?.last_read_at || null)
-        })
-      .on('postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: 'id=eq.' + otherId },
-        (payload) => {
-          const next = payload.new?.last_seen_at
-          if (next) setOther((cur) => cur ? { ...cur, last_seen_at: next } : cur)
-        })
-      .subscribe()
-  return () => { supabase.removeChannel(channel) }
+        }
+        
+        // 2. Handle Reactions
+        if (payload.type === 'reaction') {
+           // Update local state for reactions (you will need to plug this into your reaction state)
+           console.log("New reaction received:", payload.data);
+        }
+        
+        // 3. Handle Typing Indicator
+        if (payload.type === 'typing') {
+           console.log("User is typing:", payload.data);
+        }
+        
+      } catch (e) { console.error("WS Error", e); }
+    };
+    
+    return () => { ws.close(); }
   }, [conversationId, myId, otherId])
 
   function onMsgPressStart(m) {
