@@ -178,19 +178,33 @@ export default {
 
       // 1. UPLOAD
       if (path === "/api/upload" && request.method === "POST") {
-        const formData = await request.formData();
-        const file = formData.get("file");
-        if (!file) return new Response(JSON.stringify({ success: false, error: "No file provided" }), { status: 400, headers: cors });
+        try {
+          const MAX_BYTES = 20 * 1024 * 1024;
+          const contentLength = Number(request.headers.get("content-length") || 0);
+          if (contentLength > MAX_BYTES + 512 * 1024) {
+            return new Response(JSON.stringify({ success: false, error: `File too large. Max 20MB (got ${(contentLength / 1024 / 1024).toFixed(1)}MB).` }), { status: 413, headers: { ...cors, "Content-Type": "application/json" } });
+          }
 
-        const tgFormData = new FormData();
-        tgFormData.append("chat_id", env.TG_CHAT_ID);
-        tgFormData.append("document", file); 
+          const formData = await request.formData();
+          const file = formData.get("file");
+          if (!file) return new Response(JSON.stringify({ success: false, error: "No file provided" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
 
-        const tgRes = await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/sendDocument`, { method: "POST", body: tgFormData });
-        const tgData = await tgRes.json();
-        if (!tgData.ok) throw new Error(tgData.description || "Telegram upload failed");
+          if (typeof file.size === "number" && file.size > MAX_BYTES) {
+            return new Response(JSON.stringify({ success: false, error: `File too large. Max 20MB (got ${(file.size / 1024 / 1024).toFixed(1)}MB).` }), { status: 413, headers: { ...cors, "Content-Type": "application/json" } });
+          }
 
-        return new Response(JSON.stringify({ success: true, file_id: tgData.result.document.file_id }), { headers: { ...cors, "Content-Type": "application/json" } });
+          const tgFormData = new FormData();
+          tgFormData.append("chat_id", env.TG_CHAT_ID);
+          tgFormData.append("document", file);
+
+          const tgRes = await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/sendDocument`, { method: "POST", body: tgFormData });
+          const tgData = await tgRes.json();
+          if (!tgData.ok) throw new Error(tgData.description || "Telegram upload failed");
+
+          return new Response(JSON.stringify({ success: true, file_id: tgData.result.document.file_id }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message || "Upload failed" }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
+        }
       }
 
       // 2. GET RANKED FEED
