@@ -1,3 +1,4 @@
+import { getAuth } from "./auth.js";
 export class ChatRoomSQLite {
   constructor(state, env) {
     this.state = state;
@@ -49,13 +50,24 @@ export default {
     const cors = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type"
+      "Access-Control-Allow-Headers": "Content-Type, Authorization"
     };
 
     if (request.method === "OPTIONS") return new Response(null, { headers: cors });
 
     const url = new URL(request.url);
     const path = url.pathname;
+
+    // Better Auth mount — all /api/auth/* requests go to Better Auth
+    if (path.startsWith("/api/auth/")) {
+      const auth = getAuth(env);
+      const res = await auth.handler(request);
+      const h = new Headers(res.headers);
+      h.set("Access-Control-Allow-Origin", "*");
+      h.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      h.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      return new Response(res.body, { status: res.status, headers: h });
+    }
 
     async function queryDatabase(sqlQuery, params = []) {
       const dbUrl = new URL(env.DATABASE_URL);
