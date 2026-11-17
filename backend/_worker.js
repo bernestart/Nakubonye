@@ -471,6 +471,29 @@ export default {
         }
       }
 
+      
+      // 9. CREATE/UPDATE PROFILE (Onboarding)
+      if (path === "/api/profile" && request.method === "POST") {
+        try {
+          const body = await request.json();
+          const query = `
+            INSERT INTO profiles (id, display_name, username, date_of_birth, gender)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (id) DO UPDATE SET 
+              display_name = EXCLUDED.display_name,
+              username = EXCLUDED.username,
+              date_of_birth = EXCLUDED.date_of_birth,
+              gender = EXCLUDED.gender
+            RETURNING *;
+          `;
+          const params = [body.id, body.display_name, body.username, body.date_of_birth, body.gender];
+          const data = await queryDatabase(query, params);
+          return new Response(JSON.stringify({ success: true, data: data.rows[0] }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });

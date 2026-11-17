@@ -1,192 +1,111 @@
-import { useState } from 'react'
-import { useAuth } from '../lib/auth'
-import { Link, useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
-import { friendlyError } from '../lib/errors'
-import BrandGlow from '../components/BrandGlow'
+import { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../lib/auth';
+import { API_BASE_URL } from '../lib/api';
 
 export default function SignUp() {
-  const nav = useNavigate()
-  const { refreshProfile } = useAuth()
-  const [displayName, setDisplayName] = useState('')
-  const [username, setUsername] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [dateOfBirth, setDateOfBirth] = useState('')
-  const [gender, setGender] = useState('')
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
+  const navigate = useNavigate();
+  const { signUp } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  
+  const [form, setForm] = useState({
+    firstName: '',
+    lastName: '',
+    username: '',
+    email: '',
+    password: '',
+    dob: '',
+    gender: 'Male'
+  });
 
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setError('')
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-    const dn = displayName.trim()
-    const un = username.trim().toLowerCase()
-    const em = email.trim().toLowerCase()
+  const handleSignUp = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
 
-    if (!dn) return setError('Please enter your name.')
-    if (!/^[a-z0-9_]{3,20}$/.test(un)) return setError('Username: 3–20 letters, numbers, or underscores.')
-    if (!em.includes('@')) return setError('Please enter a valid email.')
-    if (password.length < 6) return setError('Password must be at least 6 characters.')
+    try {
+      const name = `${form.firstName} ${form.lastName}`.trim();
+      
+      // 1. Create User in Better Auth (Neon)
+      const authData = await signUp(form.email, form.password, name);
+      
+      // 2. Save Profile details to Neon using our new Worker route
+      const profileRes = await fetch(`${API_BASE_URL}/api/profile`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authData.token}` 
+        },
+        body: JSON.stringify({
+          id: authData.user.id,
+          display_name: name,
+          username: form.username,
+          date_of_birth: form.dob,
+          gender: form.gender
+        })
+      });
 
-    setBusy(true)
+      const profileData = await profileRes.json();
+      if (!profileData.success) throw new Error(profileData.error || 'Failed to save profile');
 
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email: em,
-      password,
-      options: { data: { display_name: dn, username: un } },
-    })
-
-    if (signUpError) {
-      setBusy(false)
-      return setError(friendlyError(signUpError))
+      // 3. Send OTP via Resend (Optional: we can add the OTP screen next, for now go to feed)
+      navigate('/feed');
+      
+    } catch (err) {
+      setError(err.message || 'Something went wrong');
+    } finally {
+      setLoading(false);
     }
-
-    if (!signUpData.session) {
-      setBusy(false)
-      return setError('Check your email to confirm your account, then log in.')
-    }
-
-    await supabase
-      .from('profiles')
-      .update({ display_name: dn, username: un, date_of_birth: dateOfBirth || null, gender: gender || null })
-      .eq('id', signUpData.session.user.id)
-
-    // Refresh the in-memory profile so Settings shows the real name/username
-    try { await refreshProfile() } catch {}
-
-    setBusy(false)
-    nav('/onboarding', { replace: true })
-  }
+  };
 
   return (
-    <div className="mobile-shell flex flex-col relative overflow-hidden isolate">
-      <BrandGlow />
+    <div className="min-h-screen bg-[#18191A] flex flex-col items-center justify-center p-4">
+      {/* FB Style Logo */}
+      <div className="mb-6 text-center">
+        <h1 className="text-5xl font-black text-[#1877F2] tracking-tighter">nakubonye</h1>
+        <p className="text-gray-300 mt-2 text-[15px]">Create a new account</p>
+      </div>
 
-      <header className="px-6 pt-8 pb-4 shrink-0">
-        <Link to="/" className="text-white/60 text-[13.5px] font-medium hover:text-white/85">
-          ← Back
-        </Link>
-      </header>
-
-      <main className="flex-1 px-6 pb-6 overflow-y-auto">
-        {/* Small logo */}
-        <div
-          className="w-[52px] h-[52px] rounded-[16px] grid place-items-center mb-6"
-          style={{
-            background: 'linear-gradient(135deg, #C084FC 0%, #A855F7 50%, #EC4899 100%)',
-            boxShadow: '0 10px 30px rgba(168,85,247,0.45)',
-          }}
-        >
-          <span className="text-white font-black text-[26px] leading-none">N</span>
-        </div>
-
-        <h1 className="text-white text-[30px] leading-[1.08] font-black tracking-tight mb-2">
-          Create your account
-        </h1>
-        <p className="text-purple-100/65 text-[14.5px] mb-8">
-          Let's create your Nakubonye profile.
-        </p>
-
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div>
-            <label className="block text-white/70 text-[12.5px] font-semibold mb-2">
-              Display name
-            </label>
-            <input
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="e.g. Bella"
-              autoComplete="name"
-              disabled={busy}
-              className="w-full bg-white/[0.04] border border-white/10 rounded-2xl px-4 py-3.5 text-white text-[15px] placeholder:text-white/30 focus:outline-none focus:border-purple-500/70 disabled:opacity-50"
-            />
+      <div className="w-full max-w-md bg-[#242526] rounded-xl shadow-2xl p-6 border border-[#3E4042]">
+        {error && <div className="bg-[#FF4D4F]/10 border border-[#FF4D4F] text-[#FF4D4F] p-3 rounded-lg mb-4 text-sm">{error}</div>}
+        
+        <form onSubmit={handleSignUp} className="space-y-4">
+          {/* Name Row */}
+          <div className="flex gap-3">
+            <input type="text" name="firstName" placeholder="First name" required onChange={handleChange} className="w-full bg-[#3A3B3C] text-white placeholder-gray-400 rounded-lg px-4 py-3 focus:outline-none focus:ring-1 focus:ring-[#1877F2]" />
+            <input type="text" name="lastName" placeholder="Surname" required onChange={handleChange} className="w-full bg-[#3A3B3C] text-white placeholder-gray-400 rounded-lg px-4 py-3 focus:outline-none focus:ring-1 focus:ring-[#1877F2]" />
           </div>
 
-          <div>
-            <label className="block text-white/70 text-[12.5px] font-semibold mb-2">
-              Username
-            </label>
-            <input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="e.g. bella_b"
-              autoComplete="username"
-              disabled={busy}
-              className="w-full bg-white/[0.04] border border-white/10 rounded-2xl px-4 py-3.5 text-white text-[15px] placeholder:text-white/30 focus:outline-none focus:border-purple-500/70 disabled:opacity-50"
-            />
-          </div>
+          <input type="text" name="username" placeholder="Username" required onChange={handleChange} className="w-full bg-[#3A3B3C] text-white placeholder-gray-400 rounded-lg px-4 py-3 focus:outline-none focus:ring-1 focus:ring-[#1877F2]" />
+          <input type="email" name="email" placeholder="Email address" required onChange={handleChange} className="w-full bg-[#3A3B3C] text-white placeholder-gray-400 rounded-lg px-4 py-3 focus:outline-none focus:ring-1 focus:ring-[#1877F2]" />
+          <input type="password" name="password" placeholder="Password" required onChange={handleChange} className="w-full bg-[#3A3B3C] text-white placeholder-gray-400 rounded-lg px-4 py-3 focus:outline-none focus:ring-1 focus:ring-[#1877F2]" />
 
-          <div>
-            <label className="block text-white/70 text-[12.5px] font-semibold mb-2">
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              autoComplete="email"
-              disabled={busy}
-              className="w-full bg-white/[0.04] border border-white/10 rounded-2xl px-4 py-3.5 text-white text-[15px] placeholder:text-white/30 focus:outline-none focus:border-purple-500/70 disabled:opacity-50"
-            />
-          </div>
+          <div className="text-gray-400 text-xs mt-2">Date of birth</div>
+          <input type="date" name="dob" required onChange={handleChange} className="w-full bg-[#3A3B3C] text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-1 focus:ring-[#1877F2]" />
 
-          <div>
-            <label className="block text-white/70 text-[12.5px] font-semibold mb-2">
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              autoComplete="new-password"
-              disabled={busy}
-              className="w-full bg-white/[0.04] border border-white/10 rounded-2xl px-4 py-3.5 text-white text-[15px] placeholder:text-white/30 focus:outline-none focus:border-purple-500/70 disabled:opacity-50"
-            />
-          </div>
+          <div className="text-gray-400 text-xs mt-2">Gender</div>
+          <select name="gender" onChange={handleChange} className="w-full bg-[#3A3B3C] text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-1 focus:ring-[#1877F2]">
+            <option>Male</option>
+            <option>Female</option>
+            <option>Custom</option>
+          </select>
 
-          {error && (
-            <div className="text-red-300 text-[13px] bg-red-500/10 border border-red-500/30 rounded-2xl px-4 py-3">
-              {error}
-            </div>
-          )}
+          <p className="text-[#B0B3B8] text-[11px] leading-tight mt-2">
+            People who use our service may have uploaded your contact information to Nakubonye. <a href="#" className="text-[#1877F2] hover:underline">Learn more</a>.
+          </p>
 
-          <div>
-            <label className="block text-white/70 text-[12.5px] font-semibold mb-2">Date of Birth</label>
-            <input type="text" placeholder="DD/MM/YYYY" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} required disabled={busy} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500" />
-          </div>
-          <div>
-            <label className="block text-white/70 text-[12.5px] font-semibold mb-2">Gender</label>
-            <select value={gender} onChange={(e) => setGender(e.target.value)} required disabled={busy} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500">
-              <option value="">Select...</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-              <option value="non_binary">Non-binary</option>
-              <option value="prefer_not_to_say">Prefer not to say</option>
-            </select>
-          </div>
-          <button type="submit"
-            disabled={busy}
-            className="mt-2 w-full text-white font-bold text-[16px] rounded-full py-[16px] transition-transform active:scale-[0.98] disabled:opacity-60"
-            style={{
-              background: 'linear-gradient(135deg, #EC4899 0%, #A855F7 100%)',
-              boxShadow: '0 12px 36px rgba(236,72,153,0.5), 0 4px 14px rgba(168,85,247,0.35)',
-            }}
-          >
-            {busy ? 'Creating account…' : 'Create account ❤️'}
+          <button type="submit" disabled={loading} className="w-full bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold text-lg rounded-lg py-3 mt-4 transition-colors disabled:opacity-50">
+            {loading ? 'Creating account...' : 'Sign Up'}
           </button>
-        </form>
 
-        <p className="text-center text-white/55 text-[13.5px] mt-7">
-          Already have an account?{' '}
-          <Link to="/signin" className="text-purple-300 font-semibold">
-            Log in
-          </Link>
-        </p>
-      </main>
+          <div className="text-center mt-4">
+            <Link to="/signin" className="text-[#1877F2] font-semibold text-sm hover:underline">Already have an account?</Link>
+          </div>
+        </form>
+      </div>
     </div>
-  )
+  );
 }
