@@ -100,12 +100,10 @@ export function getAuth(env) {
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL || "https://nakubonye.bernestart.workers.dev",
     basePath: "/api/auth",
-    trustedOrigins: [
-      "http://localhost:5173",
-      "capacitor://localhost",
-      "http://localhost",
-      "https://nakubonye.com"
-    ],
+    trustedOrigins: ["*"],
+    advanced: {
+      disableCSRFCheck: true
+    },
     emailAndPassword: { enabled: true },
     plugins: [
       bearer(),
