@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { bearer, emailOTP } from "better-auth/plugins";
+import { createAdapter } from "better-auth/adapters";
 
 const MODEL_TO_TABLE = { user: "user", session: "session", account: "account", verification: "verification" };
 const AUTH_CACHE = new Map();
@@ -86,8 +87,16 @@ export function getAuth(env) {
   const key = env.DATABASE_URL;
   if (AUTH_CACHE.has(key)) return AUTH_CACHE.get(key);
 
+  const myAdapter = createAdapter({
+    config: {
+      adapterId: "neon-http",
+      adapterName: "Neon HTTP",
+    },
+    adapter: () => createNeonAdapter(env),
+  });
+
   const auth = betterAuth({
-    database: createNeonAdapter(env),
+    database: myAdapter,
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL || "https://nakubonye.bernestart.workers.dev",
     basePath: "/api/auth",
