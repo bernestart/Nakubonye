@@ -1,4 +1,3 @@
-// Better Auth instance for Nakubonye — Neon HTTP adapter, bearer tokens, email OTP via Resend
 import { betterAuth } from "better-auth";
 import { bearer, emailOTP } from "better-auth/plugins";
 
@@ -12,14 +11,15 @@ function createNeonAdapter(env) {
     const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Neon-Connection-String": env.DATABASE_URL },
-      body: JSON.stringify({ query: sql, params })
+      body: JSON.stringify({ query: sql, params: params })
     });
     if (!res.ok) throw new Error(await res.text());
     return await res.json();
   };
 
   const buildWhere = (where, startIdx) => where.map((w, i) => {
-    const col = `"${w.field}"`; const ph = `$${startIdx + i}`;
+    const col = `"${w.field}"`;
+    const ph = `$${startIdx + i}`;
     const op = w.operator || "eq";
     switch (op) {
       case "eq": return `${col} = ${ph}`;
@@ -89,7 +89,7 @@ export function getAuth(env) {
   const auth = betterAuth({
     database: createNeonAdapter(env),
     secret: env.BETTER_AUTH_SECRET,
-    baseURL: env.BETTER_AUTH_URL || "https://nakubonye-api.workers.dev",
+    baseURL: env.BETTER_AUTH_URL || "https://nakubonye.bernestart.workers.dev",
     basePath: "/api/auth",
     trustedOrigins: [
       "http://localhost:5173",

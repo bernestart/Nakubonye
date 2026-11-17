@@ -96,6 +96,15 @@ export default {
       return await res.json();
     }
 
+        async function redisCommand(commandArray) {
+      const res = await fetch(env.UPSTASH_REDIS_URL, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${env.UPSTASH_REDIS_TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(commandArray)
+      });
+      return await res.json();
+    }
+
     async function getRedisLikes(postId) {
       try {
         const redisRes = await fetch(env.UPSTASH_REDIS_URL, {
@@ -413,14 +422,7 @@ export default {
 
       // 6. LIKES
       if (path === "/api/likes") {
-        const redisCommand = async (commandArray) => {
-          const res = await fetch(env.UPSTASH_REDIS_URL, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${env.UPSTASH_REDIS_TOKEN}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify(commandArray)
-          });
-          return await res.json();
-        };
+        
         if (request.method === "POST") {
           const body = await request.json();
           const { postId, userId, action } = body;

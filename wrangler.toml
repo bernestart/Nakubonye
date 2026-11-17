@@ -1,11 +1,11 @@
 name = "nakubonye"
 main = "backend/_worker.js"
-compatibility_date = "2024-03-20"
+compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
 [[durable_objects.bindings]]
-name = "nakubonye"
-class_name = "nakubonye"
+name = "CHAT_ROOMS"
+class_name = "ChatRoomSQLite"
 
 [[migrations]]
 tag = "v1"
