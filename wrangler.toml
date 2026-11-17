@@ -13,5 +13,4 @@ new_sqlite_classes = ["ChatRoom"]
 
 [[migrations]]
 tag = "v2"
-deleted_classes = ["ChatRoom"]
 new_sqlite_classes = ["ChatRoomSQLite"]
