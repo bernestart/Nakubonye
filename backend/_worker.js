@@ -58,15 +58,25 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // 0. PING ROUTE (Verification)
+    if (path === "/api/ping") {
+      return new Response(JSON.stringify({ ping: "pong", time: new Date().toISOString() }), { headers: cors });
+    }
+
     // Better Auth mount — all /api/auth/* requests go to Better Auth
     if (path.startsWith("/api/auth/")) {
-      const auth = getAuth(env);
-      const res = await auth.handler(request);
-      const h = new Headers(res.headers);
-      h.set("Access-Control-Allow-Origin", "*");
-      h.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-      h.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-      return new Response(res.body, { status: res.status, headers: h });
+      try {
+        const auth = getAuth(env);
+        const res = await auth.handler(request);
+        const h = new Headers(res.headers);
+        h.set("Access-Control-Allow-Origin", "*");
+        h.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+        h.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        return new Response(res.body, { status: res.status, headers: h });
+      } catch (err) {
+        console.error("Auth error:", err);
+        return new Response(JSON.stringify({ success: false, error: "AUTH_CRASH", message: err.message }), { status: 500, headers: cors });
+      }
     }
 
     async function queryDatabase(sqlQuery, params = []) {
