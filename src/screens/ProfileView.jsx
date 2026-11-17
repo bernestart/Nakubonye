@@ -1,3 +1,4 @@
+import OnlineDot from '../components/OnlineDot';
 import { toggleLikeAPI } from '../lib/api';
 import { getUserPosts } from '../lib/api';
 import { useCallback, useEffect, useState } from 'react'
@@ -618,14 +619,20 @@ export default function ProfileView() {
                 )}
               </span>
             </TierRing>
-            <span className="absolute bottom-4 right-4 w-4 h-4 rounded-full bg-emerald-500 border-2 border-[#0B0B14] z-10" />
+            <OnlineDot userId={userId} myId={myId} variant="avatar" className="!bottom-4 !right-4 !w-4 !h-4 z-10" />
           </div>
         </div>
 
         <div className="flex flex-col items-center justify-center mt-3 px-4">
             <div className="flex items-center justify-center gap-1.5">
               <h1 className="text-cream text-[22px] font-extrabold tracking-tight text-center">
-                {person.display_name || person.username}
+                <div className="flex flex-col">
+                  <span><div className="flex flex-col">
+                  <span>{person.display_name || person.username}</span>
+                  <OnlineDot userId={userId} myId={myId} variant="text" />
+                </div></span>
+                  <OnlineDot userId={userId} myId={myId} variant="text" />
+                </div>
           {person.account_type === 'creator' && person.category_label && (
             <span className="block text-purple-400 text-[11px] font-bold tracking-wide uppercase mt-1">
               {person.category_label}

@@ -1,3 +1,4 @@
+import { useMyPresence } from './hooks/usePresence';
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { StatusBar } from '@capacitor/status-bar';
@@ -195,7 +196,8 @@ function RatePromptGate({ children }) {
 }
 
 function MaintenanceGate({ children }) {
-  const { profile, loading: authLoading } = useAuth()
+  const { profile, loading: authLoading } = useAuth();
+  useMyPresence(profile?.id);
   const [state, setState] = useState({ loading: true, on: false, message: "" })
 
   useEffect(() => {

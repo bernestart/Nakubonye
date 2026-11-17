@@ -1,0 +1,539 @@
+############ NAKUBONYE AUDIT — Tue Nov 17 10:33:04 CAT 2026 ############
+
+========== 0. ENVIRONMENT ==========
+v24.18.0
+11.20.0
+2.21.3
+main
+3aaf564 Fix: Use SQLite-backed Durable Objects for free tier
+6f51d6a Phase 6: Add Privacy-Aware Bulk Presence API
+9f201e1 Phase 6: Add Redis Presence and Typing Microservices
+d390d84 Phase 6: WebSockets for DM, Group, Community Chats and Interactions
+10bc497 Phase 6: WebSockets for DM, Group, and Community Chats
+node_modules: 315M
+
+========== 1. TOP-LEVEL TREE (depth 2, no node_modules) ==========
+.
+./.env
+./.npmrc
+./BUGS.md
+./MISSING_FEATURES.md
+./ROADMAP.md
+./add-backend-chat-routes.cjs
+./add-bulk-presence.cjs
+./add-profile-camera-icons.cjs
+./add-redis-presence.cjs
+./audit-all.cjs
+./audit-final.cjs
+./audit-meta-foundation.cjs
+./audit.cjs
+./audit_20261117_103304.txt
+./backend
+./backend/_worker.js
+./build-chat-interactions.cjs
+./build_creator_ui_final.cjs
+./build_log.txt
+./capacitor.config.json
+./clean_hamburger_menu.cjs
+./compress.cjs
+./contact.cjs
+./eslint.config.js
+./fb_creator_final_fix.cjs
+./final-meta-audit-fix.cjs
+./final-syntax-fix.cjs
+./final_creator_wiring.cjs
+./fix-and-rebrand-onboarding.cjs
+./fix-chat-dot-final.cjs
+./fix-chat-dot-syntax.cjs
+./fix-chat-final.cjs
+./fix-chat-send-ultimate-v2.cjs
+./fix-chat-sends.cjs
+./fix-chat-ws-final.cjs
+./fix-community-image-map.cjs
+./fix-community-images-feed.cjs
+./fix-docbubble.cjs
+./fix-duplicate-paths-final.cjs
+./fix-duplicate-paths.cjs
+./fix-edit-profile-dob.cjs
+./fix-feed-error.cjs
+./fix-icons-2.cjs
+./fix-icons.cjs
+./fix-image-array.cjs
+./fix-media-urls.cjs
+./fix-mic-permission.cjs
+./fix-missing-state.cjs
+./fix-paths-line-by-line.cjs
+./fix-postimages-proxy.cjs
+./fix-profile-dot-final.cjs
+./fix-profile-uploads-v2.cjs
+./fix-remove-rail.cjs
+./fix-state.cjs
+./fix-state2.cjs
+./fix-syntax-chat.cjs
+./fix-syntax-errors.cjs
+./fix-tdz.cjs
+./fix-voice-mime.cjs
+./fix-websocket-broadcast.cjs
+./fix_activeview.cjs
+./fix_android_manifest.cjs
+./fix_arch_errors.cjs
+./fix_crash_and_find_menu.cjs
+./fix_creator_dashboard.cjs
+./fix_creator_vocab.cjs
+./fix_creator_vocab_v2.cjs
+./fix_dashboard_btn_visibility.cjs
+./fix_div_tags.cjs
+./fix_divs_smart.cjs
+./fix_get_verified_line.cjs
+./fix_imports.cjs
+./fix_imports_perfectly.cjs
+./fix_menu_architecture.cjs
+./fix_preview_account_type.cjs
+./fix_shim.cjs
+./fix_sparkles_crash.cjs
+./fix_verification_settings.cjs
+./force_clean_menu.cjs
+./heal-syntax.cjs
+./index.html
+./inject-chat-avatar-dot.cjs
+./inject-chat-dot.cjs
+./inject-global-presence.cjs
+./inject-presence-final.cjs
+./inject-profile-presence.cjs
+./inject-websockets.cjs
+./kill-zombie-code.cjs
+./master-audit.cjs
+./merge_monetization_dashboard.cjs
+./monetization_hits.txt
+./monetization_lines.txt
+./package-lock.json
+./package.json
+./patch-7c3.cjs
+./patch-8k6.cjs
+./patch-8m813.cjs
+./patch-a.cjs
+./patch-all-likes.cjs
+sort: fflush failed: 'standard output': Broken pipe
+sort: write error
+
+========== 2. PACKAGE.JSON (deps + scripts) ==========
+SCRIPTS: {
+  "dev": "vite",
+  "build": "vite build",
+  "preview": "vite preview"
+}
+DEPS: {
+  "@capacitor-community/camera-preview": "^8.0.2",
+  "@capacitor-community/privacy-screen": "^8.0.0",
+  "@capacitor-community/safe-area": "^7.0.0",
+  "@capacitor/android": "^8.5.2",
+  "@capacitor/camera": "^8.2.5",
+  "@capacitor/core": "^8.5.2",
+  "@capacitor/filesystem": "^8.1.5",
+  "@capacitor/geolocation": "^8.2.4",
+  "@capacitor/haptics": "^8.0.2",
+  "@capacitor/local-notifications": "^8.3.1",
+  "@capacitor/push-notifications": "^8.1.3",
+  "@capacitor/share": "^8.0.3",
+  "@capacitor/splash-screen": "^8.0.2",
+  "@capacitor/status-bar": "^8.0.4",
+  "@capawesome/capacitor-file-picker": "^8.1.1",
+  "@capgo/capacitor-audio-recorder": "^8.3.5",
+  "@capgo/capacitor-photo-library": "^8.0.32",
+  "@phosphor-icons/react": "^2.1.10",
+  "@supabase/supabase-js": "^2.112.3",
+  "@tailwindcss/vite": "^4.1.14",
+  "@use-gesture/react": "^10.3.1",
+  "capacitor-android-system-bars": "^2.1.2",
+  "framer-motion": "^13.5.1",
+  "jimp": "^1.6.1",
+  "jsonwebtoken": "^9.0.3",
+  "lucide-react": "^1.33.0",
+  "qrcode.react": "^4.2.0",
+  "react": "^19.2.8",
+  "react-dom": "^19.2.8",
+  "react-easy-crop": "^6.2.5",
+  "react-router-dom": "^7.18.2",
+  "tailwindcss": "^4.1.14"
+}
+DEV: {
+  "@capacitor/cli": "^8.5.2",
+  "@eslint/js": "^10.0.1",
+  "@vitejs/plugin-react": "^6.0.4",
+  "eslint": "^10.12.0",
+  "eslint-plugin-react": "^7.37.5",
+  "globals": "^17.13.0",
+  "vite": "^8.2.0"
+}
+
+========== 3. WRANGLER CONFIG (full) ==========
+name = "nakubonye-api"
+main = "backend/_worker.js"
+compatibility_date = "2024-03-20"
+
+[[durable_objects.bindings]]
+name = "CHAT_ROOMS"
+class_name = "ChatRoomSQLite"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ChatRoom"]
+
+[[migrations]]
+tag = "v2"
+deleted_classes = ["ChatRoom"]
+new_sqlite_classes = ["ChatRoomSQLite"]
+
+========== 4. CAPACITOR CONFIG (full) ==========
+--- capacitor.config.json ---
+{
+  "appId": "com.nakubonye.app",
+  "appName": "Nakubonye",
+  "webDir": "dist",
+  "plugins": {
+    "StatusBar": {
+      "overlaysWebView": false,
+      "style": "DARK"
+    },
+    "SafeArea": {
+      "initialViewportFitCover": true
+    },
+    "SystemBars": {
+      "insetsHandling": "native",
+      "style": "DARK",
+      "hidden": false
+    }
+  }
+}
+========== 5. ENV KEYS (names only, no values) ==========
+--- .env ---
+VITE_SUPABASE_URL
+VITE_SUPABASE_PUBLISHABLE_KEY
+
+========== 6. BACKEND STRUCTURE ==========
+backend/_worker.js
+
+--- Worker file line count ---
+436 backend/_worker.js
+
+========== 7. WORKER ROUTE INVENTORY ==========
+58:    const path = url.pathname;
+86:      if (path.startsWith("/api/ws/")) {
+94:      if (path === "/api/presence" && request.method === "POST") {
+105:      if (path === "/api/typing" && request.method === "POST") {
+116:      if (path === "/api/presence/bulk" && request.method === "GET") {
+160:      if (path.startsWith("/api/media/")) {
+180:      if (path === "/api/upload" && request.method === "POST") {
+197:      if (path === "/api/feed" && request.method === "GET") {
+213:      if (path === "/api/posts") {
+251:      if (path === "/api/community/posts" && request.method === "GET") {
+284:      if (path === "/api/messages" && request.method === "POST") {
+306:      if (path === "/api/group/messages" && request.method === "POST") {
+328:      if (path === "/api/community/messages") {
+374:      if (path === "/api/likes") {
+399:      if (path === "/api/likes/list" && request.method === "GET") {
+417:      if (path === "/api/comments") {
+
+========== 8. DURABLE OBJECT — CURRENT STATE ==========
+1:export class ChatRoomSQLite {
+88:        const id = env.CHAT_ROOMS.idFromName(roomId);
+89:        const obj = env.CHAT_ROOMS.get(id);
+297:          const id = env.CHAT_ROOMS.idFromName("dm-" + body.conversation_id);
+298:          const obj = env.CHAT_ROOMS.get(id);
+319:          const id = env.CHAT_ROOMS.idFromName("group-" + body.group_id);
+320:          const obj = env.CHAT_ROOMS.get(id);
+345:            const id = env.CHAT_ROOMS.idFromName(roomId);
+346:            const obj = env.CHAT_ROOMS.get(id);
+
+========== 9. UPLOAD ROUTE — CURRENT STATE ==========
+180:      if (path === "/api/upload" && request.method === "POST") {
+181-        const formData = await request.formData();
+182-        const file = formData.get("file");
+183-        if (!file) return new Response(JSON.stringify({ success: false, error: "No file provided" }), { status: 400, headers: cors });
+184-
+185-        const tgFormData = new FormData();
+186-        tgFormData.append("chat_id", env.TG_CHAT_ID);
+187-        tgFormData.append("document", file); 
+188-
+189-        const tgRes = await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/sendDocument`, { method: "POST", body: tgFormData });
+190-        const tgData = await tgRes.json();
+191-        if (!tgData.ok) throw new Error(tgData.description || "Telegram upload failed");
+192-
+193-        return new Response(JSON.stringify({ success: true, file_id: tgData.result.document.file_id }), { headers: { ...cors, "Content-Type": "application/json" } });
+194-      }
+195-
+196-      // 2. GET RANKED FEED
+197-      if (path === "/api/feed" && request.method === "GET") {
+198-        const userId = url.searchParams.get("userId");
+199-        const limit = url.searchParams.get("limit") || 20;
+200-        const offset = url.searchParams.get("offset") || 0;
+201-        if (!userId) return new Response(JSON.stringify({ success: false, error: "userId required" }), { status: 400, headers: cors });
+202-
+203-        const data = await queryDatabase(`SELECT * FROM get_ranked_feed($1::uuid, $2::integer, $3::integer)`, [userId, limit, offset]);
+204-        const postsWithLikes = [];
+205-        for (const post of data.rows) {
+
+--- api.js uploadMedia ---
+70:export const uploadMedia = async (file) => {
+71-  const formData = new FormData();
+72-  formData.append("file", file);
+73-  const res = await fetch(`${API_BASE_URL}/api/upload`, {
+74-    method: "POST",
+75-    body: formData
+76-  });
+77-  const json = await res.json();
+78-  if (!json.success) throw new Error(json.error || "Upload failed");
+79-  return json.file_id; // Returns the Telegram file_id
+80-};
+
+========== 10. MIGRATIONS / SQL / SCHEMA ==========
+./supabase/migrations
+./supabase/migrations/2026-10-07-audit-phase-8c-rls.sql
+./supabase/migrations/2026-10-08-phase-11-6a-device-tokens.sql
+./supabase/migrations/2026-10-08-phase-11-6c-message-push-trigger.sql
+./supabase/migrations/2026-10-08-phase-11-6-ui-decline-rpcs.sql
+./supabase/migrations/2026-10-08-phase-11-6d-unified-notifications.sql
+./supabase/migrations/2026-10-09-phase-11-6d2-engagement-notifications.sql
+./supabase/migrations/2026-10-09-phase-11-6e3-deep-link-ids.sql
+./supabase/migrations/2026-10-09-phase-11-6d4-mention-push.sql
+
+========== 11. FRONTEND SCREENS ==========
+About.jsx
+AccountSecurity.jsx
+AddGroupMembers.jsx
+Admin.jsx
+AdminVerifications.jsx
+ArchivedMessages.jsx
+BlockedList.jsx
+BookService.jsx
+Chat.jsx
+ChatInfo.jsx
+CircleDetail.jsx
+Circles.jsx
+Communities.jsx
+CommunityRequests.jsx
+CommunityView.jsx
+Create.jsx
+CreateCommunity.jsx
+CreateGroup.jsx
+CreateListing.jsx
+CreateService.jsx
+CreatorDashboardScreen.jsx
+CreatorMode.jsx
+CreatorOnboarding.jsx
+Discover.jsx
+Drafts.jsx
+EditCommunity.jsx
+EditGroup.jsx
+EditListing.jsx
+EditProfile.jsx
+EventDetail.jsx
+FacebookReward.jsx
+Feed.jsx
+Filters.jsx
+FollowList.jsx
+GroupChat.jsx
+GroupMembers.jsx
+HashtagPage.jsx
+InnerCircle.jsx
+Invite.jsx
+JoinCommunity.jsx
+JoinGroup.jsx
+Likes.jsx
+ListingDetail.jsx
+Marketplace.jsx
+Matches.jsx
+Memories.jsx
+MessageRequests.jsx
+Messages.jsx
+MessagesSearch.jsx
+MessagingSettings.jsx
+Monetization.jsx
+MutedUsers.jsx
+MutedWords.jsx
+MyBookings.jsx
+MyListings.jsx
+NotificationSettings.jsx
+Notifications.jsx
+OfflineReels.jsx
+Onboarding.jsx
+OnboardingSuggestions.jsx
+Online.jsx
+PendingTags.jsx
+PostDetail.jsx
+Preview.jsx
+Privacy.jsx
+PrivacySettings.jsx
+ProfileSettings.jsx
+ProfileView.jsx
+Reels.jsx
+ResetPassword.jsx
+Roadmap.jsx
+SafetyCenter.jsx
+Saved.jsx
+Search.jsx
+ServiceDetail.jsx
+Services.jsx
+SignIn.jsx
+SignUp.jsx
+Stories.jsx
+StoryArchive.jsx
+Terms.jsx
+Verify.jsx
+VerifyIdentity.jsx
+Welcome.jsx
+_ComingSoon.jsx
+settings
+
+--- components ---
+AppHeader.jsx
+BlockConfirm.jsx
+BottomNav.jsx
+BrandGlow.jsx
+CallOverlay.jsx
+ChatSearchSheet.jsx
+CommunityChat.jsx
+CommunityEvents.jsx
+CommunityFeed.jsx
+CreatorDashboard.jsx
+DeleteAccountModal.jsx
+DirectMessageModal.jsx
+EventComposer.jsx
+ExpandableText.jsx
+FollowButton.jsx
+ForgotPasswordModal.jsx
+ForwardPicker.jsx
+GlobalEventPopup.jsx
+GlobalMatchCelebration.jsx
+GlowBackdrop.jsx
+HashtagText.jsx
+HighlightPicker.jsx
+HighlightViewer.jsx
+ImageCropper.jsx
+InAppNotificationBanner.jsx
+InviteLinkSheet.jsx
+MaintenanceScreen.jsx
+ManageReelSheet.jsx
+MatchModal.jsx
+MessageActionsSheet.jsx
+MessagePopover.jsx
+MutualConnections.jsx
+NewMessageSheet.jsx
+NewPostsPill.jsx
+NotificationBell.jsx
+OnlineDot.jsx
+PhotoViewer.jsx
+Poll.jsx
+PollComposer.jsx
+PollMessage.jsx
+
+========== 12. COMMUNITYVIEW — TDZ INVESTIGATION ==========
+--- imports ---
+1:import { Component, useCallback, useEffect, useState } from 'react'
+2:import { useNavigate, useParams } from 'react-router-dom'
+3:import { ArrowLeft, Check, Plus, MapPin, UserPlus , MoreVertical , Share2 , LogOut , Pencil , Trash2 , Flag } from 'lucide-react'
+4:import { supabase } from '../lib/supabase'
+5:import { useAuth } from '../lib/auth'
+6:import { publicPhotoUrl, calcAge } from '../lib/photo'
+7:import { tap } from '../lib/haptic'
+8:import BrandGlow from '../components/BrandGlow'
+9:import ReportModal from '../components/ReportModal'
+10:import { Suspense } from 'react'
+11:import CommunityFeed from '../components/CommunityFeed'
+12:import CommunityChat from '../components/CommunityChat'
+13:import CommunityEvents from '../components/CommunityEvents'
+--- module-level declarations ---
+639:class FeedErrorBoundary extends Component {
+--- files importing CommunityView (cycle check) ---
+src/App.jsx
+--- CommunityView's own exports ---
+15:export default function CommunityView() {
+--- line count ---
+660 src/screens/CommunityView.jsx
+
+========== 13. CHAT.JSX — OnlineDot & JSX NESTING ==========
+1:import OnlineDot from '../components/OnlineDot';
+2-import { uploadMedia } from '../lib/api';
+3-import { useCallback, useEffect, useRef, useState } from 'react'
+4-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+5-import { motion } from 'framer-motion'
+6-import { Search, ArrowLeft, Send, MessageCircle, Paperclip, X, Smile, Mic, Square, Play, Pause, MoreVertical, Trash2, Eye, Flag, Ban, Check, CheckCheck, Phone, Video, Pin, Bell, BellOff, Eraser, Camera, Image, Timer } from 'lucide-react'
+7-import VerifiedBadge from "../components/VerifiedBadge"
+8-import PollMessage from "../components/PollMessage"
+9-import { friendlyError } from '../lib/errors'
+10-import { supabase } from '../lib/supabase'
+11-import { useAuth } from '../lib/auth'
+--
+913-                    {(other?.display_name || '?')[0]}
+914-                  </div>
+915-                )}
+916-              </div>
+917:              <OnlineDot userId={otherId} myId={myId} variant="avatar" className="!w-3 !h-3 !bottom-0 !right-0" />
+918-            </div>
+919-          </button>
+920-          <button
+921-            type="button"
+922-            onClick={() => { if (other?.id) { tap('light'); nav('/messages/' + other.id + '/info') } }}
+923-            className="min-w-0 flex-1 text-left active:opacity-70 transition-opacity"
+924-            aria-label="Chat info"
+925-          >
+926-            <p className="text-cream text-[14.5px] font-semibold truncate flex items-center gap-1.5">
+927-              <div className="flex flex-col">
+928-                  <span>{other?.display_name || other?.username || 'Someone'}</span>
+929:                  <OnlineDot userId={otherId} myId={myId} showText={true} />
+930-                </div>
+931-              {other?.is_verified && <VerifiedBadge size={14} className="ml-1" />}
+932-            </p>
+933-            <p className="text-subtle text-[11px] font-medium">{otherTyping ? 'typing…' : !canSeeOnline ? (other?.isDirect === true ? 'Direct message' : other?.isDirect === false ? 'Matched' : '') : isOnline(other?.last_seen_at, 2) ? (<><span className="inline-block w-2 h-2 rounded-full mr-1.5 align-middle" style={{ background: '#22C55E', boxShadow: '0 0 6px rgba(34,197,94,0.55)' }} />Online</>) : other?.last_seen_at ? 'Last seen ' + formatLastSeen(other.last_seen_at) : other?.isDirect === true ? 'Direct message' : other?.isDirect === false ? 'Matched' : ''}</p>
+934-          </button>
+935-        </div>
+936-        <button
+937-          onClick={() => {
+938-            if (!other) return
+939-            tap('light')
+
+--- suspicious <p> containing <div> (potential nesting bugs) ---
+926:            <p className="text-cream text-[14.5px] font-semibold truncate flex items-center gap-1.5">
+933:            <p className="text-subtle text-[11px] font-medium">{otherTyping ? 'typing…' : !canSeeOnline ? (other?.isDirect === true ? 'Direct message' : other?.isDirect === false ? 'Matched' : '') : isOnline(other?.last_seen_at, 2) ? (<><span className="inline-block w-2 h-2 rounded-full mr-1.5 align-middle" style={{ background: '#22C55E', boxShadow: '0 0 6px rgba(34,197,94,0.55)' }} />Online</>) : other?.last_seen_at ? 'Last seen ' + formatLastSeen(other.last_seen_at) : other?.isDirect === true ? 'Direct message' : other?.isDirect === false ? 'Matched' : ''}</p>
+993:            <p className="text-purple-300 text-[10.5px] font-black tracking-wider uppercase">Pinned</p>
+994:            <p className="text-cream text-[13px] truncate">
+1035:              <p className="text-cream font-semibold text-[14.5px] mb-1">
+1038:              <p className="text-muted text-[13px]">Say something real.</p>
+1080:                  <p className="text-center text-subtle text-[10.5px] font-medium py-1.5">{timeLabel(m.created_at)}</p>
+1086:                        <polyline points="9 17 4 12 9 7" />
+1087:                        <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+1286:                      <p className={`text-subtle text-[10px] mt-0.5 ${mine ? 'text-right' : ''}`}>(edited)</p>
+1335:            <p className="text-purple-300 text-[10.5px] font-bold tracking-wider uppercase">Replying to story</p>
+1336:            <p className="text-muted text-[12px] mt-0.5">Sent with the story</p>
+1351:            <p className="text-amber-300 text-[10.5px] font-bold tracking-wide uppercase mb-0.5">Editing message</p>
+1352:            <p className="text-muted text-[12.5px] truncate">{editingMsg.content || 'Media'}</p>
+1363:            <p className="text-purple-300 text-[10.5px] font-bold tracking-wide uppercase mb-0.5">
+1366:            <p className="text-muted text-[12.5px] truncate">{replyingTo.content || 'Media'}</p>
+1573:            <p className="text-muted text-[12.5px] leading-snug mb-3">
+1600:                    <p className="text-cream text-[15px] font-medium">{o.label}</p>
+1601:                    {o.sub && <p className="text-muted text-[12px] mt-0.5">{o.sub}</p>}
+1633:              <p className="text-muted text-[12.5px] text-center mt-4">Tap anywhere to close</p>
+
+========== 14. ROADMAP GAP CHECK ==========
+--- Better Auth ---
+NOT installed
+--- Resend ---
+NOT installed
+--- FCM / push ---
+    "@capacitor/push-notifications": "^8.1.3",
+--- QStash ---
+NOT installed
+--- TanStack Query ---
+NOT installed
+--- Redis client ---
+NOT installed
+
+--- /api/search route exists? ---
+NOT implemented
+--- cron / scheduled handler exists? ---
+
+========== 15. TODO/FIXME MARKERS ==========
+
+========== 16. .FIXBAK FOLDERS (leftover from past attempts) ==========
+
+############ END OF AUDIT ############

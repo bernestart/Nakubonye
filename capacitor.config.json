@@ -11,7 +11,7 @@
       "initialViewportFitCover": true
     },
     "SystemBars": {
-      "insetsHandling": "css",
+      "insetsHandling": "native",
       "style": "DARK",
       "hidden": false
     }

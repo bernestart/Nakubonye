@@ -68,6 +68,10 @@ export const getMediaUrl = (path, bucket = "community-media") => {
 };
 
 export const uploadMedia = async (file) => {
+  const MAX_BYTES = 20 * 1024 * 1024;
+  if (file.size > MAX_BYTES) {
+    throw new Error(`File too large. Max 20MB (got ${(file.size / 1024 / 1024).toFixed(1)}MB).`);
+  }
   const formData = new FormData();
   formData.append("file", file);
   const res = await fetch(`${API_BASE_URL}/api/upload`, {

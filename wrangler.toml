@@ -4,8 +4,13 @@ compatibility_date = "2024-03-20"
 
 [[durable_objects.bindings]]
 name = "CHAT_ROOMS"
-class_name = "ChatRoom"
+class_name = "ChatRoomSQLite"
 
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["ChatRoom"]
+
+[[migrations]]
+tag = "v2"
+deleted_classes = ["ChatRoom"]
+new_sqlite_classes = ["ChatRoomSQLite"]

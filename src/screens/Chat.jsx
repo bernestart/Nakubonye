@@ -1,3 +1,4 @@
+import OnlineDot from '../components/OnlineDot';
 import { uploadMedia } from '../lib/api';
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -903,14 +904,17 @@ export default function Chat() {
             className="shrink-0 active:opacity-70 transition-opacity"
             aria-label="View profile"
           >
-            <div className="w-10 h-10 rounded-full overflow-hidden bg-elevated border border-white/8">
-              {other?.photo_url ? (
-                <img src={other.photo_url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full grid place-items-center text-base font-black text-purple-400">
-                  {(other?.display_name || '?')[0]}
-                </div>
-              )}
+            <div className="relative w-10 h-10 rounded-full bg-elevated border border-white/8">
+              <div className="w-full h-full rounded-full overflow-hidden">
+                {other?.photo_url ? (
+                  <img src={other.photo_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full grid place-items-center text-base font-black text-purple-400">
+                    {(other?.display_name || '?')[0]}
+                  </div>
+                )}
+              </div>
+              <OnlineDot userId={otherId} myId={myId} variant="avatar" className="!w-3 !h-3 !bottom-0 !right-0" />
             </div>
           </button>
           <button
@@ -919,10 +923,13 @@ export default function Chat() {
             className="min-w-0 flex-1 text-left active:opacity-70 transition-opacity"
             aria-label="Chat info"
           >
-            <p className="text-cream text-[14.5px] font-semibold truncate flex items-center gap-1.5">
-              {other?.display_name || other?.username || 'Someone'}
-              {other?.is_verified && <VerifiedBadge size={14} className="ml-1" />}
-            </p>
+            <div className="text-cream text-[14.5px] font-semibold truncate flex items-center gap-1.5">
+              <div className="flex flex-col min-w-0">
+                  <span className="truncate">{other?.display_name || other?.username || 'Someone'}</span>
+                  <OnlineDot userId={otherId} myId={myId} showText={true} />
+                </div>
+              {other?.is_verified && <VerifiedBadge size={14} className="ml-1 shrink-0" />}
+            </div>
             <p className="text-subtle text-[11px] font-medium">{otherTyping ? 'typing…' : !canSeeOnline ? (other?.isDirect === true ? 'Direct message' : other?.isDirect === false ? 'Matched' : '') : isOnline(other?.last_seen_at, 2) ? (<><span className="inline-block w-2 h-2 rounded-full mr-1.5 align-middle" style={{ background: '#22C55E', boxShadow: '0 0 6px rgba(34,197,94,0.55)' }} />Online</>) : other?.last_seen_at ? 'Last seen ' + formatLastSeen(other.last_seen_at) : other?.isDirect === true ? 'Direct message' : other?.isDirect === false ? 'Matched' : ''}</p>
           </button>
         </div>

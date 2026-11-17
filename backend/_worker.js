@@ -1,4 +1,4 @@
-export class ChatRoom {
+export class ChatRoomSQLite {
   constructor(state, env) {
     this.state = state;
     this.sessions = [];
