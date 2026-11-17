@@ -1,10 +1,10 @@
-name = "nakubonye-api"
+name = "nakubonye"
 main = "backend/_worker.js"
 compatibility_date = "2024-03-20"
 
 [[durable_objects.bindings]]
-name = "CHAT_ROOMS"
-class_name = "ChatRoomSQLite"
+name = "nakubonye"
+class_name = "nakubonye"
 
 [[migrations]]
 tag = "v1"
