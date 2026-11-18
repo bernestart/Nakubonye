@@ -5,8 +5,13 @@ compatibility_flags = ["nodejs_compat"]
 
 [[durable_objects.bindings]]
 name = "CHAT_ROOMS"
-class_name = "ChatRoom"
+class_name = "ChatRoomSQLite"
 
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["ChatRoom"]
+
+[[migrations]]
+tag = "v2"
+deleted_classes = ["ChatRoom"]
+new_sqlite_classes = ["ChatRoomSQLite"]

@@ -1,5 +1,5 @@
 import { getAuth } from "./auth.js";
-export class ChatRoom {
+export class ChatRoomSQLite {
   constructor(state, env) {
     this.state = state;
     this.sessions = [];
