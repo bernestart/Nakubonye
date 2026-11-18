@@ -14,3 +14,4 @@ new_sqlite_classes = ["ChatRoom"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["ChatRoomSQLite"]
+# trigger fresh deploy Wed Nov 18 11:56:51 CAT 2026
