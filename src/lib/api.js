@@ -1,4 +1,4 @@
-const API_BASE_URL = "https://nakubonye.bernestart.workers.dev";
+export const API_BASE_URL = "https://nakubonye.bernestart.workers.dev";
 
 export const api = {
   getPosts: async () => {

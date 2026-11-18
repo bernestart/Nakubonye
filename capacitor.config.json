@@ -14,6 +14,12 @@
       "insetsHandling": "native",
       "style": "DARK",
       "hidden": false
+    },
+    "SplashScreen": {
+      "launchShowDuration": 1000,
+      "launchAutoHide": true,
+      "backgroundColor": "#0B0B14",
+      "showSpinner": false
     }
   }
 }

@@ -1,157 +1,100 @@
-import { createContext, useContext, useEffect, useState } from 'react'
-import { supabase } from './supabase'
+import { createContext, useContext, useEffect, useState } from 'react';
+import { API_BASE_URL } from './api';
 
-const AuthCtx = createContext(null)
+const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [session, setSession] = useState(null)
-  const [profile, setProfile] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState(localStorage.getItem('auth_token'));
 
   useEffect(() => {
-    let mounted = true
+    if (!token) {
+      setLoading(false);
+      return;
+    }
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return
-      setSession(data.session)
-      if (!data.session) setLoading(false)
+    // Failsafe timeout to guarantee loading becomes false
+    const timeout = setTimeout(() => setLoading(false), 3000);
+
+    fetch(`${API_BASE_URL}/api/auth/get-session`, {
+      headers: { Authorization: `Bearer ${token}` }
     })
-
-    // Track which session creation timestamps we've already logged (avoid dupes)
-    const loggedSessions = new Set()
-
-    async function logLoginEvent(userId, sessionCreatedAt, method, accessToken) {
-      if (!userId) return
-      const sid = accessToken ? String(accessToken).slice(-20) : null
-      const key = String(sessionCreatedAt || "") + ":" + userId + ":" + (sid || "")
-      if (loggedSessions.has(key)) return
-      loggedSessions.add(key)
-      try {
-        const ua = typeof navigator !== "undefined" ? navigator.userAgent : ""
-        const hint = (ua || "").slice(0, 120)
-
-        // Check if this device has been seen before
-        const { data: existing } = await supabase
-          .from("login_events")
-          .select("id")
-          .eq("user_id", userId)
-          .eq("device_hint", hint)
-          .limit(1)
-          .maybeSingle()
-        const isNewDevice = !existing
-
-        // Check if this is the very first login event overall
-        const { count } = await supabase
-          .from("login_events")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", userId)
-        const isFirstEver = (count || 0) === 0
-
-        // Insert login event
-        const { data: inserted } = await supabase
-          .from("login_events")
-          .insert({
-            user_id: userId,
-            user_agent: ua,
-            device_hint: hint,
-            method: method || "password",
-            session_id: sid,
-            is_active: true,
-          })
-          .select("id")
-          .single()
-
-        // Notify if this is a new device AND not the first-ever login
-        if (isNewDevice && !isFirstEver && inserted?.id) {
-          try {
-            await supabase.from("notifications").insert({
-              user_id: userId,
-              actor_id: userId,
-              type: "new_login",
-              ref_id: String(inserted.id),
-              ref_type: "security",
-              body: "New sign-in to your account",
-            })
-          } catch (e) { console.warn("login alert notify failed", e) }
+      .then(res => res.json())
+      .then(data => {
+        if (data?.user) {
+          setUser(data.user); setProfile(data.user);
+        } else {
+          setUser(null); setProfile(null);
+          localStorage.removeItem('auth_token');
+          setToken(null);
         }
-      } catch (e) { console.warn("logLoginEvent failed", e) }
+      })
+      .catch(err => {
+        console.error("Auth fetch failed:", err);
+      })
+      .finally(() => {
+        clearTimeout(timeout);
+        setLoading(false);
+      });
+  }, [token]);
+
+  const signIn = async (email, password) => {
+    const res = await fetch(`${API_BASE_URL}/api/auth/sign-in/email`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Login failed');
+    if (data.token) {
+      localStorage.setItem('auth_token', data.token);
+      setToken(data.token); setUser(data.user); setProfile(data.user);
     }
+    return data;
+  };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, newSession) => {
-        if (!mounted) return
-        setSession(newSession)
-        if (!newSession) {
-          setProfile(null)
-          setLoading(false)
-          return
-        }
-        // Log sign-in events (initial + token refresh aren't new sign-ins)
-        if (event === "SIGNED_IN") {
-          const ca = newSession?.user?.last_sign_in_at || newSession?.user?.updated_at || Date.now()
-          logLoginEvent(newSession.user.id, ca, "password", newSession?.access_token)
-        }
-      }
-    )
-
-    return () => {
-      mounted = false
-      subscription.unsubscribe()
+  const signUp = async (email, password, name) => {
+    const res = await fetch(`${API_BASE_URL}/api/auth/sign-up/email`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, name })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Signup failed');
+    if (data.token) {
+      localStorage.setItem('auth_token', data.token);
+      setToken(data.token); setUser(data.user); setProfile(data.user);
     }
-  }, [])
+    return data;
+  };
 
-  useEffect(() => {
-    if (!session?.user?.id) return
-    let cancelled = false
+  
+  const verifyOtp = async (email, otp) => {
+    const res = await fetch(`${API_BASE_URL}/api/auth/email-otp/verify-email`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Invalid code');
+    if (data.token) {
+      localStorage.setItem('auth_token', data.token);
+      setToken(data.token); setUser(data.user); setProfile(data.user);
+    }
+    return data;
+  };
 
-    ;(async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('id, username, display_name, date_of_birth, gender, bio, city, country, is_verified, is_active, is_admin, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children, hide_online_status, hide_age, incognito_mode, only_matches_can_message, is_banned, banned_reason, cover_photo_path, account_type, category_label')
-        .eq('id', session.user.id)
-        .single()
+  const signOut = async () => {
+    await fetch(`${API_BASE_URL}/api/auth/sign-out`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+    localStorage.removeItem('auth_token');
+    setToken(null); setUser(null); setProfile(null);
+  };
 
-      if (cancelled) return
+  const session = user ? { user, access_token: token } : null;
 
-      if (!data) {
-        // Trigger may not have created a row yet. Try again once.
-        await new Promise((r) => setTimeout(r, 700))
-        const retry = await supabase
-          .from('profiles')
-          .select('id, username, display_name, date_of_birth, gender, bio, city, country, is_verified, is_active, is_admin, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children, hide_online_status, hide_age, incognito_mode, only_matches_can_message, is_banned, banned_reason, cover_photo_path, account_type, category_label')
-          .eq('id', session.user.id)
-          .single()
-        if (!cancelled) {
-          setProfile(retry.data || null)
-          setLoading(false)
-        }
-        return
-      }
-
-      setProfile(data)
-      setLoading(false)
-    })()
-
-    return () => { cancelled = true }
-  }, [session?.user?.id])
-
-  const refreshProfile = async () => {
-    if (!session?.user?.id) return null
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, username, display_name, date_of_birth, gender, bio, city, country, is_verified, is_active, is_admin, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children, hide_online_status, hide_age, incognito_mode, only_matches_can_message, is_banned, banned_reason, cover_photo_path, account_type, category_label')
-      .eq('id', session.user.id)
-      .single()
-    if (data) setProfile(data)
-    return data
-  }
-
-  const value = { session, profile, setProfile, loading, refreshProfile }
-  return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>
+  return (
+    <AuthContext.Provider value={{ user, session, profile, loading, signIn, signUp, signOut, verifyOtp }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
-
-export function useAuth() {
-  const ctx = useContext(AuthCtx)
-  if (!ctx) throw new Error('useAuth must be used inside AuthProvider')
-  return ctx
-}
+export const useAuth = () => useContext(AuthContext);

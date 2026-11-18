@@ -494,6 +494,56 @@ export default {
         }
       }
 
+      
+      // 10. META-SCALE BFF: Feed Bootstrap
+      if (path === "/api/feed/bootstrap" && request.method === "GET") {
+        try {
+          const userId = url.searchParams.get("userId");
+          if (!userId) throw new Error("userId required");
+
+          // Run all independent queries in parallel for max speed
+          const [
+            matches, follows, blocks, mutedWords, userMutes, comments, reelLikes, listings, services, profiles
+          ] = await Promise.all([
+            queryDatabase(`SELECT user_one_id, user_two_id FROM matches WHERE user_one_id = $1 OR user_two_id = $1`, [userId]),
+            queryDatabase(`SELECT following_id FROM follows WHERE follower_id = $1`, [userId]),
+            queryDatabase(`SELECT blocker_id, blocked_id FROM blocks WHERE blocker_id = $1 OR blocked_id = $1`, [userId]),
+            queryDatabase(`SELECT word FROM muted_words WHERE user_id = $1`, [userId]),
+            queryDatabase(`SELECT muted_id FROM user_mutes WHERE muter_id = $1`, [userId]),
+            queryDatabase(`SELECT post_id, created_at FROM user_post_comments WHERE user_id = $1 AND created_at > NOW() - INTERVAL '90 days' LIMIT 500`, [userId]),
+            queryDatabase(`SELECT reel_id, created_at FROM reel_likes WHERE user_id = $1 AND created_at > NOW() - INTERVAL '90 days' LIMIT 500`, [userId]),
+            queryDatabase(`SELECT id, title, price, currency, image_paths FROM listings WHERE status = 'active' ORDER BY created_at DESC LIMIT 4`),
+            queryDatabase(`SELECT id, title, price, currency, duration_minutes, image_paths FROM services WHERE status = 'active' ORDER BY created_at DESC LIMIT 4`),
+            queryDatabase(`SELECT id, display_name, username FROM profiles LIMIT 50`) // Fallback for PYMK
+          ]);
+
+          return new Response(JSON.stringify({
+            success: true,
+            data: {
+              matches: matches.rows, follows: follows.rows, blocks: blocks.rows,
+              mutedWords: mutedWords.rows, userMutes: userMutes.rows,
+              comments: comments.rows, reelLikes: reelLikes.rows,
+              listings: listings.rows, services: services.rows, profiles: profiles.rows
+            }
+          }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+
+      // 11. BULK PROFILES (For likes/comments avatars)
+      if (path === "/api/profiles/bulk" && request.method === "POST") {
+        try {
+          const { ids } = await request.json();
+          if (!ids || ids.length === 0) return new Response(JSON.stringify({ success: true, data: [] }), { headers: cors });
+          const placeholders = ids.map((_, i) => `${i + 1}`).join(',');
+          const data = await queryDatabase(`SELECT id, display_name, username FROM profiles WHERE id IN (${placeholders})`, ids);
+          return new Response(JSON.stringify({ success: true, data: data.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });

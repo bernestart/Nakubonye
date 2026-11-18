@@ -258,11 +258,11 @@ export default function Feed() {
 
     // 3b. Personal posts (from me + matches + people I follow)
     const [matchRes, followRes, myCirclesRes, blockedRes] = await Promise.all([
-      supabase.from("matches").select("user_one_id, user_two_id").or("user_one_id.eq." + myId + ",user_two_id.eq." + myId),
-      supabase.from("follows").select("following_id").eq("follower_id", myId),
-      supabase.from("circle_members").select("circle_id").eq("user_id", myId).limit(100),
-      supabase.from("blocks").select("blocker_id, blocked_id").or("blocker_id.eq." + myId + ",blocked_id.eq." + myId),
-          supabase.from("blocks").select("blocker_id, blocked_id").or("blocker_id.eq." + myId + ",blocked_id.eq." + myId),
+      Promise.resolve({ data: boot.matches || [] }),
+      Promise.resolve({ data: boot.follows || [] }),
+      Promise.resolve({ data: [] }),
+      Promise.resolve({ data: boot.blocks || [] }),
+      Promise.resolve({ data: boot.blocks || [] }),
     ])
     const myCircleIds = new Set((myCirclesRes.data || []).map((r) => r.circle_id))
     const blockedIds = new Set()
@@ -666,7 +666,7 @@ export default function Feed() {
         const reactorIds = [...new Set((commLikes || []).map((r) => r.user_id))].slice(0, 100)
         let profMap = new Map()
         if (reactorIds.length > 0) {
-          const { data: profs } = await supabase.from("profiles").select("id, display_name, username").in("id", reactorIds)
+          const { data: profs } = await fetch(`${API_BASE_URL}/api/profiles/bulk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: reactorIds }) }).then(r => r.json()).then(d => ({ data: d.data }))
           ;(profs || []).forEach((x) => profMap.set(x.id, x))
         }
         ;(commLikes || []).forEach((r) => {
@@ -686,7 +686,7 @@ export default function Feed() {
         const reactorIds = [...new Set((personalLikes || []).map((r) => r.user_id))].slice(0, 100)
         let profMap = new Map()
         if (reactorIds.length > 0) {
-          const { data: profs } = await supabase.from("profiles").select("id, display_name, username").in("id", reactorIds)
+          const { data: profs } = await fetch(`${API_BASE_URL}/api/profiles/bulk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: reactorIds }) }).then(r => r.json()).then(d => ({ data: d.data }))
           ;(profs || []).forEach((x) => profMap.set(x.id, x))
         }
         ;(personalLikes || []).forEach((r) => {
@@ -1161,8 +1161,8 @@ export default function Feed() {
     ;(async () => {
       try {
         const [wordsRes, mutesRes] = await Promise.all([
-          supabase.from("muted_words").select("word").eq("user_id", myId),
-          supabase.from("user_mutes").select("muted_id").eq("muter_id", myId),
+          Promise.resolve({ data: boot.mutedWords || [] }),
+          Promise.resolve({ data: boot.userMutes || [] }),
         ])
         if (cancelled) return
         setMutedWordsSet(new Set((wordsRes.data || []).map((r) => (r.word || "").toLowerCase()).filter(Boolean)))
@@ -2134,8 +2134,8 @@ function EmptyFeed({ nav, suggested, myId }) {
   useEffect(() => {
     ;(async () => {
       const [ln, sv] = await Promise.all([
-        supabase.from("listings").select("id, title, price, currency, image_paths").eq("status", "active").order("created_at", { ascending: false }).limit(4),
-        supabase.from("services").select("id, title, price, currency, duration_minutes, image_paths").eq("status", "active").order("created_at", { ascending: false }).limit(4),
+        Promise.resolve({ data: boot.listings || [] }),
+        Promise.resolve({ data: boot.services || [] }),
       ])
       setListings(ln.data || [])
       setServices(sv.data || [])

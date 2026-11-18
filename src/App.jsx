@@ -201,22 +201,8 @@ function MaintenanceGate({ children }) {
   const [state, setState] = useState({ loading: true, on: false, message: "" })
 
   useEffect(() => {
-    let cancelled = false
-    supabase
-      .from("app_config")
-      .select("key, value")
-      .in("key", ["maintenance_mode", "maintenance_message"])
-      .then(({ data }) => {
-        if (cancelled) return
-        const map = {}
-        ;(data || []).forEach((r) => { map[r.key] = r.value })
-        setState({
-          loading: false,
-          on: map.maintenance_mode === "true",
-          message: map.maintenance_message || "",
-        })
-      })
-    return () => { cancelled = true }
+    // TODO: Move maintenance check to Neon /api/config later
+    setState({ loading: false, on: false, message: "" });
   }, [])
 
   if (state.loading || authLoading) return null
@@ -248,7 +234,7 @@ export default function App() {
         <InAppNotificationBanner />
       <GlobalMatchCelebration />
       <GlobalEventPopup />
-      <VoiceCallProvider>
+      <>
       <RatePromptGate>
       <MaintenanceGate>
       <Routes>
@@ -347,8 +333,8 @@ export default function App() {
       </Routes>
       </MaintenanceGate>
       </RatePromptGate>
-      <CallOverlay />
-      </VoiceCallProvider>
+      {/* <CallOverlay /> disabled for now */}
+      </>
       </NotificationsProvider>
       </WalletProvider>
       </SettingsProvider>
