@@ -126,6 +126,30 @@ export default {
       } catch (e) { return 0; }
     }
 
+    async function getBulkRedisLikes(postIds) {
+      if (!postIds || postIds.length === 0) return {};
+      try {
+        // Upstash Pipeline: Send an array of commands in a single HTTP request
+        const pipeline = postIds.map(id => ["SCARD", `post:likes:${id}`]);
+        const redisRes = await fetch(env.UPSTASH_REDIS_URL + "/pipeline", {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${env.UPSTASH_REDIS_TOKEN}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(pipeline)
+        });
+        const redisData = await redisRes.json();
+        
+        // Map the results back to their post IDs
+        const resultMap = {};
+        postIds.forEach((id, index) => {
+          resultMap[id] = redisData[index]?.result || 0;
+        });
+        return resultMap;
+      } catch (e) { 
+        console.error("Bulk Redis Error", e);
+        return {}; 
+      }
+    }
+
     try {
       // WEBSOCKET ROUTE (Real-Time Chat)
       if (path.startsWith("/api/ws/")) {
@@ -260,11 +284,16 @@ export default {
         if (!userId) return new Response(JSON.stringify({ success: false, error: "userId required" }), { status: 400, headers: cors });
 
         const data = await queryDatabase(`SELECT * FROM get_ranked_feed($1::uuid, $2::integer, $3::integer)`, [userId, limit, offset]);
-        const postsWithLikes = [];
-        for (const post of data.rows) {
-          const likesCount = await getRedisLikes(post.post_id);
-          postsWithLikes.push({ ...post, likes_count: likesCount });
-        }
+        
+        // N+1 FIX: Fetch all like counts in 1 batch instead of 20 sequential requests
+        const postIds = data.rows.map(p => p.post_id);
+        const likesMap = await getBulkRedisLikes(postIds);
+        
+        const postsWithLikes = data.rows.map(post => ({
+          ...post,
+          likes_count: likesMap[post.post_id] || 0
+        }));
+        
         return new Response(JSON.stringify({ success: true, data: postsWithLikes }), { headers: { ...cors, "Content-Type": "application/json" } });
       }
 
