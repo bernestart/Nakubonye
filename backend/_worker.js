@@ -369,6 +369,56 @@ export default {
       }
 
       // 4.5 DIRECT MESSAGES (DM)
+      // --- MESSAGE REACTIONS ---
+      if (path === "/api/messages/reactions" && request.method === "GET") {
+        const idsParam = url.searchParams.get("messageIds");
+        if (!idsParam) return new Response(JSON.stringify({ success: false, error: "messageIds required" }), { status: 400, headers: cors });
+        const ids = idsParam.split(',');
+        const placeholders = ids.map((_, i) => `${i + 1}`).join(',');
+        const data = await queryDatabase(`SELECT message_id, user_id, reaction FROM message_reactions WHERE message_id IN (${placeholders})`, ids);
+        return new Response(JSON.stringify({ success: true, data: data.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
+      }
+      if (path === "/api/messages/reactions" && request.method === "POST") {
+        const body = await request.json();
+        const { message_id, user_id, reaction, conversation_id } = body;
+        if (reaction) {
+          await queryDatabase(`INSERT INTO message_reactions (message_id, user_id, reaction) VALUES ($1, $2, $3) ON CONFLICT (message_id, user_id) DO UPDATE SET reaction = $3`, [message_id, user_id, reaction]);
+        } else {
+          await queryDatabase(`DELETE FROM message_reactions WHERE message_id = $1 AND user_id = $2`, [message_id, user_id]);
+        }
+        try {
+          const id = env.CHAT_ROOMS.idFromName("dm-" + conversation_id);
+          const obj = env.CHAT_ROOMS.get(id);
+          await obj.fetch("https://dummy.com/", { method: "POST", body: JSON.stringify({ type: 'reaction', data: { message_id, user_id, reaction } }) });
+        } catch(e) {}
+        return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+      }
+
+      // --- PINNED MESSAGES ---
+      if (path === "/api/messages/pinned" && request.method === "GET") {
+        const convId = url.searchParams.get("conversationId");
+        const pin = await queryDatabase(`SELECT message_id, pinned_by FROM pinned_messages WHERE conversation_id = $1`, [convId]);
+        if (pin.rows.length === 0) return new Response(JSON.stringify({ success: true, data: null }), { headers: cors });
+        const msg = await queryDatabase(`SELECT id, sender_id, content, created_at, edited_at, media_url, media_type, deleted_at FROM messages WHERE id = $1`, [pin.rows[0].message_id]);
+        if (msg.rows.length === 0) return new Response(JSON.stringify({ success: true, data: null }), { headers: cors });
+        return new Response(JSON.stringify({ success: true, data: { ...msg.rows[0], pinned_by: pin.rows[0].pinned_by } }), { headers: { ...cors, "Content-Type": "application/json" } });
+      }
+      if (path === "/api/messages/pinned" && request.method === "POST") {
+        const body = await request.json();
+        const { conversation_id, message_id, pinned_by } = body;
+        if (!message_id) {
+          await queryDatabase(`DELETE FROM pinned_messages WHERE conversation_id = $1`, [conversation_id]);
+        } else {
+          await queryDatabase(`INSERT INTO pinned_messages (conversation_id, message_id, pinned_by) VALUES ($1, $2, $3) ON CONFLICT (conversation_id) DO UPDATE SET message_id = $2, pinned_by = $3`, [conversation_id, message_id, pinned_by]);
+        }
+        try {
+          const id = env.CHAT_ROOMS.idFromName("dm-" + conversation_id);
+          const obj = env.CHAT_ROOMS.get(id);
+          await obj.fetch("https://dummy.com/", { method: "POST", body: JSON.stringify({ type: 'pin', data: { message_id } }) });
+        } catch(e) {}
+        return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+      }
+
       // GET MESSAGES (Chat History)
       if (path === "/api/messages" && request.method === "GET") {
         try {

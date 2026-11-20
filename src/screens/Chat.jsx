@@ -334,8 +334,12 @@ export default function Chat() {
 
     if (msgs?.length) {
       const ids = msgs.map((m) => m.id)
-      const { data: reacts } = await supabase
-        .from('message_reactions').select('message_id, user_id, reaction').in('message_id', ids)
+      let reacts = [];
+      try {
+        const reactsRes = await fetch(`https://nakubonye.bernestart.workers.dev/api/messages/reactions?messageIds=${ids.join(',')}`);
+        const reactsJson = await reactsRes.json();
+        if (reactsJson.success) reacts = reactsJson.data;
+      } catch (e) { console.warn(e); }
       const byMsg = {}
       ;(reacts || []).forEach((r) => {
         byMsg[r.message_id] = byMsg[r.message_id] || []
@@ -393,27 +397,18 @@ export default function Chat() {
     if (!conversationId) return
     let cancelled = false
     const fetchPinned = async () => {
-      const { data: pin } = await supabase
-        .from('pinned_messages')
-        .select('message_id, pinned_by')
-        .eq('conversation_id', conversationId)
-        .maybeSingle()
-      if (cancelled) return
-      if (!pin) { setPinnedMsg(null); return }
-      const { data: msg } = await supabase
-        .from('messages')
-        .select('id, sender_id, content, created_at, edited_at, media_url, media_type, deleted_at')
-        .eq('id', pin.message_id)
-        .maybeSingle()
+      try {
+        const pinRes = await fetch(`https://nakubonye.bernestart.workers.dev/api/messages/pinned?conversationId=${conversationId}`);
+        const pinJson = await pinRes.json();
+        if (cancelled) return;
+        if (!pinJson.success || !pinJson.data) { setPinnedMsg(null); return; }
+        const msg = { data: pinJson.data };
+        if (cancelled) return;
       if (cancelled) return
       setPinnedMsg(msg ? { ...msg, pinned_by: pin.pinned_by } : null)
     }
     fetchPinned()
-    const ch = supabase
-      .channel('pin-' + conversationId)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pinned_messages', filter: 'conversation_id=eq.' + conversationId }, () => fetchPinned())
-      .subscribe()
-    return () => { cancelled = true; supabase.removeChannel(ch) }
+    return () => { cancelled = true }
   }, [conversationId])
 
   // Toggle pin
@@ -421,14 +416,18 @@ export default function Chat() {
     if (!conversationId || !myId) return
     tap('light')
     if (pinnedMsg?.id === message.id) {
-      await supabase.from('pinned_messages').delete().eq('conversation_id', conversationId)
+      await fetch(`https://nakubonye.bernestart.workers.dev/api/messages/pinned`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversation_id: conversationId, message_id: null })
+      });
       setPinnedMsg(null)
     } else {
-      await supabase.from('pinned_messages').upsert({
-        conversation_id: conversationId,
-        message_id: message.id,
-        pinned_by: myId,
-      }, { onConflict: 'conversation_id' })
+      await fetch(`https://nakubonye.bernestart.workers.dev/api/messages/pinned`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversation_id: conversationId, message_id: message.id, pinned_by: myId })
+      });
       setPinnedMsg({ ...message, pinned_by: myId })
     }
   }
@@ -871,13 +870,12 @@ export default function Chat() {
     if (!myId) return
     tap('light')
     const current = (reactions[messageId] || []).find((r) => r.user_id === myId)
-    if (current?.reaction === emoji) {
-      await supabase.from('message_reactions').delete().eq('message_id', messageId).eq('user_id', myId)
-    } else if (current) {
-      await supabase.from('message_reactions').update({ reaction: emoji }).eq('message_id', messageId).eq('user_id', myId)
-    } else {
-      await supabase.from('message_reactions').insert({ message_id: messageId, user_id: myId, reaction: emoji })
-    }
+    const newReaction = current?.reaction === emoji ? null : emoji;
+    await fetch(`https://nakubonye.bernestart.workers.dev/api/messages/reactions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message_id: messageId, user_id: myId, reaction: newReaction, conversation_id: conversationId })
+    });
     setReactionPickerFor(null)
   }
 
