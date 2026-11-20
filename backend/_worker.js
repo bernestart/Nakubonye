@@ -369,6 +369,33 @@ export default {
       }
 
       // 4.5 DIRECT MESSAGES (DM)
+      // GET MESSAGES (Chat History)
+      if (path === "/api/messages" && request.method === "GET") {
+        try {
+          const conversationId = url.searchParams.get("conversationId");
+          const limit = url.searchParams.get("limit") || 50;
+          const before = url.searchParams.get("before");
+          if (!conversationId) return new Response(JSON.stringify({ success: false, error: "conversationId required" }), { status: 400, headers: cors });
+
+          let query = `SELECT * FROM messages WHERE conversation_id = $1`;
+          const params = [conversationId];
+          
+          if (before) {
+            query += ` AND created_at < $2`;
+            params.push(before);
+          }
+          
+          query += ` ORDER BY created_at DESC LIMIT ${params.length + 1}`;
+          params.push(limit);
+
+          const data = await queryDatabase(query, params);
+          // Reverse to return oldest -> newest
+          return new Response(JSON.stringify({ success: true, data: data.rows.reverse() }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+
       if (path === "/api/messages" && request.method === "POST") {
         const body = await request.json();
         const insertQuery = `
