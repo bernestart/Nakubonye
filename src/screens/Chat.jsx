@@ -401,11 +401,15 @@ export default function Chat() {
         const pinRes = await fetch(`https://nakubonye.bernestart.workers.dev/api/messages/pinned?conversationId=${conversationId}`);
         const pinJson = await pinRes.json();
         if (cancelled) return;
-        if (!pinJson.success || !pinJson.data) { setPinnedMsg(null); return; }
-        const msg = { data: pinJson.data };
-        if (cancelled) return;
-      if (cancelled) return
-      setPinnedMsg(msg ? { ...msg, pinned_by: pin.pinned_by } : null)
+        if (!pinJson.success || !pinJson.data) {
+          setPinnedMsg(null);
+          return;
+        }
+        setPinnedMsg({ ...pinJson.data });
+      } catch (e) {
+        console.warn("Failed to fetch pinned message", e);
+        if (!cancelled) setPinnedMsg(null);
+      }
     }
     fetchPinned()
     return () => { cancelled = true }
