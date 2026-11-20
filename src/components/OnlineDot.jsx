@@ -1,12 +1,9 @@
-import { useBulkPresence } from '../hooks/usePresence';
+import { usePresence } from '../hooks/usePresence';
 
 export default function OnlineDot({ userId, myId, variant = 'text', className = '' }) {
-  if (!userId || !myId) return null;
+  const status = usePresence(userId, myId);
 
-  const presence = useBulkPresence(myId, [userId]);
-  const status = presence[userId];
-
-  if (!status) return null;
+  if (!userId || !myId || !status) return null;
 
   const isOnline = status.is_online;
 

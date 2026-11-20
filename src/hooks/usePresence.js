@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { useEffect, useState } from 'react';
 
-// Hook to broadcast your own presence
+// Hook to broadcast your own presence (Heartbeat)
 export function useMyPresence(userId) {
   useEffect(() => {
     if (!userId) return;
@@ -26,21 +25,16 @@ export function useMyPresence(userId) {
       } catch (e) {}
     };
 
-    // Initial ping
     pingOnline();
-    
-    // Heartbeat every 60 seconds (Redis key expires in 300s)
     const interval = setInterval(pingOnline, 60000);
 
-    // When app goes to background or closes
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') pingOffline();
       else pingOnline();
     };
-    
+
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    
-    // Cleanup on unmount
+
     return () => {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
@@ -49,27 +43,63 @@ export function useMyPresence(userId) {
   }, [userId]);
 }
 
-// Hook to fetch presence for a list of users (Bulk)
-export function useBulkPresence(viewerId, userIds) {
-  const [presenceMap, setPresenceMap] = useState({});
+// ---------------------------------------------------------
+// GLOBAL PRESENCE BATCHER (Meta-Scale)
+// ---------------------------------------------------------
+const presenceStore = {
+  cache: {},
+  listeners: new Set(),
+  addListener(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
+  notify() { this.listeners.forEach(fn => fn(this.cache)); },
+  set(id, data) { this.cache[id] = { ...data, _ts: Date.now() }; this.notify(); }
+};
+
+let fetchQueue = new Set();
+let fetchTimeout = null;
+let currentMyId = null;
+
+function queueFetch(userId, myId) {
+  currentMyId = myId;
+  // If we have cache < 30s old, skip
+  if (presenceStore.cache[userId] && Date.now() - presenceStore.cache[userId]._ts < 30000) return;
+  
+  fetchQueue.add(userId);
+  
+  if (fetchTimeout) return;
+  
+  // Batch requests for 150ms to gather all avatars on screen
+  fetchTimeout = setTimeout(async () => {
+    const ids = Array.from(fetchQueue);
+    fetchQueue.clear();
+    fetchTimeout = null;
+    if (ids.length === 0 || !currentMyId) return;
+    
+    try {
+      const idsString = ids.join(',');
+      const res = await fetch(`https://nakubonye.bernestart.workers.dev/api/presence/bulk?viewerId=${currentMyId}&userIds=${idsString}`);
+      const json = await res.json();
+      if (json.success) {
+        Object.entries(json.data).forEach(([id, data]) => presenceStore.set(id, data));
+      }
+    } catch (e) { console.error("Bulk presence fetch failed", e); }
+  }, 150); 
+}
+
+// Hook to fetch presence for a single user via the global batcher
+export function usePresence(userId, myId) {
+  const [data, setData] = useState(presenceStore.cache[userId] || null);
 
   useEffect(() => {
-    if (!viewerId || !userIds || userIds.length === 0) return;
+    if (!userId || !myId) return;
+    
+    queueFetch(userId, myId);
+    
+    const unsub = presenceStore.addListener((cache) => {
+      if (cache[userId]) setData(cache[userId]);
+    });
+    
+    return unsub;
+  }, [userId, myId]);
 
-    const fetchPresence = async () => {
-      try {
-        const idsString = userIds.join(',');
-        const res = await fetch(`https://nakubonye.bernestart.workers.dev/api/presence/bulk?viewerId=${viewerId}&userIds=${idsString}`);
-        const json = await res.json();
-        if (json.success) setPresenceMap(json.data);
-      } catch (e) { console.error("Bulk presence failed", e); }
-    };
-
-    fetchPresence();
-    // Refresh presence every 30 seconds while viewing
-    const interval = setInterval(fetchPresence, 30000);
-    return () => clearInterval(interval);
-  }, [viewerId, userIds.join(',')]);
-
-  return presenceMap;
+  return data;
 }
