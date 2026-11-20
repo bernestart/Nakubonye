@@ -40,3 +40,4 @@ android/app/build/
 android/local.properties
 android/.idea/
 android/capacitor-cordova-android-plugins/
+.bak/
