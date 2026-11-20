@@ -2,22 +2,24 @@ import { getAuth } from "./auth.js";
 export class ChatRoomSQLite {
   constructor(state, env) {
     this.state = state;
-    this.sessions = [];
+    this.env = env;
   }
 
   async fetch(request) {
     const upgradeHeader = request.headers.get('Upgrade');
-    
-    // If it's a POST, it's a broadcast from the API
+
+    // 1. POST Broadcast (from API)
     if (request.method === 'POST' && upgradeHeader !== 'websocket') {
       const message = await request.text();
-      // Broadcast any type of payload (message, reaction, typing, read receipt)
-      this.sessions.forEach(s => {
+      // Get ALL active websockets (wakes up hibernating objects)
+      const sessions = this.state.getWebSockets();
+      sessions.forEach(s => {
         try { s.send(message); } catch (e) {}
       });
       return new Response("Broadcasted", { status: 200 });
     }
 
+    // 2. WebSocket Upgrade
     if (!upgradeHeader || upgradeHeader !== 'websocket') {
       return new Response('Expected Upgrade: websocket', { status: 426 });
     }
@@ -25,23 +27,30 @@ export class ChatRoomSQLite {
     const webSocketPair = new WebSocketPair();
     const [client, server] = Object.values(webSocketPair);
 
-    this.sessions.push(server);
-    server.accept();
-
-    server.addEventListener('close', () => {
-      this.sessions = this.sessions.filter(s => s !== server);
-    });
-
-    server.addEventListener('message', (event) => {
-      // Broadcast message to everyone else in the room
-      this.sessions.forEach(s => {
-        if (s !== server) {
-          try { s.send(event.data); } catch (e) {}
-        }
-      });
-    });
+    // HIBERNATION API: Automatically manages sessions and memory
+    this.state.acceptWebSocket(server);
 
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  // HIBERNATION EVENT: Handles incoming messages from clients
+  async webSocketMessage(ws, message) {
+    const sessions = this.state.getWebSockets();
+    sessions.forEach(s => {
+      if (s !== ws) {
+        try { s.send(message); } catch (e) {}
+      }
+    });
+  }
+
+  // HIBERNATION EVENT: Handles cleanly closing connections
+  async webSocketClose(ws, code, reason, wasClean) {
+    ws.close(code, "Durable Object is closing WebSocket");
+  }
+  
+  // HIBERNATION EVENT: Handles errors
+  async webSocketError(ws, error) {
+    ws.close(1011, "WebSocket error");
   }
 }
 
