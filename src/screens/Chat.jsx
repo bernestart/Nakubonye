@@ -318,11 +318,16 @@ export default function Chat() {
       if (convRow) setDisappearingTimer(convRow.disappearing_timer_seconds || null)
     } catch (e) { console.warn("load disappearing timer failed", e) }
 
-    const { data: msgs, error: msgErr } = await supabase
-      .from('messages')
-      .select('id, sender_id, content, created_at, edited_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata, expires_at, view_once, viewed_by')
-      .eq('conversation_id', convId)
-      .order('created_at', { ascending: true }).limit(200)
+    let msgs = null;
+    let msgErr = null;
+    try {
+      const msgRes = await fetch(`https://nakubonye.bernestart.workers.dev/api/messages?conversationId=${convId}&limit=200`);
+      const msgJson = await msgRes.json();
+      if (!msgJson.success) throw new Error(msgJson.error || "Failed to fetch messages");
+      msgs = msgJson.data;
+    } catch (e) {
+      msgErr = e;
+    }
     if (msgErr) { setError(msgErr.message); setLoading(false); return }
     const __now = Date.now()
     setMessages((msgs || []).filter((m) => !m.expires_at || new Date(m.expires_at).getTime() > __now))
