@@ -7,7 +7,7 @@ import { Search, ArrowLeft, Send, MessageCircle, Paperclip, X, Smile, Mic, Squar
 import VerifiedBadge from "../components/VerifiedBadge"
 import PollMessage from "../components/PollMessage"
 import { friendlyError } from '../lib/errors'
-import { supabase } from '../lib/supabase'
+import { API_BASE_URL } from "../lib/api";
 import { useAuth } from '../lib/auth'
 
 import { Camera as NativeCamera, CameraResultType, CameraSource } from '@capacitor/camera'
@@ -132,12 +132,9 @@ export default function Chat() {
     if (!otherId || !session?.user?.id) return
     ;(async () => {
       const uid = session.user.id
-      const [directRes, reqRes] = await Promise.all([
-        supabase.rpc('can_send_message_direct', { sender: uid, recipient: otherId }),
-        supabase.rpc('can_send_message_request', { sender: uid, recipient: otherId }),
-      ])
-      const direct = directRes.data === true
-      const request = reqRes.data === true
+      const permRes = await fetch(`${API_BASE_URL}/api/chat/permissions?sender=${uid}&recipient=${otherId}`).then(r => r.json());
+      const direct = permRes.success ? permRes.data.canSendDirect === true : false;
+      const request = permRes.success ? permRes.data.canSendRequest === true : false;
       setCanMsg(direct)
       setCanMsgRequest(request)
       if (direct) setCanMsgReason('')
@@ -149,11 +146,9 @@ export default function Chat() {
   useEffect(() => {
     if (!otherId || !session?.user?.id) return
     ;(async () => {
-      const { data } = await supabase.rpc('can_see_online', {
-        viewer: session.user.id,
-        owner: otherId,
-      })
-      setCanSeeOnline(data !== false)
+      const permOnline = await fetch(`${API_BASE_URL}/api/chat/permissions?sender=${session.user.id}&recipient=${otherId}`).then(r => r.json());
+      const data = permOnline.success ? permOnline.data : {};
+      setCanSeeOnline(data.canSeeOnline !== false);
     })()
   }, [otherId, session?.user?.id])
   const [sending, setSending] = useState(false)

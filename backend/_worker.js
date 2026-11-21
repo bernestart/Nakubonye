@@ -1004,6 +1004,39 @@ export default {
         }
       }
 
+      
+      // 16. PHASE 2a-2: Chat Permissions
+      if (path === "/api/chat/permissions" && request.method === "GET") {
+        try {
+          const sender = url.searchParams.get("sender");
+          const recipient = url.searchParams.get("recipient");
+          if (!sender || !recipient) return new Response(JSON.stringify({ success: false, error: "Missing params" }), { status: 400, headers: cors });
+
+          // Check blocks, matches, and message requests in one parallel query
+          const [blocks, matches, requests] = await Promise.all([
+            queryDatabase(`SELECT blocker_id, blocked_id FROM blocks WHERE (blocker_id = $1 AND blocked_id = $2) OR (blocker_id = $2 AND blocked_id = $1)`, [sender, recipient]),
+            queryDatabase(`SELECT id FROM matches WHERE (user_one_id = $1 AND user_two_id = $2) OR (user_one_id = $2 AND user_two_id = $1)`, [sender, recipient]),
+            queryDatabase(`SELECT status FROM message_requests WHERE (sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1)`, [sender, recipient])
+          ]);
+
+          const isBlocked = blocks.rows.length > 0;
+          const isMatch = matches.rows.length > 0;
+          const requestStatus = requests.rows[0]?.status || null;
+
+          // Business Logic
+          const canSendDirect = !isBlocked;
+          const canSendRequest = !isBlocked && !isMatch && requestStatus !== 'declined';
+          const canSeeOnline = !isBlocked;
+
+          return new Response(JSON.stringify({ 
+            success: true, 
+            data: { canSendDirect, canSendRequest, canSeeOnline, isMatch, requestStatus } 
+          }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
