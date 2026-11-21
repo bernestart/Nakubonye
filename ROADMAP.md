@@ -73,3 +73,9 @@ P11 AUTH FINISH
    grep -nE -A16 'path === "/api/(messages|messages/reactions|messages/pinned|posts|likes/list|feed|typing)"' backend/_worker.js | cut -c1-150 | head -170
    grep -rnE "api/typing|\.send\(|type: ?['\"]typing" src | cut -c1-130 | head -15
 4. Then Claude writes Phase 1e as one script.
+
+## UPDATE 2026-11-21: ACCOUNT MIGRATION MOVES BEFORE P2
+- 6 Better Auth test users have legacy 32-char ids and no profiles; 20 Neon profiles are Supabase-era (uuid) and not linked to any Better Auth login.
+- P1.5 (new): import Supabase auth users into Neon "user"/"account" keeping their uuid; users set a new password via Email OTP / reset (needs Resend delivering from noreply@nakubonye.com). Delete the legacy non-uuid test users. Exit: a migrated user logs in and sees their old profile.
+- Phase 1b done (GET /api/profile/me returns 409 LEGACY_ACCOUNT_ID for non-uuid users).
+- Hardening later (P11): auth.js has trustedOrigins ["*"] and disableCSRFCheck true; fine with bearer tokens only, tighten before cookies or web release.
