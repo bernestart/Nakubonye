@@ -2,6 +2,7 @@ import { getMediaUrl } from '../lib/api';
 import { getRankedFeed, getCommunityPosts, toggleLikeAPI, API_BASE_URL } from '../lib/api';
 import { AnimatePresence } from "framer-motion";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react"
+import { supabase } from "../lib/supabase"
 import { useNavigate } from "react-router-dom"
 import { ImagePlus, Heart, Send, X, Users, Play, Camera, PenSquare, Video, Image as ImageIcon, MessageCircle, Share2 , MoreVertical , Volume2 , VolumeX } from "lucide-react"
 import VerifiedBadge from "../components/VerifiedBadge"
