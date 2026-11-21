@@ -944,6 +944,36 @@ export default {
         }
       }
 
+      
+      // 14. PHASE 2a-2: Read Receipts (Batch)
+      if (path === "/api/inbox/read" && request.method === "POST") {
+        try {
+          const { type, rows } = await request.json(); // rows = array of { id, userId }
+          if (type === 'dm' && rows?.length) {
+            for (const r of rows) {
+              await queryDatabase(
+                `INSERT INTO conversation_reads (conversation_id, user_id, last_read_at) 
+                 VALUES ($1, $2, NOW()) 
+                 ON CONFLICT (conversation_id, user_id) DO UPDATE SET last_read_at = NOW()`, 
+                [r.conversation_id, r.user_id]
+              );
+            }
+          } else if (type === 'group' && rows?.length) {
+            for (const r of rows) {
+              await queryDatabase(
+                `INSERT INTO group_reads (group_id, user_id, last_read_at) 
+                 VALUES ($1, $2, NOW()) 
+                 ON CONFLICT (group_id, user_id) DO UPDATE SET last_read_at = NOW()`, 
+                [r.group_id, r.user_id]
+              );
+            }
+          }
+          return new Response(JSON.stringify({ success: true }), { headers: cors });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });

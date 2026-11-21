@@ -77,7 +77,7 @@ export default function Messages() {
       .filter((x) => x.conversationId)
       .map((x) => ({ conversation_id: x.conversationId, user_id: uid, last_read_at: new Date().toISOString() }))
     if (dmRows.length > 0) {
-      await supabase.from("conversation_reads").upsert(dmRows, { onConflict: "conversation_id,user_id" })
+      fetch(`${API_BASE_URL}/api/inbox/read`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'dm', rows: dmRows }) }).catch(() => {})
     }
 
     // Groups
@@ -85,7 +85,7 @@ export default function Messages() {
       .filter((x) => x.groupId)
       .map((x) => ({ group_id: x.groupId, user_id: uid, last_read_at: new Date().toISOString() }))
     if (groupRows.length > 0) {
-      await supabase.from("group_reads").upsert(groupRows, { onConflict: "group_id,user_id" })
+      fetch(`${API_BASE_URL}/api/inbox/read`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'group', rows: groupRows }) }).catch(() => {})
     }
 
     setHeaderMenuOpen(false)
