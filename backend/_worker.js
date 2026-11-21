@@ -974,6 +974,36 @@ export default {
         }
       }
 
+      
+      // 15. PHASE 2a-2: Inbox Actions (Mute, Delete)
+      if (path === "/api/inbox/action" && request.method === "POST") {
+        try {
+          const { action, type, id, userId } = await req.json();
+
+          if (action === 'delete' && type === 'dm') {
+            await queryDatabase(`INSERT INTO conversation_deletes (conversation_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [id, userId]);
+          } else if (action === 'delete' && type === 'group') {
+            await queryDatabase(`INSERT INTO group_deletes (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [id, userId]);
+          } 
+          
+          else if (action === 'mute' && type === 'dm') {
+            await queryDatabase(`INSERT INTO conversation_mutes (conversation_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [id, userId]);
+          } else if (action === 'unmute' && type === 'dm') {
+            await queryDatabase(`DELETE FROM conversation_mutes WHERE conversation_id = $1 AND user_id = $2`, [id, userId]);
+          }
+          
+          else if (action === 'mute' && type === 'group') {
+            await queryDatabase(`INSERT INTO group_mutes (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [id, userId]);
+          } else if (action === 'unmute' && type === 'group') {
+            await queryDatabase(`DELETE FROM group_mutes WHERE group_id = $1 AND user_id = $2`, [id, userId]);
+          }
+
+          return new Response(JSON.stringify({ success: true }), { headers: cors });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
