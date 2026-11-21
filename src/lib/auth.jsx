@@ -24,7 +24,7 @@ export function AuthProvider({ children }) {
       .then(res => res.json())
       .then(data => {
         if (data?.user) {
-          setUser(data.user); setProfile(data.user);
+          setUser(data.user); setProfile(data.user); refreshProfile();
         } else {
           setUser(null); setProfile(null);
           localStorage.removeItem('auth_token');
@@ -89,10 +89,21 @@ export function AuthProvider({ children }) {
     setToken(null); setUser(null); setProfile(null);
   };
 
+  const refreshProfile = async () => {
+    const t = localStorage.getItem('auth_token');
+    if (!t) return null;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/profile/me`, { headers: { Authorization: `Bearer ${t}` } });
+      const json = await res.json();
+      if (json && json.data) { setProfile(p => ({ ...(p || {}), ...json.data })); return json.data; }
+    } catch (e) { console.warn('refreshProfile failed', e); }
+    return null;
+  };
+
   const session = user ? { user, access_token: token } : null;
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, loading, signIn, signUp, signOut, verifyOtp }}>
+    <AuthContext.Provider value={{ user, session, profile, loading, signIn, signUp, signOut, verifyOtp, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

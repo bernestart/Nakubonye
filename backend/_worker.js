@@ -654,6 +654,14 @@ export default {
 
       
       // 9. CREATE/UPDATE PROFILE (Onboarding)
+      if (path === "/api/profile/me" && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        const jh = { ...cors, "Content-Type": "application/json" };
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: jh });
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(me.id)) return new Response(JSON.stringify({ success: false, error: "LEGACY_ACCOUNT_ID" }), { status: 409, headers: jh });
+        const data = await queryDatabase("SELECT * FROM profiles WHERE id = $1::uuid LIMIT 1", [me.id]);
+        return new Response(JSON.stringify({ success: true, data: data.rows[0] || null }), { headers: jh });
+      }
       if (path === "/api/profile" && request.method === "POST") {
         try {
           const body = await request.json();
@@ -667,7 +675,8 @@ export default {
               gender = EXCLUDED.gender
             RETURNING *;
           `;
-          const params = [body.id, body.display_name, body.username, body.date_of_birth, body.gender];
+          const sess = await getSessionUser(request, env, url);
+          const params = [sess ? sess.id : body.id, body.display_name, body.username, body.date_of_birth, body.gender];
           const data = await queryDatabase(query, params);
           return new Response(JSON.stringify({ success: true, data: data.rows[0] }), { headers: { ...cors, "Content-Type": "application/json" } });
         } catch (err) {
