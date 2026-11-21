@@ -213,7 +213,7 @@ export default function GroupChat() {
   useEffect(() => {
     if (!groupId) return
     // META-SCALE: Cloudflare WebSocket for Groups
-    const ws = new WebSocket(`wss://nakubonye.bernestart.workers.dev/api/ws/group-${groupId}`);
+    const ws = new WebSocket(`wss://nakubonye.bernestart.workers.dev/api/ws/group-${groupId}?token=${encodeURIComponent(localStorage.getItem("auth_token") || "")}`);
     
     ws.onmessage = (event) => {
       try {

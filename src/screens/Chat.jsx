@@ -439,7 +439,7 @@ export default function Chat() {
   useEffect(() => {
     if (!conversationId) return
     // META-SCALE: Cloudflare WebSocket for Direct Messages
-    const ws = new WebSocket(`wss://nakubonye.bernestart.workers.dev/api/ws/dm-${conversationId}`);
+    const ws = new WebSocket(`wss://nakubonye.bernestart.workers.dev/api/ws/dm-${conversationId}?token=${encodeURIComponent(localStorage.getItem("auth_token") || "")}`);
     
     ws.onmessage = (event) => {
       try {

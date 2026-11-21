@@ -10,5 +10,5 @@ P2 Single source of truth: inventory Supabase usage; move profiles/follows -> DM
 P3 Realtime hardening: shared WS hook (backoff, dedupe, resume), DO close-code fix, likes persisted in Neon
 P4 Instant UX: TanStack Query + optimistic send/like, lazy routes (2.1MB bundle -> <600KB initial)
 P5 Observability + CI: Sentry (app + Worker), GitHub Actions build/lint/deploy
-P6 Media to R2
+P6 Media hardening on Telegram (edge cache, client thumbnails); R2 later when a payment method exists
 P7 Notifications (FCM) · P8 Search · P9 Feed fan-out · P10 Load test

@@ -35,22 +35,56 @@ export class ChatRoomSQLite {
 
   // HIBERNATION EVENT: Handles incoming messages from clients
   async webSocketMessage(ws, message) {
-    const sessions = this.state.getWebSockets();
-    sessions.forEach(s => {
-      if (s !== ws) {
-        try { s.send(message); } catch (e) {}
-      }
-    });
+    // Clients may only relay tiny typing frames; real messages arrive via the authenticated REST API.
+    let ok = false;
+    if (typeof message === "string" && message.length <= 512) {
+      try { ok = JSON.parse(message).type === "typing"; } catch (e) {}
+    }
+    if (!ok) {
+      console.warn("[WS] dropped client frame");
+      if (this.env.AUTH_ENFORCE === "1") return;
+    }
+    for (const s of this.state.getWebSockets()) {
+      if (s !== ws) { try { s.send(message); } catch (e) {} }
+    }
   }
 
   // HIBERNATION EVENT: Handles cleanly closing connections
   async webSocketClose(ws, code, reason, wasClean) {
-    ws.close(code, "Durable Object is closing WebSocket");
+    try { ws.close(!code || code === 1005 || code === 1006 || code === 1015 ? 1000 : code, "closing"); } catch (e) {}
   }
   
   // HIBERNATION EVENT: Handles errors
   async webSocketError(ws, error) {
     ws.close(1011, "WebSocket error");
+  }
+}
+
+const SESS_CACHE = new Map();
+async function getSessionUser(request, env, url) {
+  let headers = request.headers;
+  let tok = null;
+  const ah = headers.get("Authorization");
+  if (ah && ah.startsWith("Bearer ")) tok = ah.slice(7).trim();
+  else if (url.searchParams.get("token")) {
+    tok = url.searchParams.get("token");
+    headers = new Headers(headers);
+    headers.set("Authorization", "Bearer " + tok);
+  }
+  if (!tok) return null;
+  const hit = SESS_CACHE.get(tok);
+  if (hit && hit.exp > Date.now()) return hit.user;
+  try {
+    const res = await getAuth(env).api.getSession({ headers });
+    const user = res && res.user ? { id: String(res.user.id), email: res.user.email } : null;
+    if (user) {
+      if (SESS_CACHE.size > 500) SESS_CACHE.clear();
+      SESS_CACHE.set(tok, { user, exp: Date.now() + 30000 });
+    }
+    return user;
+  } catch (e) {
+    console.warn("[AUTH] getSession failed", e && e.message);
+    return null;
   }
 }
 
@@ -150,9 +184,41 @@ export default {
       }
     }
 
+    // ===== PHASE 1: AUTH GATE. AUTH_ENFORCE="1" blocks; otherwise log-only. =====
+    const ENFORCE = env.AUTH_ENFORCE === "1";
+    const deny = (status, error) => new Response(JSON.stringify({ success: false, error }), { status, headers: { ...cors, "Content-Type": "application/json" } });
+    if (path.startsWith("/api/") && !path.startsWith("/api/media/")) {
+      const authUser = await getSessionUser(request, env, url);
+      if (path === "/api/whoami") {
+        return authUser ? new Response(JSON.stringify({ success: true, user: authUser }), { headers: { ...cors, "Content-Type": "application/json" } }) : deny(401, "UNAUTHENTICATED");
+      }
+      if (!authUser) {
+        console.warn("[AUTH] unauthenticated " + request.method + " " + path);
+        if (ENFORCE) return deny(401, "UNAUTHENTICATED");
+      } else {
+        const claimed = new Set();
+        if (["/api/feed", "/api/feed/bootstrap", "/api/community/posts"].includes(path) && url.searchParams.get("userId")) claimed.add(url.searchParams.get("userId"));
+        if (request.method === "POST" && (request.headers.get("content-type") || "").includes("application/json")) {
+          const b = await request.clone().json().catch(() => null);
+          if (b && typeof b === "object" && !Array.isArray(b)) {
+            for (const k of ["sender_id", "senderId", "userId", "user_id", "author_id", "authorId", "pinned_by", "pinnedBy"]) if (b[k] != null) claimed.add(String(b[k]));
+            if (path === "/api/profile" && b.id != null) claimed.add(String(b.id));
+          }
+        }
+        for (const v of claimed) {
+          if (v !== authUser.id) {
+            console.warn("[AUTH] identity mismatch on " + path);
+            if (ENFORCE) return deny(403, "IDENTITY_MISMATCH");
+            break;
+          }
+        }
+      }
+    }
+
     try {
       // WEBSOCKET ROUTE (Real-Time Chat)
       if (path.startsWith("/api/ws/")) {
+        if (request.headers.get("Upgrade") !== "websocket") return new Response("Expected WebSocket", { status: 426, headers: cors });
         const roomId = path.split("/api/ws/")[1];
         const id = env.CHAT_ROOMS.idFromName(roomId);
         const obj = env.CHAT_ROOMS.get(id);
@@ -374,7 +440,7 @@ export default {
         const idsParam = url.searchParams.get("messageIds");
         if (!idsParam) return new Response(JSON.stringify({ success: false, error: "messageIds required" }), { status: 400, headers: cors });
         const ids = idsParam.split(',');
-        const placeholders = ids.map((_, i) => `${i + 1}`).join(',');
+        
         const data = await queryDatabase(`SELECT message_id, user_id, reaction FROM message_reactions WHERE message_id IN (${placeholders})`, ids);
         return new Response(JSON.stringify({ success: true, data: data.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
       }
@@ -652,7 +718,7 @@ export default {
           const { ids } = await request.json();
           if (!ids || ids.length === 0) return new Response(JSON.stringify({ success: true, data: [] }), { headers: cors });
           const placeholders = ids.map((_, i) => `${i + 1}`).join(',');
-          const data = await queryDatabase(`SELECT id, display_name, username FROM profiles WHERE id IN (${placeholders})`, ids);
+          const data = await queryDatabase("SELECT id, display_name, username FROM profiles WHERE id::text = ANY($1::text[])", [ids.slice(0, 100).map(String)]);
           return new Response(JSON.stringify({ success: true, data: data.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
         } catch (err) {
           return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });

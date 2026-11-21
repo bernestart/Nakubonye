@@ -196,7 +196,7 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
   useEffect(() => {
     if (!communityId) return
     // META-SCALE: Cloudflare WebSocket Connection
-    const ws = new WebSocket(`wss://nakubonye.bernestart.workers.dev/api/ws/${communityId}`);
+    const ws = new WebSocket(`wss://nakubonye.bernestart.workers.dev/api/ws/${communityId}?token=${encodeURIComponent(localStorage.getItem("auth_token") || "")}`);
 
     ws.onmessage = (event) => {
       try {
