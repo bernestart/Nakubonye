@@ -1037,6 +1037,69 @@ export default {
         }
       }
 
+      
+      // 17. PHASE 2a-2: Chat State BFF
+      if (path === "/api/chat/state" && request.method === "GET") {
+        try {
+          const myId = url.searchParams.get("myId");
+          const otherId = url.searchParams.get("otherId");
+          const convId = url.searchParams.get("convId");
+
+          const [mySettings, theirSettings, prevRead, mute, clear] = await Promise.all([
+            queryDatabase(`SELECT show_read_receipts FROM user_settings WHERE user_id = $1`, [myId]),
+            queryDatabase(`SELECT show_read_receipts FROM user_settings WHERE user_id = $1`, [otherId]),
+            queryDatabase(`SELECT last_read_at FROM conversation_reads WHERE conversation_id = $1 AND user_id = $2`, [convId, myId]),
+            queryDatabase(`SELECT conversation_id FROM conversation_mutes WHERE conversation_id = $1 AND user_id = $2`, [convId, myId]),
+            queryDatabase(`SELECT cleared_at FROM conversation_clears WHERE conversation_id = $1 AND user_id = $2`, [convId, myId])
+          ]);
+
+          return new Response(JSON.stringify({
+            success: true,
+            data: {
+              mineOn: mySettings.rows[0]?.show_read_receipts !== false,
+              theirsOn: theirSettings.rows[0]?.show_read_receipts !== false,
+              prevReadAt: prevRead.rows[0]?.last_read_at || null,
+              isMuted: mute.rows.length > 0,
+              clearedAt: clear.rows[0]?.cleared_at || null
+            }
+          }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+
+      
+      // 18. PHASE 2a-2: Message Actions (Unsend, View Once)
+      if (path === "/api/messages/action" && request.method === "POST") {
+        try {
+          const { action, messageId, userId, viewedBy } = await request.json();
+          if (action === 'unsend') {
+            await queryDatabase(`UPDATE messages SET deleted_at = NOW(), content = '', media_url = null WHERE id = $1 AND sender_id = $2`, [messageId, userId]);
+          } else if (action === 'view_once') {
+            await queryDatabase(`UPDATE messages SET viewed_by = $1, media_url = null WHERE id = $2`, [JSON.stringify(viewedBy), messageId]);
+          }
+          return new Response(JSON.stringify({ success: true }), { headers: cors });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+
+      // 19. PHASE 2a-2: Adopt Match into Conversation
+      if (path === "/api/conversations/adopt" && request.method === "POST") {
+        try {
+          const { matchId, directToAdoptId } = await request.json();
+          if (directToAdoptId) {
+            await queryDatabase(`UPDATE conversations SET match_id = $1 WHERE id = $2`, [matchId, directToAdoptId]);
+            return new Response(JSON.stringify({ success: true, conversationId: directToAdoptId }), { headers: cors });
+          } else {
+            const res = await queryDatabase(`INSERT INTO conversations (match_id) VALUES ($1) RETURNING id`, [matchId]);
+            return new Response(JSON.stringify({ success: true, conversationId: res.rows[0].id }), { headers: cors });
+          }
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });

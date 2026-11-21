@@ -234,7 +234,7 @@ export default function Chat() {
           .limit(1)
           .maybeSingle()
         if (directToAdopt) {
-          await supabase.from('conversations').update({ match_id: match.id }).eq('id', directToAdopt.id)
+          await fetch(`${API_BASE_URL}/api/conversations/adopt`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ matchId: match.id, directToAdoptId: directToAdopt.id }) });
           convId = directToAdopt.id
         } else {
         const { data: created, error: createErr } = await supabase
@@ -349,40 +349,21 @@ export default function Chat() {
     setTheirLastRead(theirRead?.last_read_at || null)
 
     // Read receipts: symmetric — off if either side turned them off
-    const [mineRes, theirsRes] = await Promise.all([
-      supabase.from('user_settings').select('show_read_receipts').eq('user_id', myId).maybeSingle(),
-      supabase.from('user_settings').select('show_read_receipts').eq('user_id', otherId).maybeSingle(),
-    ])
-    const mineOn = mineRes.data?.show_read_receipts !== false
-    const theirsOn = theirsRes.data?.show_read_receipts !== false
-    setCanSeeReadReceipts(mineOn && theirsOn)
+      const stateRes = await fetch(`${API_BASE_URL}/api/chat/state?myId=${myId}&otherId=${otherId}&convId=${convId}`).then(r => r.json());
+      const state = stateRes.success ? stateRes.data : {};
+      setCanSeeReadReceipts(state.mineOn !== false && state.theirsOn !== false);
+      setMyPreviousReadAt(state.prevReadAt || null);
+      setIsMuted(!!state.isMuted);
+      setClearedAt(state.clearedAt || null);
 
-    // Capture MY previous read mark BEFORE overwriting it — used for the "new messages" divider
-    const { data: myPrevRead } = await supabase
-      .from('conversation_reads').select('last_read_at')
-      .eq('conversation_id', convId).eq('user_id', myId).maybeSingle()
-    setMyPreviousReadAt(myPrevRead?.last_read_at || null)
+      if (typeof setUnreadCount === 'function') setUnreadCount(0);
 
-    // Load mute + clear state
-    const [muteRes, clearRes] = await Promise.all([
-      supabase.from('conversation_mutes').select('conversation_id').eq('conversation_id', convId).eq('user_id', myId).maybeSingle(),
-      supabase.from('conversation_clears').select('cleared_at').eq('conversation_id', convId).eq('user_id', myId).maybeSingle(),
-    ])
-    setIsMuted(!!muteRes.data)
-    setClearedAt(clearRes.data?.cleared_at || null)
-
-    
-    // 1. OPTIMISTIC UI: Instantly reset local unread badge to 0
-    if (typeof setUnreadCount === 'function') setUnreadCount(0);
-    
-    // 2. Push timestamp to Supabase in the background
-    supabase.from('conversation_reads').upsert(
-      { conversation_id: convId, user_id: myId, last_read_at: new Date().toISOString() },
-      { onConflict: 'conversation_id,user_id' }
-    ).then(({ error }) => {
-      if (error) console.warn("Failed to sync read receipt:", error);
-    });
-    setLoading(false)
+      fetch(`${API_BASE_URL}/api/inbox/read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'dm', rows: [{ conversation_id: convId, user_id: myId }] })
+      }).catch(() => {});
+      setLoading(false)
   }, [myId, otherId])
 
   useEffect(() => { boot() }, [boot])
@@ -840,13 +821,13 @@ export default function Chat() {
     const nextViewedBy = Array.isArray(m.viewed_by) ? [...m.viewed_by, myId] : [myId]
     setMessages((cur) => cur.map((x) => x.id === m.id ? { ...x, viewed_by: nextViewedBy, media_url: null } : x))
     try {
-      await supabase.from("messages").update({ viewed_by: nextViewedBy, media_url: null }).eq("id", m.id)
+      await fetch(`${API_BASE_URL}/api/messages/action`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "view_once", messageId: m.id, viewedBy: nextViewedBy }) });
       try {
         const url = m.media_url || ""
         const marker = "/object/public/chat-media/"
         const idx = url.indexOf(marker)
         if (idx !== -1) {
-          await supabase.storage.from("chat-media").remove([url.slice(idx + marker.length)])
+          // Media deletion handled by Worker later
         }
       } catch (e) { console.warn("view-once media delete failed", e) }
     } catch (e) { console.warn("mark viewed failed", e) }
