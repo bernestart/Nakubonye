@@ -79,3 +79,6 @@ P11 AUTH FINISH
 - P1.5 (new): import Supabase auth users into Neon "user"/"account" keeping their uuid; users set a new password via Email OTP / reset (needs Resend delivering from noreply@nakubonye.com). Delete the legacy non-uuid test users. Exit: a migrated user logs in and sees their old profile.
 - Phase 1b done (GET /api/profile/me returns 409 LEGACY_ACCOUNT_ID for non-uuid users).
 - Hardening later (P11): auth.js has trustedOrigins ["*"] and disableCSRFCheck true; fine with bearer tokens only, tighten before cookies or web release.
+
+## P1.6 SIGNUP WIZARD (before P2a-2)
+Meta-style one-question-per-screen create-account flow: name, birthday, gender, email, password, OTP code, username (live availability), photo, follow suggestions, welcome. Resumable: signed-in user without a profile row is routed to the wizard. Worker routes done: GET /api/username/available, POST /api/profile/bootstrap (session id only, server-side age gate MIN_AGE, birthday immutable). Next: wizard + Meta-style login UI, profile gate in App routing, Cloudflare Turnstile, rate limits (P1f).
