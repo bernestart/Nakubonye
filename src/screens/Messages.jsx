@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { MessageCircle, RefreshCw, PenSquare, BellOff, Search, X, Users, MoreVertical, Archive, Inbox, CheckCheck, Flag, Ban, Pin, Trash2, Settings, Check, Bell } from 'lucide-react'
 import { friendlyError } from '../lib/errors'
+import { API_BASE_URL } from '../lib/api';
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl } from '../lib/photo'
@@ -315,46 +316,27 @@ export default function Messages() {
     setGroupItems(groupList)
 
     // Load pinned conversations + groups
-    const [convPins, grpPins] = await Promise.all([
-      supabase.from("conversation_pins").select("conversation_id").eq("user_id", userId),
-      supabase.from("group_pins").select("group_id").eq("user_id", userId),
-    ])
+
+    // BFF PATTERN: Single request for all inbox data
+    const bootRes = await fetch(`${API_BASE_URL}/api/inbox/bootstrap?userId=${userId}`).then(r => r.json());
+    const boot = bootRes.success ? bootRes.data : { convPins: [], grpPins: [], convArch: [], grpArch: [], convDel: [], grpDel: [], onlineRows: [] };
+
     const pinSet = new Set()
-    ;(convPins.data || []).forEach((r) => pinSet.add("c:" + r.conversation_id))
-    ;(grpPins.data || []).forEach((r) => pinSet.add("g:" + r.group_id))
+    ;(boot.convPins || []).forEach((r) => pinSet.add("c:" + r.conversation_id))
+    ;(boot.grpPins || []).forEach((r) => pinSet.add("g:" + r.group_id))
     setPinnedKeys(pinSet)
 
-    // Load archived conversations + groups
-    const [convArch, grpArch] = await Promise.all([
-      supabase.from("conversation_archives").select("conversation_id").eq("user_id", userId),
-      supabase.from("group_archives").select("group_id").eq("user_id", userId),
-    ])
     const archSet = new Set()
-    ;(convArch.data || []).forEach((r) => archSet.add("c:" + r.conversation_id))
-    ;(grpArch.data || []).forEach((r) => archSet.add("g:" + r.group_id))
+    ;(boot.convArch || []).forEach((r) => archSet.add("c:" + r.conversation_id))
+    ;(boot.grpArch || []).forEach((r) => archSet.add("g:" + r.group_id))
     setArchivedKeys(archSet)
 
-    // Load deleted conversations + groups
-    const [convDel, grpDel] = await Promise.all([
-      supabase.from("conversation_deletes").select("conversation_id").eq("user_id", userId),
-      supabase.from("group_deletes").select("group_id").eq("user_id", userId),
-    ])
     const delSet = new Set()
-    ;(convDel.data || []).forEach((r) => delSet.add("c:" + r.conversation_id))
-    ;(grpDel.data || []).forEach((r) => delSet.add("g:" + r.group_id))
+    ;(boot.convDel || []).forEach((r) => delSet.add("c:" + r.conversation_id))
+    ;(boot.grpDel || []).forEach((r) => delSet.add("g:" + r.group_id))
     setDeletedKeys(delSet)
 
-    // Online users — recent last_seen_at, excluding me
-    const cutoff = new Date(Date.now() - 3 * 60 * 1000).toISOString()
-    const { data: onlineRows } = await supabase
-      .from("profiles")
-      .select("id, display_name, username, last_seen_at")
-      .gt("last_seen_at", cutoff)
-      .neq("id", userId)
-      .eq("is_active", true)
-      .order("last_seen_at", { ascending: false })
-      .limit(30)
-
+    const onlineRows = boot.onlineRows || [];
     let visibleOnline = []
     if (onlineRows && onlineRows.length > 0) {
       const ids = onlineRows.map((r) => r.id)

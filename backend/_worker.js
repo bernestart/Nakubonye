@@ -890,6 +890,60 @@ export default {
         }
       }
 
+      
+      // 12. TELEMETRY EVENTS (Fire-and-Forget)
+      if (path === "/api/events" && request.method === "POST") {
+        try {
+          const { type, postId, userId } = await request.json();
+          
+          if (type === 'impression') {
+            await queryDatabase(`INSERT INTO feed_impressions (user_id, post_id, created_at) VALUES ($1, $2, NOW()) ON CONFLICT DO NOTHING`, [userId, postId]);
+          } else if (type === 'click') {
+            await queryDatabase(`INSERT INTO feed_clicks (user_id, post_id, created_at) VALUES ($1, $2, NOW()) ON CONFLICT DO NOTHING`, [userId, postId]);
+          } else if (type === 'notification') {
+            const { targetUserId, action } = await request.json();
+            await queryDatabase(`INSERT INTO notifications (user_id, actor_id, type, post_id) VALUES ($1, $2, $3, $4)`, [targetUserId, userId, action, postId]);
+          }
+          
+          // Return 202 Accepted immediately to free up the frontend
+          return new Response(JSON.stringify({ success: true }), { status: 202, headers: cors });
+        } catch (err) {
+          // Silently fail so the UI doesn't crash if telemetry fails
+          return new Response(JSON.stringify({ success: false }), { status: 200, headers: cors });
+        }
+      }
+
+      
+      // 13. PHASE 2a-2: INBOX BFF
+      if (path === "/api/inbox/bootstrap" && request.method === "GET") {
+        const userId = url.searchParams.get("userId");
+        if (!userId) return new Response(JSON.stringify({ success: false, error: "userId required" }), { status: 400, headers: cors });
+
+        try {
+          const [convPins, grpPins, convArch, grpArch, convDel, grpDel, onlineRows] = await Promise.all([
+            queryDatabase(`SELECT conversation_id FROM conversation_pins WHERE user_id = $1`, [userId]),
+            queryDatabase(`SELECT group_id FROM group_pins WHERE user_id = $1`, [userId]),
+            queryDatabase(`SELECT conversation_id FROM conversation_archives WHERE user_id = $1`, [userId]),
+            queryDatabase(`SELECT group_id FROM group_archives WHERE user_id = $1`, [userId]),
+            queryDatabase(`SELECT conversation_id FROM conversation_deletes WHERE user_id = $1`, [userId]),
+            queryDatabase(`SELECT group_id FROM group_deletes WHERE user_id = $1`, [userId]),
+            queryDatabase(`SELECT id, display_name, username, last_seen_at FROM profiles WHERE id != $1 AND is_active = true ORDER BY last_seen_at DESC LIMIT 30`, [userId])
+          ]);
+
+          return new Response(JSON.stringify({ 
+            success: true, 
+            data: {
+              convPins: convPins.rows, grpPins: grpPins.rows,
+              convArch: convArch.rows, grpArch: grpArch.rows,
+              convDel: convDel.rows, grpDel: grpDel.rows,
+              onlineRows: onlineRows.rows
+            }
+          }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
