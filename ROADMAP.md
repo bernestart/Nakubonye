@@ -82,3 +82,6 @@ P11 AUTH FINISH
 
 ## P1.6 SIGNUP WIZARD (before P2a-2)
 Meta-style one-question-per-screen create-account flow: name, birthday, gender, email, password, OTP code, username (live availability), photo, follow suggestions, welcome. Resumable: signed-in user without a profile row is routed to the wizard. Worker routes done: GET /api/username/available, POST /api/profile/bootstrap (session id only, server-side age gate MIN_AGE, birthday immutable). Next: wizard + Meta-style login UI, profile gate in App routing, Cloudflare Turnstile, rate limits (P1f).
+
+## P1.6b DONE (written 2026-11-21)
+Signup wizard (one question per screen, resumable), Meta-style login + forgot-password (Email OTP), profile gate in App routing. Min age 13 (Meta); dating features (Discover/Matches/Likes) to be 18+ only, enforce server-side when those routes move to the Worker. No Supabase calls in these screens. Rule: no new Supabase code anywhere; each screen touched is fully moved to Worker + Neon.

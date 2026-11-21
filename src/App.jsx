@@ -123,6 +123,7 @@ function Guard({ children }) {
   const { session, profile, loading } = useAuth()
   if (loading) return <Loading />
   if (!session) return <Navigate to="/" replace />
+  if (!profile?.username) return <Navigate to="/signup" replace />  // PROFILE GATE
   if (profile?.is_banned) return <BannedScreen reason={profile.banned_reason} />
   return children
 }
@@ -167,9 +168,9 @@ function BannedScreen({ reason }) {
 }
 
 function PublicOnly({ children }) {
-  const { session, loading } = useAuth()
+  const { session, profile, loading } = useAuth()
   if (loading) return <Loading />
-  if (session) return <Navigate to="/feed" replace />
+  if (session && profile?.username) return <Navigate to="/feed" replace />
   return children
 }
 

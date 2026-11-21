@@ -16,7 +16,7 @@ const CODE=String.raw`      if (path === "/api/username/available" && request.me
         if (!me) return out(401, { success: false, error: "UNAUTHENTICATED" });
         if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(me.id))) return out(409, { success: false, error: "LEGACY_ACCOUNT_ID" });
         const b = await request.json().catch(() => ({}));
-        const MIN_AGE = 18; // product decision: set to 13 for a general social network
+        const MIN_AGE = 13; // product decision: set to 13 for a general social network
         const clean = (v) => String(v == null ? "" : v).replace(/\s+/g, " ").trim();
         const first = clean(b.firstName), last = clean(b.lastName);
         const displayName = (first + " " + last).trim();

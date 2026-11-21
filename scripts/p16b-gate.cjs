@@ -1,0 +1,21 @@
+const fs=require('fs');
+const fails=[];
+let a=fs.readFileSync('src/lib/auth.jsx','utf8'), app=fs.readFileSync('src/App.jsx','utf8');
+const A1='setUser(data.user); setProfile(data.user); refreshProfile();';
+const rIn=/(throw new Error\(data\.message \|\| 'Login failed'\);\s*if \(data\.token\) \{\s*localStorage\.setItem\('auth_token', data\.token\);\s*setToken\(data\.token\); setUser\(data\.user\); setProfile\(data\.user\);)/;
+const G1='if (!session) return <Navigate to="/" replace />';
+const P1='const { session, loading } = useAuth()';
+const P2='if (session) return <Navigate to="/feed" replace />';
+if(a.split(A1).length!==2)fails.push('auth.jsx: session effect anchor');
+if(!rIn.test(a))fails.push('auth.jsx: signIn anchor');
+for(const [s,n] of [[G1,'Guard'],[P1,'PublicOnly destructure'],[P2,'PublicOnly redirect']])if(app.split(s).length!==2)fails.push('App.jsx: '+n+' anchor (need exactly 1)');
+if(app.includes('PROFILE GATE'))fails.push('App.jsx: already patched');
+if(fails.length){console.log('ABORTED, nothing written:\n'+fails.join('\n'));process.exit(1);}
+a=a.replace(A1,()=>'setUser(data.user); setProfile(data.user); return refreshProfile();');
+a=a.replace(rIn,m=>m+'\n      await refreshProfile();');
+app=app.replace(G1,()=>G1+'\n  if (!profile?.username) return <Navigate to="/signup" replace />  // PROFILE GATE');
+app=app.replace(P1,()=>'const { session, profile, loading } = useAuth()');
+app=app.replace(P2,()=>'if (session && profile?.username) return <Navigate to="/feed" replace />');
+fs.writeFileSync('src/lib/auth.jsx',a);fs.writeFileSync('src/App.jsx',app);
+fs.appendFileSync('ROADMAP.md','\n## P1.6b DONE (written 2026-11-21)\nSignup wizard (one question per screen, resumable), Meta-style login + forgot-password (Email OTP), profile gate in App routing. Min age 13 (Meta); dating features (Discover/Matches/Likes) to be 18+ only, enforce server-side when those routes move to the Worker. No Supabase calls in these screens. Rule: no new Supabase code anywhere; each screen touched is fully moved to Worker + Neon.\n');
+console.log('APPLIED: src/lib/auth.jsx, src/App.jsx, ROADMAP.md');

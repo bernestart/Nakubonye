@@ -24,7 +24,7 @@ export function AuthProvider({ children }) {
       .then(res => res.json())
       .then(data => {
         if (data?.user) {
-          setUser(data.user); setProfile(data.user); refreshProfile();
+          setUser(data.user); setProfile(data.user); return refreshProfile();
         } else {
           setUser(null); setProfile(null);
           localStorage.removeItem('auth_token');
@@ -50,6 +50,7 @@ export function AuthProvider({ children }) {
     if (data.token) {
       localStorage.setItem('auth_token', data.token);
       setToken(data.token); setUser(data.user); setProfile(data.user);
+      await refreshProfile();
     }
     return data;
   };
