@@ -552,13 +552,16 @@ export default function Chat() {
 
   useEffect(() => {
     if (!conversationId || !myId) return
-    const ch = supabase.channel('typing-' + conversationId)
-    ch.on('broadcast', { event: 'typing' }, (payload) => {
-      if (payload?.payload?.user_id === myId) return
-      setOtherTyping(!!payload?.payload?.typing)
-    }).subscribe()
-    typingChannelRef.current = ch
-    return () => { supabase.removeChannel(ch); typingChannelRef.current = null }
+        // META-SCALE: Typing Indicator via Cloudflare Redis
+    const typingInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/typing/check?roomId=dm-${conversationId}&userId=${otherId}`);
+        const data = await res.json();
+        setOtherTyping(data.isTyping || false);
+      } catch (e) {}
+    }, 2000);
+
+    return () => { clearInterval(typingInterval); typingChannelRef.current = null }
   }, [conversationId, myId])
 
   useEffect(() => {
