@@ -102,7 +102,10 @@ export function getAuth(env) {
     basePath: "/api/auth",
     trustedOrigins: ["*"],
     advanced: {
-      disableCSRFCheck: true
+      disableCSRFCheck: true,
+      database: {
+        generateId: () => crypto.randomUUID()
+      }
     },
     emailAndPassword: { enabled: true },
     plugins: [
