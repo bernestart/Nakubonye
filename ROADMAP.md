@@ -85,3 +85,8 @@ Meta-style one-question-per-screen create-account flow: name, birthday, gender, 
 
 ## P1.6b DONE (written 2026-11-21)
 Signup wizard (one question per screen, resumable), Meta-style login + forgot-password (Email OTP), profile gate in App routing. Min age 13 (Meta); dating features (Discover/Matches/Likes) to be 18+ only, enforce server-side when those routes move to the Worker. No Supabase calls in these screens. Rule: no new Supabase code anywhere; each screen touched is fully moved to Worker + Neon.
+
+## RESUME HERE (2026-11-21 night)
+Order: Worker patches P1e + P2a1 + P1.6 bootstrap (one push, log-only) -> client p16b gate + SignUp/SignIn wizard (build, push) -> Chrome Incognito sign-up test -> Neon check (len 36, has_profile 1) -> shadow logs [AUTH] [WS] [MEMBER] -> set AUTH_ENFORCE=1 and MEMBER_ENFORCE=1 secrets in Cloudflare dashboard after a milestone APK -> Phase 2a-2 inbox: GET /api/inbox replacing ~40 supabase calls in Messages.jsx (lines 95-480 already seen) -> P1f rate limits, Turnstile, validation -> P1.5 Supabase account migration (needs account table columns) -> rest of P2.
+Open questions: are the 20 Neon profiles real people? Is the Resend domain verified (OTP emails)? Legacy cleanup SQL: delete non-uuid rows from session, account, user.
+Probe: grep markers "PHASE 1: AUTH GATE", "PHASE 1e", "/api/conversations/open", "/api/profile/bootstrap" in backend/_worker.js and "PROFILE GATE" in src/App.jsx.
