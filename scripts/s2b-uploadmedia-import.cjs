@@ -1,6 +1,6 @@
 const fs=require('fs');
 const api=fs.readFileSync('src/lib/api.js','utf8');
-if(!/export\s+(const|async function|function)\s+uploadMedia\b/.test(api)&&!/export\s*\{[^}]*\buploadMedia\b/.test(api)){console.log('ABORTED: uploadMedia is not exported from src/lib/api.js');process.exit(1);}
+if(!/export\s+(const|async function|function)\s+uploadMedia\b/.test(api)&&!/export\s*\{[^}]*\buploadMedia\b[^}]*\}/.test(api)){console.log('ABORTED: uploadMedia is not exported from src/lib/api.js');process.exit(1);}
 const files=['src/components/CommunityFeed.jsx','src/components/PostComposer.jsx'];
 const out={};const notes=[];
 for(const f of files){
