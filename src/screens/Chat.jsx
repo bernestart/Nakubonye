@@ -593,8 +593,9 @@ export default function Chat() {
     const file = e.target.files?.[0]; if (!file) return
     if (file.size > 15 * 1024 * 1024) { setError("File too large"); return }
     setSending(true)
-    const path = await uploadMedia(file);
-    if (upErr) { setError(upErr.message); setSending(false); return }
+    let path;
+    try { path = await uploadMedia(file); }
+    catch (uploadError) { setSending(false); setError(uploadError?.message || 'Upload failed'); return }
     const pub = { publicUrl: path }; // Cloudflare will proxy it
     const payload = { conversation_id: conversationId, sender_id: myId, content: '', media_url: pub?.publicUrl, media_type: file.type, media_name: file.name }
     if (disappearingTimer) payload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
@@ -629,8 +630,9 @@ export default function Chat() {
       if (!res) return
       if (res.duration < 1) { setError('Recording too short.'); return }
       setSending(true)
-      const path = await uploadMedia(res.blob);
-      if (upErr) { setError(upErr.message); setSending(false); return }
+      let path;
+      try { path = await uploadMedia(res.blob); }
+      catch (uploadError) { setSending(false); setError(uploadError?.message || 'Upload failed'); return }
       const pub = { publicUrl: path }; // Cloudflare will proxy it
       const payload = { 
         conversation_id: conversationId, 
@@ -724,8 +726,9 @@ export default function Chat() {
       let mediaUrl = null, mediaType = null, mediaName = null
       if (attachment) {
         const ext = attachment.name.split(".").pop()?.toLowerCase() || "jpg"
-        const path = await uploadMedia(attachment);
-        if (upErr) { setSending(false); setError(upErr.message); return }
+        let path;
+        try { path = await uploadMedia(attachment); }
+        catch (uploadError) { setSending(false); setError(uploadError?.message || 'Upload failed'); return }
         const pub = { publicUrl: path }; // Cloudflare will proxy it
         mediaUrl = pub?.publicUrl || null
         mediaType = attachment.type
@@ -755,8 +758,9 @@ export default function Chat() {
     let mediaUrl = null, mediaType = null, mediaName = null
     if (attachment) {
       const ext = attachment.name.split('.').pop()?.toLowerCase() || 'jpg'
-      const path = await uploadMedia(attachment);
-      if (upErr) { setSending(false); setError(friendlyError(upErr)); return }
+      let path;
+      try { path = await uploadMedia(attachment); }
+      catch (uploadError) { setSending(false); setError(uploadError?.message || 'Upload failed'); return }
       const pub = { publicUrl: path }; // Cloudflare will proxy it
       mediaUrl = pub?.publicUrl || null
       mediaType = attachment.type
