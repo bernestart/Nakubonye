@@ -93,3 +93,6 @@ Probe: grep markers "PHASE 1: AUTH GATE", "PHASE 1e", "/api/conversations/open",
 
 ## S1 STABILIZE (2026-11-22) after audit of DeepSeek patches
 git log is the source of truth. Found: Chat.jsx used supabase without import (crash) -> import restored as stop-gap; /api/inbox/action used undefined req -> fixed; new routes (inbox/*, chat/*, messages/action) now always require a session and ids must equal the session user; messages/action rewritten (participant check, array_append); conversations/adopt disabled (use /api/conversations/open). DO NOT run the profile BFF script (route name collides with POST /api/profile/bootstrap; SELECT * leaks lat/long and private settings). Next: move remaining supabase calls in Chat.jsx and Messages.jsx, then profile screen via new /api/profile/view with column whitelist + block + visibility checks.
+
+## S2 (2026-11-22)
+GET /api/inbox (session identity, one response for the Messages list); Messages.jsx load now one request; chat/permissions requires sender = session user. Messages.jsx still on Supabase: markAllRead, pin/archive/mute/delete actions, block, stories row, realtime channel (dead: messages live in Neon). Chat.jsx still has ~25 supabase calls. Guard: run node scripts/check-undef.cjs after every patch.
