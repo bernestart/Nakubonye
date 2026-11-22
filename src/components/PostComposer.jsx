@@ -1,3 +1,4 @@
+import { uploadMedia } from '../lib/api'
 import { createPost } from '../lib/api';
 import { useEffect, useRef, useState } from "react"
 import { X, ImagePlus, Send, BarChart2, Trash2, Plus, MapPin, Smile, Clock } from "lucide-react"

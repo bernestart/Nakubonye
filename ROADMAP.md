@@ -96,3 +96,10 @@ git log is the source of truth. Found: Chat.jsx used supabase without import (cr
 
 ## S2 (2026-11-22)
 GET /api/inbox (session identity, one response for the Messages list); Messages.jsx load now one request; chat/permissions requires sender = session user. Messages.jsx still on Supabase: markAllRead, pin/archive/mute/delete actions, block, stories row, realtime channel (dead: messages live in Neon). Chat.jsx still has ~25 supabase calls. Guard: run node scripts/check-undef.cjs after every patch.
+
+## RESUME HERE (2026-11-22) - supersedes earlier RESUME sections
+State: S1 (strict routes, Chat.jsx import stop-gap), S2 (GET /api/inbox, Messages load via one request, permissions identity), S2b (uploadMedia imports) applied and pushed. Guard: run node scripts/check-undef.cjs after every patch (the build cannot catch undefined identifiers).
+DO NOT run scripts/DO-NOT-RUN-profile-bff.txt. Any patch from another AI must be audited first: git log, node scripts/check-undef.cjs, grep of Worker routes.
+Pending tests: (1) sign in via curl, then GET /api/inbox, expect 200; INBOX_FAILED means read the [inbox] line in the Cloudflare log. (2) Chrome Incognito sign-up wizard, then Neon: select id, length(id) as len, "createdAt", (select count(*) from profiles p where p.id::text = u.id) as has_profile from "user" u order by "createdAt" desc limit 3; expect len 36, has_profile 1. (3) shadow logs [AUTH] [MEMBER] [WS].
+Next: S3 Chat.jsx purge (recon first: sed -n '195,330p;640,740p;770,860p' src/screens/Chat.jsx); POST /api/messages must accept expires_at, view_once, viewed_by, metadata with sender = session user; Messages.jsx actions, block, stories, realtime; profile screen via /api/profile/view (column whitelist, block and visibility checks, never SELECT *); then AUTH_ENFORCE + MEMBER_ENFORCE (needs a milestone APK); Phase 1f rate limits + Turnstile; Phase 1.5 Supabase account migration.
+Open questions: are the 20 Neon profiles real people? Is the Resend domain verified? Legacy cleanup SQL: delete non-uuid rows from session, account, user.

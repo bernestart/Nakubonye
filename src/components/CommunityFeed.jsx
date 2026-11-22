@@ -1,3 +1,4 @@
+import { uploadMedia } from '../lib/api'
 import { getMediaUrl } from '../lib/api';
 import { getCommunityPosts } from '../lib/api';
 import { useCallback, useEffect, useRef, useState } from 'react'
