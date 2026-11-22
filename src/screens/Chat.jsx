@@ -1,3 +1,4 @@
+import { supabase } from '../lib/supabase'
 import OnlineDot from '../components/OnlineDot';
 import { uploadMedia } from '../lib/api';
 import { useCallback, useEffect, useRef, useState } from 'react'

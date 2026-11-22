@@ -1,0 +1,71 @@
+const fs = require('fs');
+const p = 'src/screens/ProfileView.jsx';
+
+if (!fs.existsSync(p)) process.exit(1);
+let s = fs.readFileSync(p, 'utf8');
+
+// 1. Ensure API_BASE_URL is imported
+if (!s.includes('API_BASE_URL')) {
+  s = s.replace(
+    'import { supabase } from "../lib/supabase"',
+    'import { API_BASE_URL } from "../lib/api";\nimport { supabase } from "../lib/supabase"'
+  );
+}
+
+// 2. Find the load function start and the catch block end
+const startAnchor = `const load = useCallback(async () => {`;
+const endAnchor = `  }, [myId, userId])`;
+
+const startIdx = s.indexOf(startAnchor);
+const endIdx = s.indexOf(endAnchor);
+
+if (startIdx > -1 && endIdx > -1 && endIdx > startIdx) {
+  const newLoadFunction = `const load = useCallback(async () => {
+    if (!myId || !userId) return;
+    setLoading(true); setError('');
+
+    try {
+      // BFF PATTERN: Single request for all profile data
+      const res = await fetch(\`\${API_BASE_URL}/api/profile/bootstrap?userId=\${userId}&myId=\${myId}\`);
+      const json = await res.json();
+      
+      if (!json.success) {
+        setError(json.error || 'Profile not found.');
+        setLoading(false);
+        return;
+      }
+
+      const data = json.data;
+      
+      setPerson(data.profile);
+      setCanView(data.canView);
+      setCanViewMessage(data.canViewMessage || '');
+      setTargetVisibility(data.settings || {});
+      setPhotos(data.photos || []);
+      setPrompts(data.prompts || []);
+      setInterests(data.interests || []);
+      setReels(data.reels || []);
+      setMyPosts(data.posts || []);
+      setFollowersCount(data.followersCount);
+      setFollowingCount(data.followingCount);
+      setIsMatch(data.isMatch);
+      
+      setLoading(false);
+
+    } catch (err) {
+      setError(err.message || 'Failed to load profile');
+      setLoading(false);
+    }
+  }, [myId, userId])`;
+
+  s = s.slice(0, startIdx) + newLoadFunction + s.slice(endIdx + endAnchor.length);
+  
+  // 3. Remove the Supabase import
+  s = s.replace('import { supabase } from "../lib/supabase"\n', '');
+  s = s.replace('import { supabase } from "../lib/supabase"', '');
+
+  fs.writeFileSync(p, s, 'utf8');
+  console.log('✅ ProfileView.jsx load function completely replaced with BFF.');
+} else {
+  console.error('❌ ABORT: Could not find exact anchors for load function.');
+}

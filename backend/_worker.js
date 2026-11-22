@@ -189,6 +189,21 @@ export default {
     const deny = (status, error) => new Response(JSON.stringify({ success: false, error }), { status, headers: { ...cors, "Content-Type": "application/json" } });
     if (path.startsWith("/api/") && !path.startsWith("/api/media/")) {
       const authUser = await getSessionUser(request, env, url);
+      // ===== S1: STRICT ROUTES (always need a session; ids must equal the session user) =====
+      const STRICT_ROUTES = ["/api/messages/action", "/api/chat/state", "/api/inbox/bootstrap", "/api/inbox/read", "/api/inbox/action"];
+      if (path === "/api/chat/permissions" && !authUser) return deny(401, "UNAUTHENTICATED");
+      if (STRICT_ROUTES.includes(path)) {
+        if (!authUser) return deny(401, "UNAUTHENTICATED");
+        const ids = [url.searchParams.get("userId"), url.searchParams.get("myId")].filter(Boolean);
+        if (request.method === "POST") {
+          const sb = await request.clone().json().catch(() => null);
+          if (sb && typeof sb === "object") {
+            for (const k of ["userId", "myId", "user_id", "sender_id"]) if (sb[k] != null) ids.push(String(sb[k]));
+            if (Array.isArray(sb.rows)) for (const r of sb.rows) if (r && typeof r === "object") for (const k of ["userId", "user_id"]) if (r[k] != null) ids.push(String(r[k]));
+          }
+        }
+        if (ids.some((v) => String(v).toLowerCase() !== String(authUser.id).toLowerCase())) return deny(403, "IDENTITY_MISMATCH");
+      }
       if (path === "/api/whoami") {
         return authUser ? new Response(JSON.stringify({ success: true, user: authUser }), { headers: { ...cors, "Content-Type": "application/json" } }) : deny(401, "UNAUTHENTICATED");
       }
@@ -978,7 +993,7 @@ export default {
       // 15. PHASE 2a-2: Inbox Actions (Mute, Delete)
       if (path === "/api/inbox/action" && request.method === "POST") {
         try {
-          const { action, type, id, userId } = await req.json();
+          const { action, type, id, userId } = await request.json();
 
           if (action === 'delete' && type === 'dm') {
             await queryDatabase(`INSERT INTO conversation_deletes (conversation_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [id, userId]);
@@ -1071,21 +1086,28 @@ export default {
       
       // 18. PHASE 2a-2: Message Actions (Unsend, View Once)
       if (path === "/api/messages/action" && request.method === "POST") {
+        const jh = { ...cors, "Content-Type": "application/json" };
+        const out = (status, obj) => new Response(JSON.stringify(obj), { status, headers: jh });
+        const me = await getSessionUser(request, env, url);
+        if (!me) return out(401, { success: false, error: "UNAUTHENTICATED" });
         try {
-          const { action, messageId, userId, viewedBy } = await request.json();
-          if (action === 'unsend') {
-            await queryDatabase(`UPDATE messages SET deleted_at = NOW(), content = '', media_url = null WHERE id = $1 AND sender_id = $2`, [messageId, userId]);
-          } else if (action === 'view_once') {
-            await queryDatabase(`UPDATE messages SET viewed_by = $1, media_url = null WHERE id = $2`, [JSON.stringify(viewedBy), messageId]);
-          }
-          return new Response(JSON.stringify({ success: true }), { headers: cors });
+          const b = await request.json().catch(() => ({}));
+          const mid = String(b.messageId || "");
+          if (!/^\d{1,18}$/.test(mid)) return out(400, { success: false, error: "BAD_MESSAGE_ID" });
+          if (b.action === "unsend") {
+            await queryDatabase("UPDATE messages SET deleted_at = NOW(), content = '', media_url = NULL WHERE id = $1::bigint AND sender_id = $2::uuid", [mid, me.id]);
+          } else if (b.action === "view_once") {
+            await queryDatabase("UPDATE messages m SET viewed_by = array_append(COALESCE(m.viewed_by, '{}'), $2), media_url = NULL WHERE m.id = $1::bigint AND m.view_once = true AND m.sender_id <> $3::uuid AND EXISTS (SELECT 1 FROM conversations c LEFT JOIN matches mt ON mt.id = c.match_id WHERE c.id = m.conversation_id AND $3::uuid IN (c.initiator_id, c.recipient_id, mt.user_one_id, mt.user_two_id))", [mid, me.id, me.id]);
+          } else return out(400, { success: false, error: "BAD_ACTION" });
+          return out(200, { success: true });
         } catch (err) {
-          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+          console.error("[messages/action] " + String((err && err.message) || "").slice(0, 160));
+          return out(500, { success: false, error: "ACTION_FAILED" });
         }
       }
 
       // 19. PHASE 2a-2: Adopt Match into Conversation
-      if (path === "/api/conversations/adopt" && request.method === "POST") {
+      if (path === "/api/conversations/adopt-disabled" && request.method === "POST") {
         try {
           const { matchId, directToAdoptId } = await request.json();
           if (directToAdoptId) {
