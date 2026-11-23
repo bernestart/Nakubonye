@@ -1,5 +1,5 @@
 import OnlineDot from '../components/OnlineDot';
-import { toggleLikeAPI } from '../lib/api';
+import { API_BASE_URL, toggleLikeAPI } from '../lib/api';
 import { getUserPosts } from '../lib/api';
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -85,345 +85,80 @@ export default function ProfileView() {
   const [canSeeLocation, setCanSeeLocation] = useState(true)
 
   const load = useCallback(async () => {
-    if (!myId || !userId) return
-    setLoading(true); setError('')
-
-    try { await supabase.rpc('record_profile_view', { p_viewed_id: userId }) } catch {}
-
-    const { data: prof, error: profErr } = await supabase
-      .from('profiles')
-      .select('id, display_name, username, date_of_birth, bio, city, country, is_verified, tier, looking_for, cover_photo_path, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children, hide_age, account_type, category_label')
-      .eq('id', userId)
-      .single()
-
-    if (profErr || !prof) {
-      setError(profErr?.message || 'Profile not found.')
-      setLoading(false)
-      return
-    }
-    setPerson(prof)
-
-    // Load target's visibility settings if viewing someone else
-    if (userId !== myId) {
-      try {
-        const { data: settings } = await supabase.from("user_settings").select("*").eq("user_id", userId).maybeSingle()
-        const s = settings || {}
-        const fields = ['phone','email','birthday','relationship','contact_info','followers_list','matches_list','communities_membership']
-        const map = {}
-        for (const f of fields) {
-          map[f] = await canSeeField({ viewerId: myId, ownerId: userId, settings: s, field: f })
-        }
-        setTargetVisibility(map)
-      } catch (e) { console.warn("load target visibility failed", e) }
-    } else {
-      setTargetVisibility({
-        phone: true, email: true, birthday: true, relationship: true,
-        contact_info: true, followers_list: true, matches_list: true,
-        communities_membership: true,
-      })
-    }
-
-    // Enforce profile_visibility
-    if (userId !== myId) {
-      const { data: allowed } = await supabase.rpc('can_view_profile', {
-        viewer: myId,
-        owner: userId,
-      })
-      if (allowed === false) {
-        setCanView(false)
-        setCanViewMessage('This profile is private')
-        setLoading(false)
-        return
-      }
-    }
-    setCanView(true)
-
-    // Enforce location visibility
-    if (userId !== myId) {
-      const { data: locAllowed } = await supabase.rpc('can_see_location', {
-        viewer: myId,
-        owner: userId,
-      })
-      setCanSeeLocation(locAllowed !== false)
-    } else {
-      setCanSeeLocation(true)
-    }
-
-
-    // Viewer context for audience enforcement
-    let myContext = { myId, matchIds: new Set(), myCircleIds: new Set(), myCommunityIds: new Set() }
+    if (!myId || !userId) return;
+    setLoading(true); setError('');
     try {
-      const [matchRes, circleRes, communityRes2] = await Promise.all([
-        supabase.from('matches').select('user_one_id, user_two_id').or('user_one_id.eq.' + myId + ',user_two_id.eq.' + myId),
-        supabase.from('circle_members').select('circle_id').eq('user_id', myId),
-        supabase.from('community_memberships').select('community_id').eq('user_id', myId),
-      ])
-      const matchIds = (matchRes.data || []).map((m) => m.user_one_id === myId ? m.user_two_id : m.user_one_id)
-      const circleIds = (circleRes.data || []).map((r) => r.circle_id)
-      const commIds = (communityRes2.data || []).map((r) => r.community_id)
-      myContext = {
-        myId,
-        matchIds: new Set(matchIds),
-        myCircleIds: new Set(circleIds),
-        myCommunityIds: new Set(commIds),
+      const [workerRes, personalPosts] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/profile/view?userId=${userId}`).then(r => r.json()).catch(() => ({ success: false })),
+        getUserPosts(userId).catch(() => []),
+      ]);
+      if (!workerRes || !workerRes.success) {
+        setError((workerRes && workerRes.error) || 'Could not load profile.');
+        setLoading(false);
+        return;
       }
-    } catch (e) { console.warn('profile context load failed', e) }
-
-    const [photoRes, promptRes, linksRes, reelRes, personalRes, communityRes, f1, f2] = await Promise.all([
-      supabase.from('profile_photos').select('storage_path, is_primary, display_order').eq('user_id', userId)
-        .order('is_primary', { ascending: false }).order('display_order', { ascending: true }),
-      supabase.from('profile_prompts').select('prompt_key, answer, display_order').eq('profile_id', userId)
-        .order('display_order', { ascending: true }),
-      supabase.from('profile_interests').select('interest_id').eq('profile_id', userId),
-      supabase.from('reels').select('id, user_id, video_url, thumbnail_url, caption, created_at, allow_comments, clips, trim_start, trim_end, mirrored, filter_id, text_overlays, sticker_overlays, view_count, location')
-        .eq('user_id', userId).eq('is_active', true).order('created_at', { ascending: false }).limit(30),
-      getUserPosts(userId),
-      supabase.from('community_posts').select('id, content, image_path, created_at, pinned_until, community_id, author_id')
-        .eq('author_id', userId).order('created_at', { ascending: false }).limit(60),
-      supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', userId),
-      supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', userId),
-    ])
-
-    setPhotos((photoRes.data || []).map((p) => publicPhotoUrl(p.storage_path)).filter(Boolean))
-    setPrompts(promptRes.data || [])
-    setReels(reelRes.data || [])
-    setFollowersCount(f1.count || 0)
-    setFollowingCount(f2.count || 0)
-
-    // compute followers visibility (kept as local var so followed-by can gate on it)
-    let localCanSeeFollowerCounts = true
-    let localCanSeeCommunities = true
-    if (userId !== myId) {
-      try {
-        const [visRes, iFollowRes] = await Promise.all([
-          supabase.from('user_settings').select('followers_list_visibility, communities_membership_visibility').eq('user_id', userId).maybeSingle(),
-          supabase.from('follows').select('follower_id').eq('follower_id', myId).eq('following_id', userId).maybeSingle(),
-        ])
-        const vis = visRes.data?.followers_list_visibility || 'everyone'
-        const commVis = visRes.data?.communities_membership_visibility || 'everyone'
-        const iFollow = !!iFollowRes.data
-        const weMatched = myContext.matchIds.has(userId)
-
-        let visible = true
-        if (vis === 'only_me') visible = false
-        else if (vis === 'followers') visible = iFollow
-        else if (vis === 'matches') visible = weMatched
-        localCanSeeFollowerCounts = visible
-        setCanSeeFollowerCounts(visible)
-
-        let commVisible = true
-        if (commVis === 'only_me') commVisible = false
-        else if (commVis === 'followers') commVisible = iFollow
-        else if (commVis === 'matches') commVisible = weMatched
-        localCanSeeCommunities = commVisible
-        setCanSeeCommunities(commVisible)
-      } catch {
-        setCanSeeFollowerCounts(true)
-        localCanSeeFollowerCounts = true
-        localCanSeeCommunities = true
-        setCanSeeCommunities(true)
+      const d = workerRes.data;
+      if (d.canView === false) {
+        setCanView(false);
+        setCanViewMessage('This profile is private');
+        setLoading(false);
+        return;
       }
-    } else {
-      setCanSeeFollowerCounts(true)
-    }
+      setCanView(true);
+      setPerson(d.profile);
+      const vis = d.visibility || { phone: true, email: true, birthday: true, relationship: true, contact_info: true, followers_list: true, matches_list: true, communities_membership: true };
+      setTargetVisibility(vis);
+      setCanSeeLocation(d.canSeeLocation !== false);
+      setPhotos((d.photos || []).map(p => publicPhotoUrl(p.storage_path)).filter(Boolean));
+      setPrompts(d.prompts || []);
+      setReels(d.reels || []);
+      setFollowersCount(d.followersCount || 0);
+      setFollowingCount(d.followingCount || 0);
+      setInterests(d.interests || []);
+      setCommunities(d.communities || []);
+      setCanSeeFollowerCounts(vis.followers_list !== false);
+      setCanSeeCommunities(vis.communities_membership !== false);
+      setFollowedBy(d.followedBy || { people: [], more: 0 });
+      const rp = d.relationship || {};
+      setIsMatch(!!rp.matched);
+      setMyLike(!!rp.myLike);
+      setTheyLikedMe(!!rp.theyLikedMe);
 
-    // Followed-by: people I follow who also follow this user
-    // Gated on followers_list_visibility + block-aware
-    if (userId !== myId && localCanSeeFollowerCounts) {
-      try {
-        const [myFollowsRes, theirFollowersRes, blockedRes] = await Promise.all([
-          supabase.from('follows').select('following_id').eq('follower_id', myId).limit(500),
-          supabase.from('follows').select('follower_id').eq('following_id', userId).limit(500),
-          supabase.from('blocks').select('blocker_id, blocked_id').or('blocker_id.eq.' + myId + ',blocked_id.eq.' + myId),
-        ])
-        const myFollowSet = new Set((myFollowsRes.data || []).map((r) => r.following_id))
-        const blockedIds = new Set()
-        ;(blockedRes.data || []).forEach((b) => {
-          if (b.blocker_id === myId) blockedIds.add(b.blocked_id)
-          if (b.blocked_id === myId) blockedIds.add(b.blocker_id)
-        })
-        const sharedIds = (theirFollowersRes.data || [])
-          .map((r) => r.follower_id)
-          .filter((id) => myFollowSet.has(id) && id !== myId && id !== userId && !blockedIds.has(id))
-
-        if (sharedIds.length > 0) {
-          const top = sharedIds.slice(0, 3)
-          const { data: profs } = await supabase
-            .from('profiles')
-            .select('id, display_name, username')
-            .in('id', top)
-          const pMap = new Map((profs || []).map((p) => [p.id, p]))
-          const people = top.map((id) => pMap.get(id)).filter(Boolean)
-          setFollowedBy({ people, more: Math.max(0, sharedIds.length - people.length) })
-        } else {
-          setFollowedBy({ people: [], more: 0 })
-        }
-      } catch (e) { console.warn('followedBy failed', e) }
-    }
-
-    if (linksRes.data?.length) {
-      const ids = linksRes.data.map((l) => l.interest_id)
-      const { data: rows } = await supabase.from('interests').select('id, name').in('id', ids)
-      setInterests((rows || []).map((r) => r.name))
-    } else setInterests([])
-
-    // Communities (best-effort) — gated on communities_membership_visibility
-    if (userId === myId || localCanSeeCommunities) {
-      try {
-        const { data: cmRows } = await supabase
-          .from('community_memberships')
-          .select('community_id, communities(id, name, slug, emoji, cover_color)')
-          .eq('user_id', userId)
-          .limit(20)
-        setCommunities((cmRows || []).map((r) => r.communities).filter(Boolean))
-      } catch { setCommunities([]) }
-    } else {
-      setCommunities([])
-    }
-
-    const isOwn = userId === myId
-    const personal = (Array.isArray(personalRes) ? personalRes : (personalRes.data || []))
-      .filter((p) => {
-        if (isOwn) return true
-        const aud = p.audience || 'public'
-        if (aud === 'public' || aud === 'everyone') return true
-        if (aud === 'private') return false
-        if (aud === 'matches') return myContext.matchIds.has(userId)
-        if (typeof aud === 'string' && aud.startsWith('circle:')) {
-          return myContext.myCircleIds.has(aud.slice(7))
-        }
-        return false
-      })
-      .map((p) => ({ ...p, _source: 'personal', author_id: p.user_id, likes_count: p.likes_count || 0 }))
-
-    const community = (communityRes.data || [])
-      .filter((p) => {
-        // Community posts are visible only to community members (or on your own profile)
-        if (isOwn) return true
-        if (!p.community_id) return false
-        return myContext.myCommunityIds.has(p.community_id)
-      })
-      .map((p) => ({ ...p, _source: 'community' }))
-    setMyPosts([...personal, ...community].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)))
-
-    // Load reactions + comments for these posts
-    try {
-      const personalIds = personal.map((p) => p.id)
-      const communityIds = community.map((p) => p.id)
-      const counts = new Map()
-      const mine = new Set()
-      const mineTypes = new Map()
-      const cmtCounts = new Map()
-
-      if (personalIds.length > 0) {
-        const [likesRes, cmtsRes] = await Promise.all([
-          supabase.from("user_post_likes").select("post_id, user_id, reaction").in("post_id", personalIds),
-          supabase.from("user_post_comments").select("post_id").in("post_id", personalIds).is("deleted_at", null),
-        ])
-        ;(likesRes.data || []).forEach((r) => {
-          const k = "personal:" + r.post_id
-          counts.set(k, (counts.get(k) || 0) + 1)
-          if (r.user_id === myId) {
-            mine.add(k)
-            mineTypes.set(k, r.reaction || "❤️")
+      // Convert aggregation → state Maps/Sets
+      const agg = d.aggregation || { personal: {}, community: {} };
+      const rps = d.reactorProfiles || {};
+      const counts = new Map(), mine = new Set(), mineTypes = new Map(), cmtCounts = new Map();
+      const topReactors = new Map();
+      for (const bucket of [agg.personal, agg.community]) {
+        for (const [key, v] of Object.entries(bucket || {})) {
+          counts.set(key, v.count || 0);
+          if (v.mine) { mine.add(key); mineTypes.set(key, v.myReaction || '❤️'); }
+          if (v.commentCount) cmtCounts.set(key, v.commentCount);
+          if (v.reactions && v.reactions.length) {
+            topReactors.set(key, v.reactions.slice(0, 3).map(r => ({
+              userId: r.userId,
+              name: rps[r.userId]?.display_name || rps[r.userId]?.username || 'Someone',
+              emoji: r.emoji || '❤️',
+            })));
           }
-        })
-        ;(cmtsRes.data || []).forEach((c) => {
-          const k = "personal:" + c.post_id
-          cmtCounts.set(k, (cmtCounts.get(k) || 0) + 1)
-        })
-      }
-
-      if (communityIds.length > 0) {
-        const [likesRes, cmtsRes] = await Promise.all([
-          supabase.from("community_post_reactions").select("post_id, user_id, reaction").in("post_id", communityIds),
-          supabase.from("community_post_comments").select("post_id").in("post_id", communityIds).is("deleted_at", null),
-        ])
-        ;(likesRes.data || []).forEach((r) => {
-          const k = "community:" + r.post_id
-          counts.set(k, (counts.get(k) || 0) + 1)
-          if (r.user_id === myId) {
-            mine.add(k)
-            mineTypes.set(k, r.reaction || "❤️")
-          }
-        })
-        ;(cmtsRes.data || []).forEach((c) => {
-          const k = "community:" + c.post_id
-          cmtCounts.set(k, (cmtCounts.get(k) || 0) + 1)
-        })
-      }
-
-      
-    // FIX: Override empty Supabase counts with Cloudflare Redis counts
-    personal.forEach((p) => {
-      if (typeof p.likes_count !== 'undefined') {
-        counts.set("personal:" + p.id, p.likes_count);
-      }
-    });
-
-    setProfileReactionCounts(counts)
-      setProfileMyReactions(mine)
-      setProfileMyReactionTypes(mineTypes)
-      setProfileCommentCounts(cmtCounts)
-
-      // Fetch top 3 reactor names per post (own profile side)
-      const topReactors = new Map()
-      if (personalIds.length > 0) {
-        const { data: personalLikes } = await supabase
-          .from("user_post_likes")
-          .select("post_id, user_id, reaction, created_at")
-          .in("post_id", personalIds)
-          .order("created_at", { ascending: false })
-        const reactorIds = [...new Set((personalLikes || []).map((r) => r.user_id))].slice(0, 100)
-        let profMap = new Map()
-        if (reactorIds.length > 0) {
-          const { data: profs } = await supabase.from("profiles").select("id, display_name, username").in("id", reactorIds)
-          ;(profs || []).forEach((x) => profMap.set(x.id, x))
         }
-        ;(personalLikes || []).forEach((r) => {
-          const k = "personal:" + r.post_id
-          if (!topReactors.has(k)) topReactors.set(k, [])
-          const arr = topReactors.get(k)
-          if (arr.length < 3) arr.push({ name: profMap.get(r.user_id)?.display_name || profMap.get(r.user_id)?.username || "Someone", emoji: r.reaction || "❤️", userId: r.user_id })
-        })
       }
-      if (communityIds.length > 0) {
-        const { data: commLikes } = await supabase
-          .from("community_post_reactions")
-          .select("post_id, user_id, reaction, created_at")
-          .in("post_id", communityIds)
-          .order("created_at", { ascending: false })
-        const reactorIds = [...new Set((commLikes || []).map((r) => r.user_id))].slice(0, 100)
-        let profMap = new Map()
-        if (reactorIds.length > 0) {
-          const { data: profs } = await supabase.from("profiles").select("id, display_name, username").in("id", reactorIds)
-          ;(profs || []).forEach((x) => profMap.set(x.id, x))
-        }
-        ;(commLikes || []).forEach((r) => {
-          const k = "community:" + r.post_id
-          if (!topReactors.has(k)) topReactors.set(k, [])
-          const arr = topReactors.get(k)
-          if (arr.length < 3) arr.push({ name: profMap.get(r.user_id)?.display_name || profMap.get(r.user_id)?.username || "Someone", emoji: r.reaction || "❤️", userId: r.user_id })
-        })
-      }
-      setProfileTopReactors(topReactors)
-    } catch (e) { console.warn("profile reactions load failed", e) }
+      setProfileReactionCounts(counts);
+      setProfileMyReactions(mine);
+      setProfileMyReactionTypes(mineTypes);
+      setProfileCommentCounts(cmtCounts);
+      setProfileTopReactors(topReactors);
 
-    if (!isMe) {
-      const lo = myId < userId ? myId : userId
-      const hi = myId < userId ? userId : myId
-      const [{ data: match }, { data: myLikeRow }, { data: theirLikeRow }] = await Promise.all([
-        supabase.from('matches').select('id').eq('user_one_id', lo).eq('user_two_id', hi).maybeSingle(),
-        supabase.from('likes').select('id').eq('user_id', myId).eq('liked_user_id', userId).maybeSingle(),
-        supabase.from('likes').select('id').eq('user_id', userId).eq('liked_user_id', myId).maybeSingle(),
-      ])
-      setIsMatch(!!match)
-      setMyLike(!!myLikeRow)
-      setTheyLikedMe(!!theirLikeRow)
+      // myPosts = personal + community, sorted desc
+      const community = d.communityPosts || [];
+      setMyPosts([...(personalPosts || []), ...community].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
+      setLoading(false);
+    } catch (e) {
+      console.error('ProfileView load error:', e);
+      setError((e && e.message) || 'Load failed');
+      setLoading(false);
     }
-
-    setLoading(false)
-  }, [myId, userId, isMe])
+  }, [myId, userId, isMe]);
 
   useEffect(() => { load() }, [load])
 
