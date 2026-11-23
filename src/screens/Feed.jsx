@@ -2,7 +2,6 @@ import { getMediaUrl } from '../lib/api';
 import { getRankedFeed, getCommunityPosts, toggleLikeAPI, API_BASE_URL } from '../lib/api';
 import { AnimatePresence } from "framer-motion";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react"
-import { supabase } from "../lib/supabase"
 import { useNavigate } from "react-router-dom"
 import { ImagePlus, Heart, Send, X, Users, Play, Camera, PenSquare, Video, Image as ImageIcon, MessageCircle, Share2 , MoreVertical , Volume2 , VolumeX } from "lucide-react"
 import VerifiedBadge from "../components/VerifiedBadge"
@@ -15,61 +14,6 @@ import { logImpression, logView, logDwell, logSkip } from "../lib/feedSignals"
 // ─── Ranking signals ──────────────────────────────────────
 // Fetch my interaction history with post authors (last 90 days)
 // + my reel vs post affinity, so mixFeed can personalize ranking.
-async function fetchRankingSignals(myId) {
-  if (!myId) return { interactions: new Map(), reelAffinity: 1 }
-
-  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
-
-  // 1. My recent likes + comments on posts (need post_id, will resolve authors later)
-  const [postLikes, postComments, reelsLiked] = await Promise.all([
-    Promise.resolve({ data: [] }), // DISABLED: Using Cloudflare Redis likes instead
-    supabase.from("user_post_comments").select("post_id, created_at").eq("user_id", myId).gt("created_at", ninetyDaysAgo).limit(500),
-    supabase.from("reel_likes").select("reel_id, created_at").eq("user_id", myId).gt("created_at", ninetyDaysAgo).limit(500),
-  ])
-
-  const postIds = [...new Set([
-    ...(postLikes.data || []).map((r) => r.post_id),
-    ...(postComments.data || []).map((r) => r.post_id),
-  ])].filter(Boolean)
-
-  // 2. Resolve post authors
-  const authorCounts = new Map()
-  if (postIds.length > 0) {
-    const { data: personal } = await supabase
-      .from("user_posts")
-      .select("id, user_id")
-      .in("id", postIds)
-    const { data: community } = await supabase
-      .from("community_posts")
-      .select("id, author_id")
-      .in("id", postIds)
-
-    const idToAuthor = new Map()
-    ;(personal || []).forEach((r) => idToAuthor.set(r.id, r.user_id))
-    ;(community || []).forEach((r) => idToAuthor.set(r.id, r.author_id))
-
-    // Increment per-author counts
-    const addAuthor = (pid) => {
-      const a = idToAuthor.get(pid)
-      if (!a) return
-      authorCounts.set(a, (authorCounts.get(a) || 0) + 1)
-    }
-    ;(postLikes.data || []).forEach((r) => addAuthor(r.post_id))
-    ;(postComments.data || []).forEach((r) => addAuthor(r.post_id))
-  }
-
-  // 3. Content affinity — reel ratio
-  const reelN = (reelsLiked.data || []).length
-  const postN = (postLikes.data || []).length + (postComments.data || []).length
-  const total = reelN + postN
-  // affinity is a number between 0.7 (strongly post-preferring) and 1.4 (strongly reel-preferring)
-  const reelAffinity = total < 5 ? 1 : Math.max(0.7, Math.min(1.4, 1 + (reelN - postN) / (total * 1.5)))
-
-  return {
-    interactions: authorCounts,
-    reelAffinity,
-  }
-}
 import BottomNav from "../components/BottomNav"
 import NotificationBell from "../components/NotificationBell"
 import AppHeader from "../components/AppHeader"
@@ -144,8 +88,6 @@ export default function Feed() {
 
   useEffect(() => {
     if (!myId) return;
-    
-    // Setup IntersectionObserver for impressions
     observerRef.current = new IntersectionObserver((entries) => {
       entries.forEach(async (entry) => {
         if (entry.isIntersecting) {
@@ -153,17 +95,16 @@ export default function Feed() {
           if (postId && !observedPosts.current.has(postId)) {
             observedPosts.current.add(postId);
             try {
-              // Upsert prevents duplicate errors if the user scrolls up and down
-              await supabase.from('feed_impressions').upsert(
-                { post_id: postId, user_id: myId }, 
-                { onConflict: 'post_id, user_id', ignoreDuplicates: true }
-              );
+              await fetch(`${API_BASE_URL}/api/feed/impression`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rows: [{ post_id: postId, user_id: myId }] })
+              }).catch(() => null)
             } catch (e) { console.warn("Impression track failed", e); }
           }
         }
       });
-    }, { threshold: 0.5 }); // Trigger when 50% of the post is visible
-
+    }, { threshold: 0.5 });
     return () => observerRef.current?.disconnect();
   }, [myId]);
 
@@ -172,13 +113,14 @@ export default function Feed() {
   };
 
   const trackClick = async (postId) => {
-    if (!myId || !postId) return;
+    if (!myId || !postId) return
     try {
-      await supabase.from('feed_clicks').upsert(
-        { post_id: postId, user_id: myId }, 
-        { onConflict: 'post_id, user_id', ignoreDuplicates: true }
-      );
-    } catch (e) { console.warn("Click track failed", e); }
+      await fetch(`${API_BASE_URL}/api/feed/click`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: [{ post_id: postId, user_id: myId }] })
+      }).catch(() => null)
+    } catch (e) { console.warn("Click track failed", e) }
   };
   // -------------------------------
   const [actionsFor, setActionsFor] = useState(null)
@@ -220,493 +162,107 @@ export default function Feed() {
     if (!myId) return
     if (!opts?.silent) setLoading(true)
     setError("")
-
-    // 1. My communities (may be empty)
-    const { data: mine } = await supabase
-      .from("community_memberships")
-      .select("community_id")
-      .eq("user_id", myId)
-    const myCommIds = (mine || []).map((m) => m.community_id)
-
-    // 2. Community meta
-    if (myCommIds.length > 0) {
-      const { data: commRows } = await supabase
-        .from("communities")
-        .select("id, name, emoji, cover_color")
-        .in("id", myCommIds)
-      setCommunities(new Map((commRows || []).map((c) => [c.id, c])))
-    }
-
-    // 3a. Community posts (only if user has communities)
-    let communityPosts = []
-    if (myCommIds.length > 0) {
-      let rows = [];
-        try {
-          // Pass myId to the API for security verification
-          rows = await getCommunityPosts(myCommIds, myId);
-        } catch (err) {
-          console.error("Community Feed API Error:", err);
-        }
-      communityPosts = (rows || []).map((r) => {
-          // FIX: Ensure image_path is converted to image_paths array for the UI
-          const paths = Array.isArray(r.image_paths) && r.image_paths.length > 0 
-            ? r.image_paths 
-            : (r.image_path ? [r.image_path] : []);
-          return { ...r, _source: "community", image_paths: paths };
-        });
-    }
-
-    // 3b. Personal posts (from me + matches + people I follow)
-    const [matchRes, followRes, myCirclesRes, blockedRes] = await Promise.all([
-      Promise.resolve({ data: boot.matches || [] }),
-      Promise.resolve({ data: boot.follows || [] }),
-      Promise.resolve({ data: [] }),
-      Promise.resolve({ data: boot.blocks || [] }),
-      Promise.resolve({ data: boot.blocks || [] }),
-    ])
-    const myCircleIds = new Set((myCirclesRes.data || []).map((r) => r.circle_id))
-    const blockedIds = new Set()
-    ;(blockedRes?.data || []).forEach((b) => {
-      if (b.blocker_id === myId) blockedIds.add(b.blocked_id)
-      if (b.blocked_id === myId) blockedIds.add(b.blocker_id)
-    })
-    const matchIds = (matchRes.data || []).map((m) => m.user_one_id === myId ? m.user_two_id : m.user_one_id)
-    const followIds = (followRes.data || []).map((f) => f.following_id)
-    const allowedUserIds = [...new Set([myId, ...matchIds, ...followIds])]
-
-    // NEW: Fetch ranked feed using PostGIS/EdgeRank RPC
-    
-    let rankedRows = [];
     try {
-      rankedRows = await getRankedFeed(myId);
-    } catch (err) {
-      console.error("Feed API Error:", err);
-    }
-  
-
-
-
-    // Map the RPC output back to the format the UI expects (id instead of post_id)
-    const personalRows = (rankedRows || []).map(r => ({
-      id: r.post_id,
-      user_id: r.user_id,
-      author_id: r.user_id, // FIX: Map user_id to author_id for the UI
-      _source: "post",      // FIX: Tell the UI this is a regular post
-      content: r.content,
-      image_path: r.image_path,
-      image_paths: r.image_paths,
-      audience: r.audience,
-      created_at: r.created_at,
-      location_text: r.location_text,
-      feeling_text: r.feeling_text,
-      publish_at: r.publish_at,
-      _rank_score: r.rank_score,
-      likes_count: r.likes_count || 0 // FIX: Read likes from Cloudflare API
-    }));
-    const personalPosts = (personalRows || [])
-      .filter((r) => !blockedIds.has(r.user_id) && canSeePost(r, { myId, matchIds: new Set(matchIds), myCircleIds }))
-      .map((r) => ({
-        ...r,
-        author_id: r.user_id,
-        _source: "personal",
-      }))
-
-    // 3c. Reels (public only, from anyone)
-    const { data: reelRows, error: reelErr } = await supabase.rpc('get_suggested_reels', {
-      viewer_id: myId,
-      page_limit: 10
-    });
-    if (!reelErr && reelRows) setSuggestedReels(reelRows);
-    const reelItems = (reelRows || []).map((r) => ({
-      id: r.id,
-      user_id: r.user_id,
-      author_id: r.user_id,
-      content: r.caption,
-      video_url: r.video_url,
-      thumbnail_url: r.thumbnail_url,
-      mirrored: r.mirrored,
-      cover_frame_time: r.cover_frame_time,
-      created_at: r.created_at,
-      _source: "reel",
-    }))
-
-
-    // Listings (public, active)
-    const { data: lmListingsLoad } = await supabase
-      .from("listings")
-      .select("id, seller_id, title, description, price, currency, category, location, image_paths, created_at")
-      .eq("status", "active")
-      
-      .order("created_at", { ascending: false })
-      .limit(10)
-    const listingItems = (lmListingsLoad || []).map((r) => ({
-      id: r.id,
-      user_id: r.seller_id,
-      author_id: r.seller_id,
-      title: r.title,
-      content: r.description,
-      price: r.price,
-      currency: r.currency,
-      location: r.location,
-      image_paths: r.image_paths,
-      created_at: r.created_at,
-      _source: "listing",
-    }))
-
-    // Services (active)
-    const { data: svcRows_lmListingsLoad } = await supabase
-      .from("services")
-      .select("id, provider_id, title, description, price, currency, category, duration_minutes, location, image_paths, created_at")
-      .eq("status", "active")
-      
-      .order("created_at", { ascending: false })
-      .limit(10)
-    const serviceItems = (svcRows_lmListingsLoad || []).map((r) => ({
-      id: r.id,
-      user_id: r.provider_id,
-      author_id: r.provider_id,
-      title: r.title,
-      content: r.description,
-      price: r.price,
-      currency: r.currency,
-      duration_minutes: r.duration_minutes,
-      location: r.location,
-      image_paths: r.image_paths,
-      created_at: r.created_at,
-      _source: "service",
-    }))
-
-    // 3d. Load my hidden post IDs and filter them out
-    const { data: hideRows } = await supabase
-      .from("post_hides")
-      .select("post_id, post_type")
-      .eq("user_id", myId)
-    const hiddenKeys = new Set((hideRows || []).map((h) => h.post_type + ":" + h.post_id))
-
-    // Snoozed users — filter their posts from feed
-    const { data: snoozeRows } = await supabase
-      .from("post_snoozes")
-      .select("snoozed_user_id")
-      .eq("user_id", myId)
-      .gt("until_at", new Date().toISOString())
-    const snoozedIds = new Set((snoozeRows || []).map((s) => s.snoozed_user_id))
-
-    // 3e. Sort posts and reels separately
-    const postsSorted = [...communityPosts, ...personalPosts, ...listingItems, ...serviceItems]
-      .filter((r) => !hiddenKeys.has((r._source || "community") + ":" + r.id))
-      .filter((r) => !snoozedIds.has(r.author_id))
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-    const reelsSorted = reelItems
-      .filter((r) => !hiddenKeys.has("reel:" + r.id))
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-
-    // 3e-bis. Fetch engagement counts for ranking
-    const commIdsRank = postsSorted.filter((r) => r._source === "community").map((r) => r.id)
-    const personalIdsRank = postsSorted.filter((r) => r._source === "personal").map((r) => r.id)
-    const likeMap = new Map()
-    const cmtMap = new Map()
-    if (commIdsRank.length > 0) {
-      const [a, b] = await Promise.all([
-        supabase.from("community_post_reactions").select("post_id").in("post_id", commIdsRank),
-        supabase.from("community_post_comments").select("post_id").in("post_id", commIdsRank),
-      ])
-      ;(a.data || []).forEach((r) => likeMap.set(r.post_id, (likeMap.get(r.post_id) || 0) + 1))
-      ;(b.data || []).forEach((c) => cmtMap.set(c.post_id, (cmtMap.get(c.post_id) || 0) + 1))
-    }
-    if (personalIdsRank.length > 0) {
-      const [a, b] = await Promise.all([
-        Promise.resolve({ data: [] }), // DISABLED: Using Cloudflare Redis likes instead
-        supabase.from("user_post_comments").select("post_id").in("post_id", personalIdsRank),
-      ])
-      ;(a.data || []).forEach((r) => likeMap.set(r.post_id, (likeMap.get(r.post_id) || 0) + 1))
-      ;(b.data || []).forEach((c) => cmtMap.set(c.post_id, (cmtMap.get(c.post_id) || 0) + 1))
-    }
-    const enrichedPosts = postsSorted.map((p) => ({
-      ...p,
-      _likeCount: likeMap.get(p.id) || 0,
-      _commentCount: cmtMap.get(p.id) || 0,
-    }))
-    const enrichedReels = reelsSorted.map((r) => ({
-      ...r,
-      _likeCount: 0,
-      _commentCount: 0,
-    }))
-
-    // 3f. Mix — ranked
-    seenReelIds.current = new Set()
-    const rankingSignals = await fetchRankingSignals(myId)
-    const scoreContextLoad = {
-      myId,
-      matchIds: new Set(matchIds),
-      followIds: new Set(followIds),
-      interactions: rankingSignals.interactions,
-      reelAffinity: rankingSignals.reelAffinity,
-    }
-    const filteredEnriched = (enrichedPosts || []).filter((p) => {
-      const authorId = p.author_id || p.user_id
-      if (authorId && mutedUsersSet.has(authorId)) return false
-      const text = (p.content || "").toLowerCase()
-      if (text && mutedWordsSet.size > 0) {
-        for (const w of mutedWordsSet) { if (text.includes(w)) return false }
-      }
-      return true
-    })
-
-    const filteredReels = (enrichedReels || []).filter((r) => {
-      const authorId = r.author_id || r.user_id
-      if (authorId && mutedUsersSet.has(authorId)) return false
-      return true
-    })
-
-    const list = mixFeed({
-      posts: filteredEnriched,
-      reels: filteredReels,
-      pageSize: 20,
-      reelEvery: 10,
-      seenReelIds: seenReelIds.current,
-      scoreContext: { ...scoreContextLoad, signalScores, authorSignals },
-    })
-
-    setPosts(list)
-    // hasMore stays true as long as we got something —
-    // loadMore() will set it false when there's truly nothing left
-    setHasMore(list.length > 0)
-    setCursor(list.length > 0 ? list[list.length - 1].created_at : null)
-
-    // 4. Profiles + photos for post authors
-    const ids = [...new Set(list.map((r) => r.author_id))]
-    if (ids.length > 0) {
-      const { data: profs } = await supabase
-        .from("profiles")
-        .select("id, display_name, username, is_verified")
-        .in("id", ids)
-      setProfiles(new Map((profs || []).map((p) => [p.id, p])))
-
-      const { data: ph } = await supabase
-        .from("profile_photos")
-        .select("user_id, storage_path, is_primary, display_order")
-        .in("user_id", ids)
-        .order("is_primary", { ascending: false })
-        .order("display_order", { ascending: true })
-      const pm = new Map()
-      ;(ph || []).forEach((p) => { if (!pm.has(p.user_id)) pm.set(p.user_id, p.storage_path) })
-      setPhotos(pm)
-    }
-
-    // Suggested people
-    const { data: sug } = await supabase.rpc("get_pymk_profiles", { p_limit: 12 })
-
-    // Load my avatar for composer pill
-    const { data: myProfilePhoto } = await supabase
-      .from("profile_photos")
-      .select("storage_path")
-      .eq("user_id", myId)
-      .order("is_primary", { ascending: false })
-      .order("display_order", { ascending: true })
-      .limit(1)
-      .maybeSingle()
-    setMyPhotoUrl(myProfilePhoto?.storage_path ? publicPhotoUrl(myProfilePhoto.storage_path) : null)
-
-    setSuggested((sug || []).slice(0, 10).map((r) => ({
-      id: r.id,
-      display_name: r.display_name,
-      username: r.username,
-      photo_url: publicPhotoUrl(r.primary_photo),
-    })))
-
-    // Reactions + comment counts (per source)
-    const communityIds = list.filter((r) => r._source === "community").map((r) => r.id)
-    const personalIds = list.filter((r) => r._source === "personal").map((r) => r.id)
-
-    const myLikedIds = new Set()
-    const counts = new Map()
-    const cc = new Map()
-    const breakdown = new Map()
-    const reactionTypesMap = new Map()
-
-    if (communityIds.length > 0) {
-      const { data: reactRows } = await supabase
-        .from("community_post_reactions")
-        .select("post_id, user_id, reaction")
-        .in("post_id", communityIds)
-      ;(reactRows || []).forEach((r) => {
-        const k = "community:" + r.post_id
-        counts.set(k, (counts.get(k) || 0) + 1)
-        if (r.user_id === myId) {
-          myLikedIds.add(k)
-          myReactionTypes.set(k, r.reaction || "❤️")
-        }
-        if (!breakdown.has(k)) breakdown.set(k, new Map())
-        const bd = breakdown.get(k)
-        const em = r.reaction || "❤️"
-        bd.set(em, (bd.get(em) || 0) + 1)
-      })
-
-      const { data: commentRows } = await supabase
-        .from("community_post_comments")
-        .select("post_id")
-        .in("post_id", communityIds)
-      ;(commentRows || []).forEach((c) => {
-        const k = "community:" + c.post_id
-        cc.set(k, (cc.get(k) || 0) + 1)
-      })
-    }
-
-    if (personalIds.length > 0) {
-      const { data: reactRows } = await supabase
-        .from("user_post_likes")
-        .select("post_id, user_id, reaction")
-        .in("post_id", personalIds)
-      ;(reactRows || []).forEach((r) => {
-        const k = "personal:" + r.post_id
-        counts.set(k, (counts.get(k) || 0) + 1)
-        if (r.user_id === myId) {
-          myLikedIds.add(k)
-          myReactionTypes.set(k, r.reaction || "❤️")
-        }
-        if (!breakdown.has(k)) breakdown.set(k, new Map())
-        const bd = breakdown.get(k)
-        const em = r.reaction || "❤️"
-        bd.set(em, (bd.get(em) || 0) + 1)
-      })
-
-      const { data: commentRows } = await supabase
-        .from("user_post_comments")
-        .select("post_id")
-        .in("post_id", personalIds)
-      ;(commentRows || []).forEach((c) => {
-        const k = "personal:" + c.post_id
-        cc.set(k, (cc.get(k) || 0) + 1)
-      })
-    }
-
-    // Count reshares per post — group by reshared_from_type + reshared_from_id
-    const resharedIds = posts.map((p) => p.id).filter(Boolean)
-    if (resharedIds.length > 0) {
-      const { data: reshareRows } = await supabase
-        .from("user_posts")
-        .select("reshared_from_type, reshared_from_id")
-        .in("reshared_from_id", resharedIds)
-      const sc = new Map()
-      ;(reshareRows || []).forEach((r) => {
-        if (!r.reshared_from_id || !r.reshared_from_type) return
-        const k = r.reshared_from_type + ":" + r.reshared_from_id
-        sc.set(k, (sc.get(k) || 0) + 1)
-      })
-      setShareCounts(sc)
-    }
-
-    // 7A.4 — Aggregate per-post + per-author signals
-    try {
-      const cutoff = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()
-      const { data: signalRows } = await supabase
-        .from("post_signals")
-        .select("post_type, post_id, author_id, signal, value")
-        .eq("user_id", myId)
-        .gt("created_at", cutoff)
-        .limit(3000)
-
-      const perPost = new Map()
-      const perAuthor = new Map()
-      ;(signalRows || []).forEach((r) => {
-        const key = r.post_type + ":" + r.post_id
-        if (!perPost.has(key)) perPost.set(key, { dwell: 0, skip: 0, view: 0, open: 0, share: 0, comment: 0, like: 0, hide: 0, impression: 0 })
-        const p = perPost.get(key)
-        if (r.signal === "dwell") p.dwell += Number(r.value) || 0
-        else if (p[r.signal] !== undefined) p[r.signal] += 1
-
-        if (r.author_id) {
-          if (!perAuthor.has(r.author_id)) perAuthor.set(r.author_id, { dwell: 0, skip: 0, view: 0, open: 0, share: 0, comment: 0, like: 0 })
-          const a = perAuthor.get(r.author_id)
-          if (r.signal === "dwell") a.dwell += Number(r.value) || 0
-          else if (a[r.signal] !== undefined) a[r.signal] += 1
-        }
-      })
-      setSignalScores(perPost)
-      setAuthorSignals(perAuthor)
-    } catch (e) { console.warn("signal aggregate failed", e) }
-
-    // Reel likes — separate table, composite key
-    const reelIds = list.filter((r) => r._source === "reel").map((r) => r.id)
-    if (reelIds.length > 0) {
-      const { data: reactRows } = await supabase
-        .from("reel_likes")
-        .select("reel_id, user_id")
-        .in("reel_id", reelIds)
-      ;(reactRows || []).forEach((r) => {
-        const k = "reel:" + r.reel_id
-        counts.set(k, (counts.get(k) || 0) + 1)
-        if (r.user_id === myId) myLikedIds.add(k)
-      })
-    }
-
-    // FIX: Merge Cloudflare likes_count into the local map
-    list.forEach((p) => {
-      if (typeof p.likes_count !== 'undefined') {
-        const k = p._source + ":" + p.id;
-        counts.set(k, p.likes_count);
-      }
-    });
-
-    setMyReactions(myLikedIds)
-    setReactionCounts(counts)
-    setCommentCounts(cc)
-    setReactionBreakdown(breakdown)
-
-    // Load top 3 reactor names per post
-    try {
-      const topReactorsMap = new Map()
-
-      if (communityIds.length > 0) {
-        const { data: commLikes } = await supabase
-          .from("community_post_reactions")
-          .select("post_id, user_id, reaction, created_at")
-          .in("post_id", communityIds)
-          .order("created_at", { ascending: false })
-        const reactorIds = [...new Set((commLikes || []).map((r) => r.user_id))].slice(0, 100)
-        let profMap = new Map()
-        if (reactorIds.length > 0) {
-          const { data: profs } = await fetch(`${API_BASE_URL}/api/profiles/bulk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: reactorIds }) }).then(r => r.json()).then(d => ({ data: d.data }))
-          ;(profs || []).forEach((x) => profMap.set(x.id, x))
-        }
-        ;(commLikes || []).forEach((r) => {
-          const k = "community:" + r.post_id
-          if (!topReactorsMap.has(k)) topReactorsMap.set(k, [])
-          const arr = topReactorsMap.get(k)
-          if (arr.length < 3) arr.push({ name: profMap.get(r.user_id)?.display_name || profMap.get(r.user_id)?.username || "Someone", emoji: r.reaction || "❤️" })
+      const res = await fetch(`${API_BASE_URL}/api/feed/v2`).then(r => r.json()).catch(() => ({ success: false }))
+      if (!res || !res.success) { setError((res && res.error) || "Feed load failed"); setLoading(false); return }
+      const d = res.data
+      const matchIds = new Set(d.matchIds || [])
+      const followIds = new Set(d.followIds || [])
+      const myCircleIds = new Set(d.myCircleIds || [])
+      const blockedIds = new Set(d.blockedIds || [])
+      const mutedLocal = new Set(d.mutedIds || [])
+      const mutedWordsLocal = new Set(d.mutedWords || [])
+      const hiddenKeys = new Set(d.hiddenKeys || [])
+      const snoozedIds = new Set(d.snoozedIds || [])
+      setMutedUsersSet(mutedLocal)
+      setMutedWordsSet(mutedWordsLocal)
+      setCommunities(new Map((d.communities || []).map(c => [c.id, c])))
+      const communityPosts = (d.sources?.community || []).map(r => ({ ...r, _source: "community" }))
+      const personalPosts = (d.sources?.personal || []).map(r => ({ ...r, _source: "personal", author_id: r.author_id || r.user_id }))
+      const reelItems = (d.sources?.reels || []).map(r => ({ ...r, _source: "reel" }))
+      const listingItems = d.sources?.listings || []
+      const serviceItems = d.sources?.services || []
+      setSuggestedReels(d.suggestedReels || [])
+      setSuggested((d.pymk || []).slice(0, 10).map(r => ({
+        id: r.id, display_name: r.display_name, username: r.username,
+        photo_url: publicPhotoUrl(r.primary_photo),
+      })))
+      const filteredPosts = [...communityPosts, ...personalPosts, ...listingItems, ...serviceItems]
+        .filter(r => !hiddenKeys.has((r._source || "community") + ":" + r.id))
+        .filter(r => !snoozedIds.has(String(r.author_id)))
+        .filter(r => !blockedIds.has(String(r.author_id)))
+        .filter(r => canSeePost(r, { myId, matchIds, myCircleIds }))
+        .filter(r => {
+          const a = String(r.author_id || r.user_id)
+          if (mutedLocal.has(a)) return false
+          const text = (r.content || "").toLowerCase()
+          if (text && mutedWordsLocal.size > 0) { for (const w of mutedWordsLocal) { if (text.includes(w)) return false } }
+          return true
         })
-      }
-
-      if (personalIds.length > 0) {
-        const { data: personalLikes } = await supabase
-          .from("user_post_likes")
-          .select("post_id, user_id, reaction, created_at")
-          .in("post_id", personalIds)
-          .order("created_at", { ascending: false })
-        const reactorIds = [...new Set((personalLikes || []).map((r) => r.user_id))].slice(0, 100)
-        let profMap = new Map()
-        if (reactorIds.length > 0) {
-          const { data: profs } = await fetch(`${API_BASE_URL}/api/profiles/bulk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: reactorIds }) }).then(r => r.json()).then(d => ({ data: d.data }))
-          ;(profs || []).forEach((x) => profMap.set(x.id, x))
+        .map(p => ({
+          ...p,
+          _likeCount: d.enrichment?.[p._source + ":" + p.id]?.likes || 0,
+          _commentCount: d.enrichment?.[p._source + ":" + p.id]?.comments || 0,
+        }))
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      const filteredReels = reelItems
+        .filter(r => !hiddenKeys.has("reel:" + r.id))
+        .filter(r => !mutedLocal.has(String(r.author_id)))
+        .map(r => ({ ...r, _likeCount: d.enrichment?.["reel:" + r.id]?.likes || 0, _commentCount: 0 }))
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      seenReelIds.current = new Set()
+      const interactions = new Map(Object.entries(d.interactions || {}))
+      const signalScoresMap = new Map(Object.entries(d.signalScores || {}))
+      const authorSignalsMap = new Map(Object.entries(d.authorSignals || {}))
+      const list = mixFeed({
+        posts: filteredPosts,
+        reels: filteredReels,
+        pageSize: 20,
+        reelEvery: 10,
+        seenReelIds: seenReelIds.current,
+        scoreContext: {
+          myId, matchIds, followIds, interactions,
+          reelAffinity: d.reelAffinity || 1,
+          signalScores: signalScoresMap,
+          authorSignals: authorSignalsMap,
+        },
+      })
+      setPosts(list)
+      setHasMore(list.length > 0)
+      setCursor(list.length > 0 ? list[list.length - 1].created_at : null)
+      setProfiles(new Map((d.profiles || []).map(p => [p.id, p])))
+      const photoMap = new Map()
+      ;(d.photos || []).forEach(ph => { if (!photoMap.has(ph.user_id)) photoMap.set(ph.user_id, ph.storage_path) })
+      setPhotos(photoMap)
+      setMyPhotoUrl(d.myPhotoPath ? publicPhotoUrl(d.myPhotoPath) : null)
+      const myLiked = new Set(), counts = new Map(), cc = new Map(), breakdown = new Map(), types = new Map(), top = new Map()
+      for (const [key, e] of Object.entries(d.enrichment || {})) {
+        counts.set(key, e.likes || 0)
+        if (e.mine) { myLiked.add(key); types.set(key, e.myReaction || "❤️") }
+        if (e.comments) cc.set(key, e.comments)
+        if (e.reactions && Object.keys(e.reactions).length > 0) {
+          const bd = new Map()
+          for (const [em, n] of Object.entries(e.reactions)) bd.set(em, n)
+          breakdown.set(key, bd)
         }
-        ;(personalLikes || []).forEach((r) => {
-          const k = "personal:" + r.post_id
-          if (!topReactorsMap.has(k)) topReactorsMap.set(k, [])
-          const arr = topReactorsMap.get(k)
-          if (arr.length < 3) arr.push({ name: profMap.get(r.user_id)?.display_name || profMap.get(r.user_id)?.username || "Someone", emoji: r.reaction || "❤️" })
-        })
+        if (e.reactors && e.reactors.length > 0) top.set(key, e.reactors)
       }
-
-      setTopReactors(topReactorsMap)
-    } catch (e) { console.warn("top reactors load failed", e) }
-    setMyReactionTypes((cur) => {
-      const merged = new Map(cur)
-      myReactionTypes.forEach((v, k) => merged.set(k, v))
-      return merged
-    })
-
-    setLoading(false)
-    setPendingRealtimeCount(0)
+      setMyReactions(myLiked)
+      setReactionCounts(counts)
+      setCommentCounts(cc)
+      setReactionBreakdown(breakdown)
+      setMyReactionTypes(types)
+      setTopReactors(top)
+      setShareCounts(new Map(Object.entries(d.shareCounts || {})))
+      setSignalScores(signalScoresMap)
+      setAuthorSignals(authorSignalsMap)
+      setLoading(false)
+      setPendingRealtimeCount(0)
+    } catch (e) {
+      console.error("Feed load error:", e)
+      setError((e && e.message) || "Load failed")
+      setLoading(false)
+    }
   }, [myId])
 
   // ---- Infinite scroll: fetch next page ----
@@ -714,329 +270,63 @@ export default function Feed() {
     if (!myId || loadingMoreRef.current || !hasMore || !cursor) return
     loadingMoreRef.current = true
     setLoadingMore(true)
-
-    const myCommIds = [...communities.keys()]
-
-    // --- Community posts (older than cursor) ---
-    let communityPosts = []
-    if (myCommIds.length > 0) {
-      const { data: rows } = await supabase
-        .from("community_posts")
-        .select("id, community_id, author_id, content, image_path, image_paths, created_at, pinned_until")
-        .in("community_id", myCommIds)
-        .lt("created_at", cursor)
-        .order("created_at", { ascending: false })
-        .limit(20)
-      communityPosts = (rows || []).map((r) => ({ ...r, _source: "community" }))
-    }
-
-    // --- Personal posts from me + matches + follows ---
-    const [matchRes, followRes, myCirclesRes2, blockedRes2] = await Promise.all([
-      supabase.from("matches").select("user_one_id, user_two_id").or("user_one_id.eq." + myId + ",user_two_id.eq." + myId),
-      supabase.from("follows").select("following_id").eq("follower_id", myId),
-      supabase.from("circle_members").select("circle_id").eq("user_id", myId).limit(100),
-    ])
-    const myCircleIds2 = new Set((myCirclesRes2.data || []).map((r) => r.circle_id))
-    const blockedIds2 = new Set()
-    ;(blockedRes2?.data || []).forEach((b) => {
-      if (b.blocker_id === myId) blockedIds2.add(b.blocked_id)
-      if (b.blocked_id === myId) blockedIds2.add(b.blocker_id)
-    })
-    const matchIds = (matchRes.data || []).map((m) => m.user_one_id === myId ? m.user_two_id : m.user_one_id)
-    const followIds = (followRes.data || []).map((f) => f.following_id)
-    const allowedUserIds = [...new Set([myId, ...matchIds, ...followIds])]
-
-    const { data: personalRows } = await supabase
-      .from("user_posts")
-      .select("id, user_id, content, image_path, image_paths, audience, created_at, location_text, feeling_text, publish_at")
-      .in("user_id", allowedUserIds)
-      .eq("is_active", true)
-      .lt("created_at", cursor)
-      .lte("publish_at", new Date().toISOString())
-      .order("created_at", { ascending: false })
-      .limit(20)
-    const personalPosts = (personalRows || [])
-      .filter((r) => !blockedIds2.has(r.user_id) && canSeePost(r, { myId, matchIds: new Set(matchIds), myCircleIds: myCircleIds2 }))
-      .map((r) => ({
-        ...r,
-        author_id: r.user_id,
-        _source: "personal",
-      }))
-
-    // --- Reels older than cursor ---
-    const { data: reelRows } = await supabase
-      .from("reels")
-      .select("id, user_id, video_url, thumbnail_url, caption, mirrored, cover_frame_time, created_at")
-      .eq("is_active", true)
-      .eq("audience", "public")
-      .lt("created_at", cursor)
-      .order("created_at", { ascending: false })
-      .limit(4)
-    const reelItems = (reelRows || []).map((r) => ({
-      id: r.id,
-      user_id: r.user_id,
-      author_id: r.user_id,
-      content: r.caption,
-      video_url: r.video_url,
-      thumbnail_url: r.thumbnail_url,
-      mirrored: r.mirrored,
-      cover_frame_time: r.cover_frame_time,
-      created_at: r.created_at,
-      _source: "reel",
-    }))
-
-
-    // Listings (public, active)
-    const { data: lmListingsMore } = await supabase
-      .from("listings")
-      .select("id, seller_id, title, description, price, currency, category, location, image_paths, created_at")
-      .eq("status", "active")
-      .lt("created_at", cursor)
-      .order("created_at", { ascending: false })
-      .limit(6)
-    const listingItems = (lmListingsMore || []).map((r) => ({
-      id: r.id,
-      user_id: r.seller_id,
-      author_id: r.seller_id,
-      title: r.title,
-      content: r.description,
-      price: r.price,
-      currency: r.currency,
-      location: r.location,
-      image_paths: r.image_paths,
-      created_at: r.created_at,
-      _source: "listing",
-    }))
-
-    // Services (active)
-    const { data: svcRows_lmListingsMore } = await supabase
-      .from("services")
-      .select("id, provider_id, title, description, price, currency, category, duration_minutes, location, image_paths, created_at")
-      .eq("status", "active")
-      .lt("created_at", cursor)
-      .order("created_at", { ascending: false })
-      .limit(6)
-    const serviceItems = (svcRows_lmListingsMore || []).map((r) => ({
-      id: r.id,
-      user_id: r.provider_id,
-      author_id: r.provider_id,
-      title: r.title,
-      content: r.description,
-      price: r.price,
-      currency: r.currency,
-      duration_minutes: r.duration_minutes,
-      location: r.location,
-      image_paths: r.image_paths,
-      created_at: r.created_at,
-      _source: "service",
-    }))
-
-    // --- Load hidden IDs, filter, merge, take newest 12 ---
-    const { data: hideRows } = await supabase
-      .from("post_hides")
-      .select("post_id, post_type")
-      .eq("user_id", myId)
-    const hiddenKeys = new Set((hideRows || []).map((h) => h.post_type + ":" + h.post_id))
-
-    const postsSorted = [...communityPosts, ...personalPosts, ...listingItems, ...serviceItems]
-      .filter((r) => !hiddenKeys.has((r._source || "community") + ":" + r.id))
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-    const reelsSorted = reelItems
-      .filter((r) => !hiddenKeys.has("reel:" + r.id))
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-
-    // Engagement for ranking
-    const commIdsRank = postsSorted.filter((r) => r._source === "community").map((r) => r.id)
-    const personalIdsRank = postsSorted.filter((r) => r._source === "personal").map((r) => r.id)
-    const likeMap = new Map()
-    const cmtMap = new Map()
-    if (commIdsRank.length > 0) {
-      const [a, b] = await Promise.all([
-        supabase.from("community_post_reactions").select("post_id").in("post_id", commIdsRank),
-        supabase.from("community_post_comments").select("post_id").in("post_id", commIdsRank),
-      ])
-      ;(a.data || []).forEach((r) => likeMap.set(r.post_id, (likeMap.get(r.post_id) || 0) + 1))
-      ;(b.data || []).forEach((c) => cmtMap.set(c.post_id, (cmtMap.get(c.post_id) || 0) + 1))
-    }
-    if (personalIdsRank.length > 0) {
-      const [a, b] = await Promise.all([
-        Promise.resolve({ data: [] }), // DISABLED: Using Cloudflare Redis likes instead
-        supabase.from("user_post_comments").select("post_id").in("post_id", personalIdsRank),
-      ])
-      ;(a.data || []).forEach((r) => likeMap.set(r.post_id, (likeMap.get(r.post_id) || 0) + 1))
-      ;(b.data || []).forEach((c) => cmtMap.set(c.post_id, (cmtMap.get(c.post_id) || 0) + 1))
-    }
-    const enrichedPosts = postsSorted.map((p) => ({
-      ...p,
-      _likeCount: likeMap.get(p.id) || 0,
-      _commentCount: cmtMap.get(p.id) || 0,
-    }))
-    const enrichedReels = reelsSorted.map((r) => ({ ...r, _likeCount: 0, _commentCount: 0 }))
-
-    const rankingSignalsLM = await fetchRankingSignals(myId)
-    const scoreContextLM = {
-      myId,
-      matchIds: new Set(matchIds),
-      followIds: new Set(followIds),
-      interactions: rankingSignalsLM.interactions,
-      reelAffinity: rankingSignalsLM.reelAffinity,
-    }
-    const merged = mixFeed({
-      posts: enrichedPosts,
-      reels: enrichedReels,
-      pageSize: 20,
-      reelEvery: 10,
-      seenReelIds: seenReelIds.current,
-      scoreContext: scoreContextLM,
-    })
-
-    if (merged.length === 0) {
-      setHasMore(false)
-      setLoadingMore(false)
-      return
-    }
-
-    // --- Profiles + photos for new authors ---
-    const ids = [...new Set(merged.map((r) => r.author_id))]
-    if (ids.length > 0) {
-      const { data: profs } = await supabase
-        .from("profiles")
-        .select("id, display_name, username, is_verified")
-        .in("id", ids)
-      setProfiles((prev) => {
-        const next = new Map(prev)
-        ;(profs || []).forEach((p) => next.set(p.id, p))
-        return next
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/feed/loadMore?cursor=${encodeURIComponent(cursor)}`).then(r => r.json()).catch(() => ({ success: false }))
+      if (!res || !res.success) { setLoadingMore(false); loadingMoreRef.current = false; return }
+      const d = res.data
+      const matchIds = new Set(d.context?.matchIds || [])
+      const followIds = new Set(d.context?.followIds || [])
+      const blockedIds = new Set(d.context?.blockedIds || [])
+      const mutedLocal = new Set(d.context?.mutedIds || [])
+      const hiddenKeys = new Set(d.context?.hiddenKeys || [])
+      const communityPosts = (d.sources?.community || []).map(r => ({ ...r, _source: "community" }))
+      const personalPosts = (d.sources?.personal || []).map(r => ({ ...r, _source: "personal", author_id: r.author_id || r.user_id }))
+      const reelItems = (d.sources?.reels || []).map(r => ({ ...r, _source: "reel" }))
+      const listingItems = d.sources?.listings || []
+      const serviceItems = d.sources?.services || []
+      const postsSorted = [...communityPosts, ...personalPosts, ...listingItems, ...serviceItems]
+        .filter(r => !hiddenKeys.has((r._source || "community") + ":" + r.id))
+        .filter(r => !blockedIds.has(String(r.author_id)))
+        .filter(r => !mutedLocal.has(String(r.author_id)))
+        .filter(r => canSeePost(r, { myId, matchIds, myCircleIds: new Set() }))
+        .map(p => ({
+          ...p,
+          _likeCount: d.enrichment?.[p._source + ":" + p.id]?.likes || 0,
+          _commentCount: d.enrichment?.[p._source + ":" + p.id]?.comments || 0,
+        }))
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      const reelsSorted = reelItems
+        .filter(r => !hiddenKeys.has("reel:" + r.id))
+        .filter(r => !mutedLocal.has(String(r.author_id)))
+        .map(r => ({ ...r, _likeCount: d.enrichment?.["reel:" + r.id]?.likes || 0, _commentCount: 0 }))
+      const merged = mixFeed({
+        posts: postsSorted,
+        reels: reelsSorted,
+        pageSize: 20,
+        reelEvery: 10,
+        seenReelIds: seenReelIds.current,
+        scoreContext: { myId, matchIds, followIds, interactions: new Map(), reelAffinity: 1 },
       })
-      const { data: ph } = await supabase
-        .from("profile_photos")
-        .select("user_id, storage_path, is_primary, display_order")
-        .in("user_id", ids)
-        .order("is_primary", { ascending: false })
-        .order("display_order", { ascending: true })
-      setPhotos((prev) => {
-        const next = new Map(prev)
-        ;(ph || []).forEach((p) => { if (!next.has(p.user_id)) next.set(p.user_id, p.storage_path) })
-        return next
-      })
-    }
-
-    // --- Reactions + comment counts (per source) ---
-    const communityIds = merged.filter((r) => r._source === "community").map((r) => r.id)
-    const personalIds = merged.filter((r) => r._source === "personal").map((r) => r.id)
-
-    if (communityIds.length > 0) {
-      const { data: reactRows } = await supabase
-        .from("community_post_reactions")
-        .select("post_id, user_id")
-        .in("post_id", communityIds)
-      const freshReactions = new Map()
-      const freshMyReactions = new Set()
-      ;(reactRows || []).forEach((r) => {
-        const k = "community:" + r.post_id
-        freshReactions.set(k, (freshReactions.get(k) || 0) + 1)
-        if (r.user_id === myId) freshMyReactions.add(k)
-      })
-      setMyReactions((prev) => new Set([...prev, ...freshMyReactions]))
-      setReactionCounts((prev) => {
-        const next = new Map(prev)
-        freshReactions.forEach((c, k) => next.set(k, c))
-        return next
-      })
-
-      const { data: commentRows } = await supabase
-        .from("community_post_comments")
-        .select("post_id")
-        .in("post_id", communityIds)
-      const freshComments = new Map()
-      ;(commentRows || []).forEach((c) => {
-        const k = "community:" + c.post_id
-        freshComments.set(k, (freshComments.get(k) || 0) + 1)
-      })
-      setCommentCounts((prev) => {
-        const next = new Map(prev)
-        freshComments.forEach((c, k) => next.set(k, c))
-        return next
-      })
-    }
-
-    if (personalIds.length > 0) {
-      const { data: reactRows } = await supabase
-        .from("user_post_likes")
-        .select("post_id, user_id")
-        .in("post_id", personalIds)
-      const freshReactions = new Map()
-      const freshMyReactions = new Set()
-      ;(reactRows || []).forEach((r) => {
-        const k = "personal:" + r.post_id
-        freshReactions.set(k, (freshReactions.get(k) || 0) + 1)
-        if (r.user_id === myId) freshMyReactions.add(k)
-      })
-      setMyReactions((prev) => new Set([...prev, ...freshMyReactions]))
-      setReactionCounts((prev) => {
-        const next = new Map(prev)
-        freshReactions.forEach((c, k) => next.set(k, c))
-        return next
-      })
-
-      const { data: commentRows } = await supabase
-        .from("user_post_comments")
-        .select("post_id")
-        .in("post_id", personalIds)
-      const freshComments = new Map()
-      ;(commentRows || []).forEach((c) => {
-        const k = "personal:" + c.post_id
-        freshComments.set(k, (freshComments.get(k) || 0) + 1)
-      })
-      setCommentCounts((prev) => {
-        const next = new Map(prev)
-        freshComments.forEach((c, k) => next.set(k, c))
-        return next
-      })
-    }
-
-    // Reel likes for this page
-    const newReelIds = merged.filter((r) => r._source === "reel").map((r) => r.id)
-    if (newReelIds.length > 0) {
-      const { data: reactRows } = await supabase
-        .from("reel_likes")
-        .select("reel_id, user_id")
-        .in("reel_id", newReelIds)
-      const freshReactions = new Map()
-      const freshMyReactions = new Set()
-      ;(reactRows || []).forEach((r) => {
-        const k = "reel:" + r.reel_id
-        freshReactions.set(k, (freshReactions.get(k) || 0) + 1)
-        if (r.user_id === myId) freshMyReactions.add(k)
-      })
-      setMyReactions((prev) => new Set([...prev, ...freshMyReactions]))
-      setReactionCounts((prev) => {
-        const next = new Map(prev)
-        freshReactions.forEach((c, k) => next.set(k, c))
-        return next
-      })
-    }
-
-    // Dedup by _source + id before appending — prevents duplicates at page boundaries
-    setPosts((prev) => {
-      const existing = new Set(prev.map((x) => `${x._source}:${x.id}`))
-      const incoming = merged.filter((x) => !existing.has(`${x._source}:${x.id}`))
-      return [...prev, ...incoming]
-    })
-
-    // Strict cursor: the oldest item across BOTH sources (posts + reels), not just merged[last]
-    const allFetched = [...postsSorted, ...reelsSorted]
-    if (allFetched.length > 0) {
-      const oldest = allFetched.reduce((min, r) => (r.created_at < min ? r.created_at : min), allFetched[0].created_at)
-      setCursor(oldest)
-    } else {
-      setHasMore(false)
-    }
-
-    setHasMore(allFetched.length > 0)
+      if (merged.length === 0) { setHasMore(false); setLoadingMore(false); loadingMoreRef.current = false; return }
+      if (d.profiles?.length) setProfiles(prev => { const n = new Map(prev); for (const p of d.profiles) n.set(p.id, p); return n })
+      if (d.photos?.length) setPhotos(prev => { const n = new Map(prev); for (const ph of d.photos) if (!n.has(ph.user_id)) n.set(ph.user_id, ph.storage_path); return n })
+      const freshMy = new Set(), freshCounts = new Map(), freshCmts = new Map(), freshTypes = new Map()
+      for (const [key, e] of Object.entries(d.enrichment || {})) {
+        freshCounts.set(key, e.likes || 0)
+        if (e.mine) { freshMy.add(key); freshTypes.set(key, e.myReaction || "❤️") }
+        if (e.comments) freshCmts.set(key, e.comments)
+      }
+      setMyReactions(prev => new Set([...prev, ...freshMy]))
+      setReactionCounts(prev => { const n = new Map(prev); freshCounts.forEach((v, k) => n.set(k, v)); return n })
+      setCommentCounts(prev => { const n = new Map(prev); freshCmts.forEach((v, k) => n.set(k, v)); return n })
+      setMyReactionTypes(prev => { const n = new Map(prev); freshTypes.forEach((v, k) => n.set(k, v)); return n })
+      setPosts(prev => [...prev, ...merged])
+      setCursor(merged.length > 0 ? merged[merged.length - 1].created_at : cursor)
+      setHasMore(merged.length > 0)
+    } catch (e) { console.warn("loadMore failed", e) }
     setLoadingMore(false)
     loadingMoreRef.current = false
-  }, [myId, hasMore, cursor, communities])
+  }, [myId, hasMore, cursor])
 
   // ---- Sentinel observer ----
   useEffect(() => {
@@ -1154,54 +444,40 @@ export default function Feed() {
     videos.forEach((v) => { v.muted = feedMuted })
   }, [feedMuted, posts])
 
-  // Load mute filter (muted words + muted users) once per session
-  useEffect(() => {
-    if (!myId) return
-    let cancelled = false
-    ;(async () => {
-      try {
-        const [wordsRes, mutesRes] = await Promise.all([
-          Promise.resolve({ data: boot.mutedWords || [] }),
-          Promise.resolve({ data: boot.userMutes || [] }),
-        ])
-        if (cancelled) return
-        setMutedWordsSet(new Set((wordsRes.data || []).map((r) => (r.word || "").toLowerCase()).filter(Boolean)))
-        setMutedUsersSet(new Set((mutesRes.data || []).map((r) => r.muted_id)))
-      } catch (e) { console.warn("mute load failed", e) }
-    })()
-    return () => { cancelled = true }
-  }, [myId])
 
   useEffect(() => { load() }, [load])
 
   useEffect(() => {
     if (!myId) return
-    const debounced = () => {
-      setPendingRealtimeCount((c) => c + 1)
-    }
-    const ch = supabase
-      .channel("feed-realtime-" + myId)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "community_posts" }, debounced)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_posts" }, debounced)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "user_posts" }, debounced)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "reels" }, debounced)
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
-  }, [myId, load])
+    let since = new Date().toISOString()
+    const pollId = setInterval(async () => {
+      if (document.hidden) return
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/feed/poll?since=${encodeURIComponent(since)}`).then(r => r.json()).catch(() => ({ success: false }))
+        if (res && res.success && res.count > 0) {
+          setPendingRealtimeCount((c) => c + res.count)
+          since = new Date().toISOString()
+        }
+      } catch (e) { /* silent */ }
+    }, 15000)
+    return () => clearInterval(pollId)
+  }, [myId])
 
   async function notifyReaction(post, emoji) {
-    // Determine target: post author
     const targetId = post.author_id || post.user_id
     if (!targetId || !myId || targetId === myId) return
     try {
-      await supabase.from("notifications").insert({
-        user_id: targetId,
-        actor_id: myId,
-        type: "like_post",
-        ref_id: String(post.id),
-        ref_type: "post",
-        body: emoji === "❤️" ? "loved your post" : "reacted to your post",
-      })
+      await fetch(`${API_BASE_URL}/api/feed/notify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: targetId,
+          type: 'like_post',
+          refId: String(post.id),
+          refType: 'post',
+          body: emoji === "❤️" ? "loved your post" : "reacted to your post"
+        })
+      }).catch(() => null)
     } catch (e) { console.warn("notify failed", e) }
   }
 
