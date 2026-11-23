@@ -808,22 +808,54 @@ export default {
 
       if (path === "/api/messages" && request.method === "POST") {
         const body = await request.json();
-        const insertQuery = `
-          INSERT INTO messages (conversation_id, sender_id, content, media_url, media_type, media_name, reply_to_id)
-          VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *;
-        `;
-        const data = await queryDatabase(insertQuery, [
-          body.conversation_id, body.sender_id, body.content, body.media_url, body.media_type, body.media_name, body.reply_to_id
-        ]);
-        
+        // S3: derive sender from session when available; fall back to body for legacy APK (Roadmap Rule 3).
+        const sessionUser = await getSessionUser(request, env, url);
+        if (env.MESSAGES_ENFORCE === "1" && !sessionUser) {
+          return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        }
+        const senderId = sessionUser ? String(sessionUser.id) : (body.sender_id ? String(body.sender_id) : null);
+        if (!sessionUser && body.sender_id) console.warn("[MSG] legacy sender from body");
+        if (sessionUser && body.sender_id && String(body.sender_id) !== String(sessionUser.id)) console.warn("[MSG] sender mismatch: using session");
+        if (!senderId) return new Response(JSON.stringify({ success: false, error: "MISSING_SENDER" }), { status: 400, headers: cors });
+        // S3: dynamic column list — only insert fields actually provided; retry drops unknown columns if schema lacks them.
+        const cols = ["conversation_id", "sender_id", "content"];
+        const vals = [body.conversation_id, senderId, body.content];
+        const optional = ["media_url","media_type","media_name","reply_to_id","expires_at","view_once","viewed_by","metadata","ephemeral_type","voice_duration_seconds","voice_waveform"];
+        for (const k of optional) {
+          if (body[k] === undefined || body[k] === null) continue;
+          if (Array.isArray(body[k]) && body[k].length === 0) continue;
+          cols.push(k); vals.push(body[k]);
+        }
+        const buildInsert = (c) => "INSERT INTO messages (" + c.join(", ") + ") VALUES (" + c.map((_,i)=>"$"+(i+1)).join(", ") + ") RETURNING *;";
+        let data;
+        try {
+          data = await queryDatabase(buildInsert(cols), vals);
+        } catch (e) {
+          const msg = String((e && e.message) || "");
+          const m = msg.match(/column "([^"]+)" does not exist/);
+          if (!m) {
+            console.error("[MSG] insert failed: " + msg.slice(0, 200));
+            return new Response(JSON.stringify({ success: false, error: "INSERT_FAILED", detail: msg.slice(0, 120) }), { status: 500, headers: cors });
+          }
+          const badCol = m[1];
+          console.warn("[MSG] dropping missing column: " + badCol);
+          const idx = cols.indexOf(badCol);
+          if (idx < 0) return new Response(JSON.stringify({ success: false, error: "INSERT_FAILED", detail: msg.slice(0, 120) }), { status: 500, headers: cors });
+          cols.splice(idx, 1); vals.splice(idx, 1);
+          try {
+            data = await queryDatabase(buildInsert(cols), vals);
+          } catch (e2) {
+            const m2 = String((e2 && e2.message) || "");
+            console.error("[MSG] retry failed: " + m2.slice(0, 200));
+            return new Response(JSON.stringify({ success: false, error: "INSERT_FAILED", detail: m2.slice(0, 120) }), { status: 500, headers: cors });
+          }
+        }
         const newMsg = data.rows[0];
-        // Broadcast to DM WebSocket
         try {
           const id = env.CHAT_ROOMS.idFromName("dm-" + body.conversation_id);
           const obj = env.CHAT_ROOMS.get(id);
           await obj.fetch("https://dummy.com/", { method: "POST", body: JSON.stringify(newMsg) });
         } catch (e) { console.error(e); }
-
         return new Response(JSON.stringify({ success: true, data: newMsg }), { headers: { ...cors, "Content-Type": "application/json" } });
       }
 
