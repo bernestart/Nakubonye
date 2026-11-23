@@ -342,7 +342,33 @@ export default {
         const nc = await queryDatabase("INSERT INTO conversations (match_id, initiator_id, recipient_id, is_direct) VALUES (NULL, $1::uuid, $2::uuid, true) RETURNING id", [meId, other]);
         return out(200, { success: true, id: nc.rows[0].id });
       }
-      if (path === "/api/username/available" && request.method === "GET") {
+      if (path === "/api/conversations/timer") {
+        const jh = { ...cors, "Content-Type": "application/json" };
+        const out = (status, obj) => new Response(JSON.stringify(obj), { status, headers: jh });
+        const me = await getSessionUser(request, env, url);
+        if (!me) return out(401, { success: false, error: "UNAUTHENTICATED" });
+        const meId = String(me.id);
+        if (request.method === "GET") {
+          const convId = url.searchParams.get("conversationId");
+          if (!convId) return out(400, { success: false, error: "MISSING_CONV" });
+          const r = await queryDatabase("SELECT c.disappearing_timer_seconds FROM conversations c LEFT JOIN matches mt ON mt.id = c.match_id WHERE c.id = $1::bigint AND ($2::uuid IN (c.initiator_id, c.recipient_id, mt.user_one_id, mt.user_two_id))", [convId, meId]);
+          if (!r.rows.length) return out(404, { success: false, error: "NOT_FOUND_OR_NOT_PARTICIPANT" });
+          return out(200, { success: true, seconds: r.rows[0].disappearing_timer_seconds });
+        }
+        if (request.method === "POST") {
+          const b = await request.json().catch(() => ({}));
+          const convId = String(b.conversationId || "");
+          const seconds = b.seconds === null || b.seconds === undefined || b.seconds === "" ? null : Number(b.seconds);
+          if (!/^\d{1,18}$/.test(convId)) return out(400, { success: false, error: "BAD_CONV" });
+          if (seconds !== null && (!Number.isFinite(seconds) || seconds < 0 || seconds > 86400)) return out(400, { success: false, error: "BAD_SECONDS" });
+          const chk = await queryDatabase("SELECT 1 FROM conversations c LEFT JOIN matches mt ON mt.id = c.match_id WHERE c.id = $1::bigint AND ($2::uuid IN (c.initiator_id, c.recipient_id, mt.user_one_id, mt.user_two_id))", [convId, meId]);
+          if (!chk.rows.length) return out(403, { success: false, error: "NOT_PARTICIPANT" });
+          await queryDatabase("UPDATE conversations SET disappearing_timer_seconds = $1 WHERE id = $2::bigint", [seconds, convId]);
+          return out(200, { success: true, seconds });
+        }
+        return out(405, { success: false, error: "METHOD_NOT_ALLOWED" });
+      }
+            if (path === "/api/username/available" && request.method === "GET") {
         const jh = { ...cors, "Content-Type": "application/json" };
         const out = (status, obj) => new Response(JSON.stringify(obj), { status, headers: jh });
         const me = await getSessionUser(request, env, url);
@@ -1053,7 +1079,7 @@ export default {
           const { ids } = await request.json();
           if (!ids || ids.length === 0) return new Response(JSON.stringify({ success: true, data: [] }), { headers: cors });
           const placeholders = ids.map((_, i) => `${i + 1}`).join(',');
-          const data = await queryDatabase("SELECT id, display_name, username FROM profiles WHERE id::text = ANY($1::text[])", [ids.slice(0, 100).map(String)]);
+          const data = await queryDatabase("SELECT p.id, p.display_name, p.username, p.is_verified, p.last_seen_at, (SELECT storage_path FROM profile_photos WHERE user_id = p.id ORDER BY is_primary DESC, display_order ASC LIMIT 1) AS primary_photo_path FROM profiles p WHERE p.id::text = ANY($1::text[])", [ids.slice(0, 100).map(String)]);
           return new Response(JSON.stringify({ success: true, data: data.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
         } catch (err) {
           return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
@@ -1148,7 +1174,8 @@ export default {
       // 15. PHASE 2a-2: Inbox Actions (Mute, Delete)
       if (path === "/api/inbox/action" && request.method === "POST") {
         try {
-          const { action, type, id, userId } = await request.json();
+          const __body = await request.json();
+          const { action, type, id, userId } = __body;
 
           if (action === 'delete' && type === 'dm') {
             await queryDatabase(`INSERT INTO conversation_deletes (conversation_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [id, userId]);
@@ -1166,6 +1193,15 @@ export default {
             await queryDatabase(`INSERT INTO group_mutes (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [id, userId]);
           } else if (action === 'unmute' && type === 'group') {
             await queryDatabase(`DELETE FROM group_mutes WHERE group_id = $1 AND user_id = $2`, [id, userId]);
+          } else if (action === 'clear' && type === 'dm') {
+            await queryDatabase(`INSERT INTO conversation_clears (conversation_id, user_id, cleared_at) VALUES ($1, $2, NOW()) ON CONFLICT (conversation_id, user_id) DO UPDATE SET cleared_at = NOW()`, [id, userId]);
+          } else if (action === 'clear' && type === 'group') {
+            await queryDatabase(`INSERT INTO group_clears (group_id, user_id, cleared_at) VALUES ($1, $2, NOW()) ON CONFLICT (group_id, user_id) DO UPDATE SET cleared_at = NOW()`, [id, userId]);
+          } else if (action === 'request') {
+            const senderId = userId || (__body.senderId);
+            const recipientId = __body.recipientId;
+            if (!senderId || !recipientId) return new Response(JSON.stringify({ success: false, error: "MISSING_IDS" }), { status: 400, headers: cors });
+            await queryDatabase(`INSERT INTO message_requests (sender_id, recipient_id, content, media_url, media_type, media_name) VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6) ON CONFLICT DO NOTHING`, [senderId, recipientId, __body.content || '', __body.mediaUrl || null, __body.mediaType || null, __body.mediaName || null]);
           }
 
           return new Response(JSON.stringify({ success: true }), { headers: cors });
@@ -1215,10 +1251,11 @@ export default {
           const otherId = url.searchParams.get("otherId");
           const convId = url.searchParams.get("convId");
 
-          const [mySettings, theirSettings, prevRead, mute, clear] = await Promise.all([
+          const [mySettings, theirSettings, prevRead, theirRead, mute, clear] = await Promise.all([
             queryDatabase(`SELECT show_read_receipts FROM user_settings WHERE user_id = $1`, [myId]),
             queryDatabase(`SELECT show_read_receipts FROM user_settings WHERE user_id = $1`, [otherId]),
             queryDatabase(`SELECT last_read_at FROM conversation_reads WHERE conversation_id = $1 AND user_id = $2`, [convId, myId]),
+            queryDatabase(`SELECT last_read_at FROM conversation_reads WHERE conversation_id = $1 AND user_id = $2`, [convId, otherId]),
             queryDatabase(`SELECT conversation_id FROM conversation_mutes WHERE conversation_id = $1 AND user_id = $2`, [convId, myId]),
             queryDatabase(`SELECT cleared_at FROM conversation_clears WHERE conversation_id = $1 AND user_id = $2`, [convId, myId])
           ]);
@@ -1228,7 +1265,7 @@ export default {
             data: {
               mineOn: mySettings.rows[0]?.show_read_receipts !== false,
               theirsOn: theirSettings.rows[0]?.show_read_receipts !== false,
-              prevReadAt: prevRead.rows[0]?.last_read_at || null,
+              prevReadAt: prevRead.rows[0]?.last_read_at || null, theirReadAt: theirRead.rows[0]?.last_read_at || null,
               isMuted: mute.rows.length > 0,
               clearedAt: clear.rows[0]?.cleared_at || null
             }
@@ -1253,6 +1290,10 @@ export default {
             await queryDatabase("UPDATE messages SET deleted_at = NOW(), content = '', media_url = NULL WHERE id = $1::bigint AND sender_id = $2::uuid", [mid, me.id]);
           } else if (b.action === "view_once") {
             await queryDatabase("UPDATE messages m SET viewed_by = array_append(COALESCE(m.viewed_by, '{}'), $2), media_url = NULL WHERE m.id = $1::bigint AND m.view_once = true AND m.sender_id <> $3::uuid AND EXISTS (SELECT 1 FROM conversations c LEFT JOIN matches mt ON mt.id = c.match_id WHERE c.id = m.conversation_id AND $3::uuid IN (c.initiator_id, c.recipient_id, mt.user_one_id, mt.user_two_id))", [mid, me.id, me.id]);
+          } else if (b.action === "edit") {
+            const content = String(b.content || "").slice(0, 2000);
+            if (!content) return out(400, { success: false, error: "EMPTY_CONTENT" });
+            await queryDatabase("UPDATE messages SET content = $1, edited_at = NOW() WHERE id = $2::bigint AND sender_id = $3::uuid AND deleted_at IS NULL", [content, mid, me.id]);
           } else return out(400, { success: false, error: "BAD_ACTION" });
           return out(200, { success: true });
         } catch (err) {
