@@ -1391,6 +1391,135 @@ export default {
           return new Response(JSON.stringify({ success: false, error: "FEED_LOAD_FAILED" }), { status: 500, headers: cors });
         }
       }
+      if (path === "/api/feed/loadMore" && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const myId = String(me.id);
+        const cursor = url.searchParams.get("cursor");
+        if (!cursor) return new Response(JSON.stringify({ success: false, error: "MISSING_CURSOR" }), { status: 400, headers: cors });
+        try {
+          // === 1. Context (parallel) ===
+          const [matchR, followR, blockR, muteR] = await Promise.all([
+            queryDatabase("SELECT user_one_id, user_two_id FROM matches WHERE user_one_id = $1::uuid OR user_two_id = $1::uuid", [myId]),
+            queryDatabase("SELECT following_id FROM follows WHERE follower_id = $1::uuid", [myId]),
+            queryDatabase("SELECT blocker_id, blocked_id FROM blocks WHERE blocker_id = $1::uuid OR blocked_id = $1::uuid", [myId]),
+            queryDatabase("SELECT muted_id FROM user_mutes WHERE muter_id = $1::uuid", [myId]).catch(() => ({ rows: [] })),
+          ]);
+          const matchIds = matchR.rows.map(m => String(m.user_one_id) === myId ? String(m.user_two_id) : String(m.user_one_id));
+          const followIds = followR.rows.map(r => String(r.following_id));
+          const blockedIds = [];
+          blockR.rows.forEach(b => {
+            if (String(b.blocker_id) === myId) blockedIds.push(String(b.blocked_id));
+            if (String(b.blocked_id) === myId) blockedIds.push(String(b.blocker_id));
+          });
+          const mutedIds = muteR.rows.map(r => String(r.muted_id));
+
+          // === 2. Communities user belongs to ===
+          const myCommR = await queryDatabase("SELECT community_id FROM community_memberships WHERE user_id = $1::uuid", [myId]);
+          const myCommIds = myCommR.rows.map(r => String(r.community_id));
+
+          // === 3. Content queries (all filtered by cursor) ===
+          const [commR, persR, reelR, listR, svcR, hideR] = await Promise.all([
+            myCommIds.length > 0
+              ? queryDatabase("SELECT id, community_id, author_id, content, image_path, image_paths, created_at, pinned_until FROM community_posts WHERE community_id = ANY($1::bigint[]) AND created_at < $2::timestamptz ORDER BY created_at DESC LIMIT 20", [myCommIds.map(Number), cursor])
+              : { rows: [] },
+            queryDatabase("SELECT id, user_id, content, image_path, image_paths, audience, created_at, location_text, feeling_text, publish_at FROM user_posts WHERE user_id = ANY($1::uuid[]) AND is_active = true AND created_at < $2::timestamptz AND publish_at <= NOW() ORDER BY created_at DESC LIMIT 20", [[myId, ...matchIds, ...followIds].filter(Boolean), cursor]),
+            queryDatabase("SELECT id, user_id, video_url, thumbnail_url, caption, mirrored, cover_frame_time, created_at FROM reels WHERE is_active = true AND audience = 'public' AND created_at < $1::timestamptz ORDER BY created_at DESC LIMIT 4", [cursor]),
+            queryDatabase("SELECT id, seller_id, title, description, price, currency, category, location, image_paths, created_at FROM listings WHERE status = 'active' AND created_at < $1::timestamptz ORDER BY created_at DESC LIMIT 6", [cursor]),
+            queryDatabase("SELECT id, provider_id, title, description, price, currency, category, duration_minutes, location, image_paths, created_at FROM services WHERE status = 'active' AND created_at < $1::timestamptz ORDER BY created_at DESC LIMIT 6", [cursor]),
+            queryDatabase("SELECT post_id, post_type FROM post_hides WHERE user_id = $1::uuid", [myId]),
+          ]);
+
+          const communityPosts = commR.rows.map(r => {
+            const paths = Array.isArray(r.image_paths) && r.image_paths.length > 0 ? r.image_paths : (r.image_path ? [r.image_path] : []);
+            return { ...r, _source: "community", image_paths: paths };
+          });
+          const personalPosts = persR.rows.filter(r => !blockedIds.includes(String(r.user_id))).map(r => ({
+            ...r, author_id: r.user_id, _source: "personal",
+          }));
+          const reelItems = reelR.rows.map(r => ({
+            id: r.id, user_id: r.user_id, author_id: r.user_id, content: r.caption,
+            video_url: r.video_url, thumbnail_url: r.thumbnail_url, mirrored: r.mirrored,
+            cover_frame_time: r.cover_frame_time, created_at: r.created_at, _source: "reel",
+          }));
+          const listingItems = listR.rows.map(r => ({ id: r.id, user_id: r.seller_id, author_id: r.seller_id, title: r.title, content: r.description, price: r.price, currency: r.currency, location: r.location, image_paths: r.image_paths, created_at: r.created_at, _source: "listing" }));
+          const serviceItems = svcR.rows.map(r => ({ id: r.id, user_id: r.provider_id, author_id: r.provider_id, title: r.title, content: r.description, price: r.price, currency: r.currency, duration_minutes: r.duration_minutes, location: r.location, image_paths: r.image_paths, created_at: r.created_at, _source: "service" }));
+          const hiddenKeys = hideR.rows.map(h => h.post_type + ":" + h.post_id);
+
+          // === 4. Enrichment ===
+          const commIds = communityPosts.map(r => Number(r.id));
+          const persIds = personalPosts.map(r => Number(r.id));
+          const reelIds = reelItems.map(r => Number(r.id));
+          const [commReactR, commCmtR, persLikesR, persCmtsR, reelLikesR, sharesR] = await Promise.all([
+            commIds.length > 0 ? queryDatabase("SELECT post_id, user_id, reaction FROM community_post_reactions WHERE post_id = ANY($1::bigint[])", [commIds]) : { rows: [] },
+            commIds.length > 0 ? queryDatabase("SELECT post_id FROM community_post_comments WHERE post_id = ANY($1::bigint[]) AND deleted_at IS NULL", [commIds]) : { rows: [] },
+            persIds.length > 0 ? queryDatabase("SELECT post_id, user_id, reaction FROM user_post_likes WHERE post_id = ANY($1::bigint[])", [persIds]) : { rows: [] },
+            persIds.length > 0 ? queryDatabase("SELECT post_id FROM user_post_comments WHERE post_id = ANY($1::bigint[]) AND deleted_at IS NULL", [persIds]) : { rows: [] },
+            reelIds.length > 0 ? queryDatabase("SELECT reel_id, user_id FROM reel_likes WHERE reel_id = ANY($1::bigint[])", [reelIds]) : { rows: [] },
+            persIds.length > 0 ? queryDatabase("SELECT reshared_from_type, reshared_from_id FROM user_posts WHERE reshared_from_id = ANY($1::bigint[]) AND reshared_from_type IS NOT NULL", [persIds]) : { rows: [] },
+          ]);
+          const enrichment = {};
+          const ensure = (k) => { if (!enrichment[k]) enrichment[k] = { likes: 0, comments: 0, mine: false, myReaction: null, reactions: {}, reactorIds: [] }; return enrichment[k]; };
+          const addReact = (key, userId, reaction) => {
+            const e = ensure(key);
+            e.likes++;
+            const em = reaction || "❤️";
+            e.reactions[em] = (e.reactions[em] || 0) + 1;
+            if (String(userId) === myId) { e.mine = true; e.myReaction = em; }
+            if (e.reactorIds.length < 3) e.reactorIds.push(String(userId));
+          };
+          for (const r of commReactR.rows) addReact("community:" + r.post_id, r.user_id, r.reaction);
+          for (const c of commCmtR.rows) ensure("community:" + c.post_id).comments++;
+          for (const r of persLikesR.rows) addReact("personal:" + r.post_id, r.user_id, r.reaction);
+          for (const c of persCmtsR.rows) ensure("personal:" + c.post_id).comments++;
+          for (const r of reelLikesR.rows) { const e = ensure("reel:" + r.reel_id); e.likes++; if (String(r.user_id) === myId) e.mine = true; }
+          const shareCounts = {};
+          for (const s of sharesR.rows) {
+            if (!s.reshared_from_id || !s.reshared_from_type) continue;
+            const k = s.reshared_from_type + ":" + s.reshared_from_id;
+            shareCounts[k] = (shareCounts[k] || 0) + 1;
+          }
+
+          // === 5. Profiles + photos for authors + reactors ===
+          const authorIds = new Set();
+          [...communityPosts, ...personalPosts, ...reelItems, ...listingItems, ...serviceItems].forEach(p => { if (p.author_id) authorIds.add(String(p.author_id)); });
+          const reactorSet = new Set();
+          for (const k of Object.keys(enrichment)) for (const uid of enrichment[k].reactorIds) reactorSet.add(uid);
+          const allIds = [...new Set([...authorIds, ...reactorSet])];
+          let profiles = [], photos = [];
+          if (allIds.length > 0) {
+            const [profsR, phR] = await Promise.all([
+              queryDatabase("SELECT id, display_name, username, is_verified FROM profiles WHERE id = ANY($1::uuid[])", [allIds]),
+              queryDatabase("SELECT DISTINCT ON (user_id) user_id, storage_path FROM profile_photos WHERE user_id = ANY($1::uuid[]) ORDER BY user_id, is_primary DESC, display_order ASC", [allIds]),
+            ]);
+            profiles = profsR.rows;
+            photos = phR.rows;
+            const profMap = {};
+            for (const p of profiles) profMap[String(p.id)] = p;
+            for (const k of Object.keys(enrichment)) {
+              enrichment[k].reactors = enrichment[k].reactorIds.map(uid => ({
+                userId: uid,
+                name: profMap[uid]?.display_name || profMap[uid]?.username || "Someone",
+                emoji: "❤️",
+              }));
+              delete enrichment[k].reactorIds;
+            }
+          }
+
+          return new Response(JSON.stringify({
+            success: true,
+            data: {
+              sources: { community: communityPosts, personal: personalPosts, reels: reelItems, listings: listingItems, services: serviceItems },
+              enrichment, shareCounts,
+              profiles, photos,
+              context: { matchIds, followIds, blockedIds, mutedIds, hiddenKeys },
+            }
+          }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          console.error("[feed/loadMore] " + String((err && err.message) || "").slice(0, 200));
+          return new Response(JSON.stringify({ success: false, error: "LOADMORE_FAILED" }), { status: 500, headers: cors });
+        }
+      }
       if (path === "/api/profile/view" && request.method === "GET") {
         const me = await getSessionUser(request, env, url);
         if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
