@@ -1214,6 +1214,26 @@ export default {
             const recipientId = __body.recipientId;
             if (!senderId || !recipientId) return new Response(JSON.stringify({ success: false, error: "MISSING_IDS" }), { status: 400, headers: cors });
             await queryDatabase(`INSERT INTO message_requests (sender_id, recipient_id, content, media_url, media_type, media_name) VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6) ON CONFLICT DO NOTHING`, [senderId, recipientId, __body.content || '', __body.mediaUrl || null, __body.mediaType || null, __body.mediaName || null]);
+          } else if (action === 'pin' && type === 'dm') {
+            await queryDatabase(`INSERT INTO conversation_pins (conversation_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [id, userId]);
+          } else if (action === 'unpin' && type === 'dm') {
+            await queryDatabase(`DELETE FROM conversation_pins WHERE conversation_id = $1 AND user_id = $2`, [id, userId]);
+          } else if (action === 'pin' && type === 'group') {
+            await queryDatabase(`INSERT INTO group_pins (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [id, userId]);
+          } else if (action === 'unpin' && type === 'group') {
+            await queryDatabase(`DELETE FROM group_pins WHERE group_id = $1 AND user_id = $2`, [id, userId]);
+          } else if (action === 'archive' && type === 'dm') {
+            await queryDatabase(`INSERT INTO conversation_archives (conversation_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [id, userId]);
+          } else if (action === 'unarchive' && type === 'dm') {
+            await queryDatabase(`DELETE FROM conversation_archives WHERE conversation_id = $1 AND user_id = $2`, [id, userId]);
+          } else if (action === 'archive' && type === 'group') {
+            await queryDatabase(`INSERT INTO group_archives (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [id, userId]);
+          } else if (action === 'unarchive' && type === 'group') {
+            await queryDatabase(`DELETE FROM group_archives WHERE group_id = $1 AND user_id = $2`, [id, userId]);
+          } else if (action === 'block') {
+            const targetId = __body.targetId || __body.blocked_id || id;
+            if (!targetId) return new Response(JSON.stringify({ success: false, error: "MISSING_TARGET" }), { status: 400, headers: cors });
+            await queryDatabase(`INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1::uuid, $2::uuid) ON CONFLICT DO NOTHING`, [userId, targetId]);
           }
 
           return new Response(JSON.stringify({ success: true }), { headers: cors });
