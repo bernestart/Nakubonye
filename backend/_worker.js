@@ -1113,6 +1113,50 @@ export default {
           return new Response(JSON.stringify({ success: false, error: "ACTION_FAILED" }), { status: 500, headers: cors });
         }
       }
+      if (path === "/api/profile/connections" && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const userId = String(url.searchParams.get("userId") || "").toLowerCase();
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+          return new Response(JSON.stringify({ success: false, error: "BAD_USER_ID" }), { status: 400, headers: cors });
+        }
+        try {
+          const [followersR, followingR, matchesR] = await Promise.all([
+            queryDatabase("SELECT follower_id AS id FROM follows WHERE following_id = $1::uuid LIMIT 100", [userId]),
+            queryDatabase("SELECT following_id AS id FROM follows WHERE follower_id = $1::uuid LIMIT 100", [userId]),
+            queryDatabase("SELECT user_one_id, user_two_id FROM matches WHERE user_one_id = $1::uuid OR user_two_id = $1::uuid LIMIT 100", [userId]),
+          ]);
+          const followerIds = followersR.rows.map(r => String(r.id));
+          const followingIds = followingR.rows.map(r => String(r.id));
+          const matchIds = matchesR.rows.map(m => String(m.user_one_id) === userId ? String(m.user_two_id) : String(m.user_one_id));
+          const allIds = [...new Set([...followerIds, ...followingIds, ...matchIds])];
+          let profMap = {}, photoMap = {};
+          if (allIds.length > 0) {
+            const [profsR, photosR] = await Promise.all([
+              queryDatabase("SELECT id, display_name, username, is_verified FROM profiles WHERE id = ANY($1::uuid[])", [allIds]),
+              queryDatabase("SELECT DISTINCT ON (user_id) user_id, storage_path FROM profile_photos WHERE user_id = ANY($1::uuid[]) ORDER BY user_id, is_primary DESC, display_order ASC", [allIds]),
+            ]);
+            for (const p of profsR.rows) profMap[String(p.id)] = p;
+            for (const ph of photosR.rows) photoMap[String(ph.user_id)] = ph.storage_path;
+          }
+          const toPerson = (id) => {
+            const pr = profMap[id];
+            if (!pr) return null;
+            return { id, display_name: pr.display_name, username: pr.username, is_verified: pr.is_verified, photo_path: photoMap[id] || null };
+          };
+          return new Response(JSON.stringify({
+            success: true,
+            data: {
+              followers: followerIds.map(toPerson).filter(Boolean),
+              following: followingIds.map(toPerson).filter(Boolean),
+              matches: matchIds.map(toPerson).filter(Boolean),
+            }
+          }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          console.error("[profile/connections] " + String((err && err.message) || "").slice(0, 200));
+          return new Response(JSON.stringify({ success: false, error: "CONNECTIONS_FAILED" }), { status: 500, headers: cors });
+        }
+      }
       if (path === "/api/profile/view" && request.method === "GET") {
         const me = await getSessionUser(request, env, url);
         if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
