@@ -1142,6 +1142,18 @@ export default {
 
       
       // 14. PHASE 2a-2: Read Receipts (Batch)
+      if (path === "/api/stories" && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const userId = url.searchParams.get("userId");
+        if (!userId) return new Response(JSON.stringify({ success: false, error: "userId required" }), { status: 400, headers: cors });
+        try {
+          const r = await queryDatabase("SELECT id, user_id, media_url, media_type, created_at FROM stories WHERE user_id = $1::uuid AND expires_at > NOW() ORDER BY created_at ASC", [userId]);
+          return new Response(JSON.stringify({ success: true, data: r.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
       if (path === "/api/inbox/read" && request.method === "POST") {
         try {
           const { type, rows } = await request.json(); // rows = array of { id, userId }
@@ -1149,18 +1161,18 @@ export default {
             for (const r of rows) {
               await queryDatabase(
                 `INSERT INTO conversation_reads (conversation_id, user_id, last_read_at) 
-                 VALUES ($1, $2, NOW()) 
-                 ON CONFLICT (conversation_id, user_id) DO UPDATE SET last_read_at = NOW()`, 
-                [r.conversation_id, r.user_id]
+                 VALUES ($1, $2, COALESCE($3::timestamptz, NOW())) 
+                 ON CONFLICT (conversation_id, user_id) DO UPDATE SET last_read_at = COALESCE($3::timestamptz, NOW())`, 
+                [r.conversation_id, r.user_id, r.last_read_at || null]
               );
             }
           } else if (type === 'group' && rows?.length) {
             for (const r of rows) {
               await queryDatabase(
                 `INSERT INTO group_reads (group_id, user_id, last_read_at) 
-                 VALUES ($1, $2, NOW()) 
-                 ON CONFLICT (group_id, user_id) DO UPDATE SET last_read_at = NOW()`, 
-                [r.group_id, r.user_id]
+                 VALUES ($1, $2, COALESCE($3::timestamptz, NOW())) 
+                 ON CONFLICT (group_id, user_id) DO UPDATE SET last_read_at = COALESCE($3::timestamptz, NOW())`, 
+                [r.group_id, r.user_id, r.last_read_at || null]
               );
             }
           }
