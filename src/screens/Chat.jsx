@@ -1,4 +1,3 @@
-import { supabase } from '../lib/supabase'
 import OnlineDot from '../components/OnlineDot';
 import { uploadMedia } from '../lib/api';
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -271,16 +270,14 @@ export default function Chat() {
       setReactions(byMsg)
     }
 
-    const { data: theirRead } = await supabase
-      .from('conversation_reads').select('last_read_at')
-      .eq('conversation_id', convId).eq('user_id', otherId).maybeSingle()
-    setTheirLastRead(theirRead?.last_read_at || null)
+    // theirRead loaded via /api/chat/state below (theirReadAt field)
 
     // Read receipts: symmetric — off if either side turned them off
       const stateRes = await fetch(`${API_BASE_URL}/api/chat/state?myId=${myId}&otherId=${otherId}&convId=${convId}`).then(r => r.json());
       const state = stateRes.success ? stateRes.data : {};
       setCanSeeReadReceipts(state.mineOn !== false && state.theirsOn !== false);
       setMyPreviousReadAt(state.prevReadAt || null);
+      setTheirLastRead(state.theirReadAt || null);
       setIsMuted(!!state.isMuted);
       setClearedAt(state.clearedAt || null);
 
@@ -581,11 +578,13 @@ export default function Chat() {
     setReplyingTo(null)
     setViewOnce(false)
 
-    const { data: inserted, error: sendErr } = await supabase
-      .from('messages')
-      .insert(payload)
-      .select('id, sender_id, content, created_at, edited_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata, view_once, viewed_by')
-      .single()
+    const sendRes = await fetch(`${API_BASE_URL}/api/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }).then(r => r.json()).catch(() => ({ success: false, error: "Network error" }));
+    const inserted = sendRes.success ? sendRes.data : null;
+    const sendErr = !sendRes.success ? { message: sendRes.error || "Send failed" } : null;
 
     if (sendErr) {
       setError(friendlyError(sendErr))
@@ -626,11 +625,13 @@ export default function Chat() {
       metadata: { poll },
     }
     if (disappearingTimer) payload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
-    const { data: inserted, error: err } = await supabase
-      .from("messages")
-      .insert(payload)
-      .select("id, sender_id, content, created_at, edited_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata, view_once, viewed_by")
-      .single()
+    const pollRes = await fetch(`${API_BASE_URL}/api/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }).then(r => r.json()).catch(() => ({ success: false, error: "Network error" }));
+    const inserted = pollRes.success ? pollRes.data : null;
+    const err = !pollRes.success ? { message: pollRes.error || "Poll send failed" } : null;
     if (!err && inserted) {
       setMessages((cur) => cur.some((x) => x.id === inserted.id) ? cur : [...cur, inserted])
     }
@@ -662,14 +663,20 @@ export default function Chat() {
         mediaType = attachment.type
         mediaName = attachment.name
       }
-      const { error: reqErr } = await supabase.from("message_requests").insert({
-        sender_id: myId,
-        recipient_id: otherId,
-        content: body || "",
-        media_url: mediaUrl,
-        media_type: mediaType,
-        media_name: mediaName,
-      })
+      const reqRes = await fetch(`${API_BASE_URL}/api/inbox/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "request",
+          userId: myId,
+          recipientId: otherId,
+          content: body || "",
+          mediaUrl: mediaUrl,
+          mediaType: mediaType,
+          mediaName: mediaName
+        })
+      }).then(r => r.json()).catch(() => ({ success: false, error: "Network error" }));
+      const reqErr = !reqRes.success ? { message: reqRes.error || "Request failed", code: null } : null;
       setSending(false)
       if (reqErr) {
         if (reqErr.code === "23505") setError("You already sent a request. Please wait for a response.")
@@ -708,11 +715,13 @@ export default function Chat() {
     if (mediaUrl) { payload.media_url = mediaUrl; payload.media_type = mediaType; payload.media_name = mediaName }
     if (replyingTo?.id) payload.reply_to_id = replyingTo.id
     setText(''); clearAttachment(); setReplyingTo(null); setStoryReply(null); setViewOnce(false)
-    const { data: inserted, error: sendErr } = await supabase
-      .from('messages')
-      .insert(payload)
-      .select('id, sender_id, content, created_at, edited_at, media_url, media_type, media_name, reply_to_id, deleted_at, metadata, view_once, viewed_by')
-      .single()
+    const send2Res = await fetch(`${API_BASE_URL}/api/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }).then(r => r.json()).catch(() => ({ success: false, error: "Network error" }));
+    const inserted = send2Res.success ? send2Res.data : null;
+    const sendErr = !send2Res.success ? { message: send2Res.error || "Send failed" } : null;
 
     if (sendErr) {
       setError(sendErr.message)
@@ -727,10 +736,18 @@ export default function Chat() {
     if (!conversationId || !myId) return
     tap('light')
     if (isMuted) {
-      await supabase.from('conversation_mutes').delete().eq('conversation_id', conversationId).eq('user_id', myId)
+      await fetch(`${API_BASE_URL}/api/inbox/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "unmute", type: "dm", id: conversationId, userId: myId })
+      }).catch(() => null)
       setIsMuted(false)
     } else {
-      await supabase.from('conversation_mutes').insert({ conversation_id: conversationId, user_id: myId })
+      await fetch(`${API_BASE_URL}/api/inbox/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "mute", type: "dm", id: conversationId, userId: myId })
+      }).catch(() => null)
       setIsMuted(true)
     }
   }
@@ -740,10 +757,11 @@ export default function Chat() {
     if (!confirm('Clear this chat? Messages will be hidden for you only.')) return
     tap('light')
     const now = new Date().toISOString()
-    await supabase.from('conversation_clears').upsert(
-      { conversation_id: conversationId, user_id: myId, cleared_at: now },
-      { onConflict: 'conversation_id,user_id' }
-    )
+    await fetch(`${API_BASE_URL}/api/inbox/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "clear", type: "dm", id: conversationId, userId: myId })
+    }).catch(() => null)
     setClearedAt(now)
   }
 
@@ -774,11 +792,12 @@ export default function Chat() {
     }
     if (!confirm('Unsend this message for everyone? This cannot be undone.')) return
     tap('light')
-    const { error: err } = await supabase
-      .from('messages')
-      .update({ deleted_at: new Date().toISOString(), content: '', media_url: null })
-      .eq('id', messageId).eq('sender_id', myId)
-    if (err) { setError(friendlyError(err)); return }
+    const unsendRes = await fetch(`${API_BASE_URL}/api/messages/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "unsend", messageId })
+    }).then(r => r.json()).catch(() => ({ success: false, error: "Network error" }));
+    if (!unsendRes.success) { setError(friendlyError({ message: unsendRes.error || "Unsend failed" })); return }
     setMessages((cur) => cur.map((m) => m.id === messageId ? { ...m, deleted_at: new Date().toISOString(), content: '', media_url: null } : m))
   }
 
@@ -1501,16 +1520,17 @@ export default function Chat() {
                     tap("light")
                     const savedBefore = disappearingTimer
                     setTimerSheetOpen(false)
-                    const { data: saveData, error: saveErr } = await supabase.from('conversations')
-      .update({ disappearing_timer_seconds: o.value })
-      .eq('id', conversationId)
-      .select('id, disappearing_timer_seconds')
-    if (saveErr || !saveData || saveData.length === 0) {
-      console.error('[timer-save] FAILED', { saveErr, saveData, conversationId, value: o.value })
-      if (typeof setError === 'function') setError('Timer save failed: ' + (saveErr?.message || 'no rows updated - conversationId=' + conversationId))
+                    const saveRes = await fetch(`${API_BASE_URL}/api/conversations/timer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conversationId, seconds: o.value })
+    }).then(r => r.json()).catch(() => ({ success: false, error: "Network error" }));
+    if (!saveRes.success) {
+      console.error('[timer-save] FAILED', { saveRes, conversationId, value: o.value })
+      if (typeof setError === 'function') setError('Timer save failed: ' + (saveRes.error || 'unknown'))
       setDisappearingTimer(savedBefore)
     } else {
-      setDisappearingTimer(saveData[0].disappearing_timer_seconds)
+      setDisappearingTimer(saveRes.seconds)
     }
                   }}
                   className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left active:bg-white/[0.03] last:border-b-0"
