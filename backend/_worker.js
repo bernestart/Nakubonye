@@ -1085,6 +1085,34 @@ export default {
           return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
         }
       }
+      if (path === "/api/profile/actions" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const myId = String(me.id);
+        try {
+          const b = await request.json().catch(() => ({}));
+          const action = String(b.action || "");
+          const targetId = String(b.targetUserId || "");
+          if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId)) {
+            return new Response(JSON.stringify({ success: false, error: "BAD_TARGET" }), { status: 400, headers: cors });
+          }
+          if (myId === targetId) return new Response(JSON.stringify({ success: false, error: "SELF_ACTION" }), { status: 400, headers: cors });
+
+          if (action === "like" || action === "like_back") {
+            const r = await queryDatabase("SELECT like_user($1::uuid, $2::uuid) AS result", [myId, targetId]);
+            const result = r.rows[0]?.result || {};
+            return new Response(JSON.stringify({ success: true, data: result }), { headers: { ...cors, "Content-Type": "application/json" } });
+          }
+          if (action === "decline") {
+            await queryDatabase("SELECT decline_like($1::uuid, $2::uuid)", [myId, targetId]);
+            return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+          }
+          return new Response(JSON.stringify({ success: false, error: "BAD_ACTION" }), { status: 400, headers: cors });
+        } catch (err) {
+          console.error("[profile/actions] " + String((err && err.message) || "").slice(0, 160));
+          return new Response(JSON.stringify({ success: false, error: "ACTION_FAILED" }), { status: 500, headers: cors });
+        }
+      }
       if (path === "/api/profile/view" && request.method === "GET") {
         const me = await getSessionUser(request, env, url);
         if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
@@ -1097,7 +1125,7 @@ export default {
         try {
           // ---- fire-and-forget: record profile view (only when viewing someone else) ----
           if (!isSelf) {
-            queryDatabase("SELECT record_profile_view($1::uuid)", [targetId]).catch(() => null);
+            queryDatabase("SELECT record_profile_view($1::uuid, $2::uuid)", [myId, targetId]).catch(() => null);
           }
 
           // ---- visibility + location checks via existing Postgres functions ----
