@@ -1085,6 +1085,182 @@ export default {
           return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
         }
       }
+      if (path === "/api/profile/view" && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const myId = String(me.id).toLowerCase();
+        const targetId = String(url.searchParams.get("userId") || "").toLowerCase();
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId)) {
+          return new Response(JSON.stringify({ success: false, error: "BAD_USER_ID" }), { status: 400, headers: cors });
+        }
+        const isSelf = myId === targetId;
+        try {
+          // ---- fire-and-forget: record profile view (only when viewing someone else) ----
+          if (!isSelf) {
+            queryDatabase("SELECT record_profile_view($1::uuid)", [targetId]).catch(() => null);
+          }
+
+          // ---- visibility + location checks via existing Postgres functions ----
+          let canView = true, canSeeLocation = true;
+          if (!isSelf) {
+            const v = await queryDatabase("SELECT can_view_profile($1::uuid, $2::uuid) AS allowed", [myId, targetId]).catch(() => null);
+            canView = !(v && v.rows[0] && v.rows[0].allowed === false);
+            if (canView) {
+              const l = await queryDatabase("SELECT can_see_location($1::uuid, $2::uuid) AS allowed", [myId, targetId]).catch(() => null);
+              canSeeLocation = !(l && l.rows[0] && l.rows[0].allowed === false);
+            }
+          }
+          if (!canView) {
+            return new Response(JSON.stringify({ success: true, data: { canView: false, canSeeLocation: false, profile: null } }), { headers: { ...cors, "Content-Type": "application/json" } });
+          }
+
+          // ---- all reads in parallel ----
+          const [
+            profR, photosR, promptsR, interestsR, reelsR, communityPostsR,
+            followersCountR, followingCountR, matchesR, circlesR, commMembershipsR,
+            targetSettingsR, targetCommunitiesR, blocksR, likeCheckR,
+            personalLikesR, personalCommentsR, commLikesR, commCommentsR
+          ] = await Promise.all([
+            queryDatabase("SELECT id, display_name, username, date_of_birth, bio, city, country, is_verified, tier, looking_for, cover_photo_path, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children, hide_age, account_type, category_label FROM profiles WHERE id = $1::uuid", [targetId]),
+            queryDatabase("SELECT storage_path, is_primary, display_order FROM profile_photos WHERE user_id = $1::uuid ORDER BY is_primary DESC, display_order ASC", [targetId]),
+            queryDatabase("SELECT prompt_key, answer, display_order FROM profile_prompts WHERE profile_id = $1::uuid ORDER BY display_order ASC", [targetId]),
+            queryDatabase("SELECT pi.interest_id, i.name FROM profile_interests pi LEFT JOIN interests i ON i.id = pi.interest_id WHERE pi.profile_id = $1::uuid", [targetId]),
+            queryDatabase("SELECT id, user_id, video_url, thumbnail_url, caption, created_at, allow_comments, clips, trim_start, trim_end, mirrored, filter_id, text_overlays, sticker_overlays, view_count, location FROM reels WHERE user_id = $1::uuid AND is_active = true ORDER BY created_at DESC LIMIT 30", [targetId]),
+            queryDatabase("SELECT id, content, image_path, created_at, pinned_until, community_id, author_id FROM community_posts WHERE author_id = $1::uuid ORDER BY created_at DESC LIMIT 60", [targetId]),
+            queryDatabase("SELECT COUNT(*)::int AS n FROM follows WHERE following_id = $1::uuid", [targetId]),
+            queryDatabase("SELECT COUNT(*)::int AS n FROM follows WHERE follower_id = $1::uuid", [targetId]),
+            queryDatabase("SELECT user_one_id, user_two_id FROM matches WHERE user_one_id = $1::uuid OR user_two_id = $1::uuid", [myId]),
+            queryDatabase("SELECT circle_id FROM circle_members WHERE user_id = $1::uuid", [myId]),
+            queryDatabase("SELECT community_id FROM community_memberships WHERE user_id = $1::uuid", [myId]),
+            queryDatabase("SELECT * FROM user_settings WHERE user_id = $1::uuid", [targetId]),
+            queryDatabase("SELECT community_id FROM community_memberships WHERE user_id = $1::uuid LIMIT 20", [targetId]),
+            queryDatabase("SELECT blocker_id, blocked_id FROM blocks WHERE blocker_id = $1::uuid OR blocked_id = $1::uuid", [myId]),
+            isSelf ? Promise.resolve({ rows: [] }) : Promise.all([
+              queryDatabase("SELECT 1 FROM matches WHERE user_one_id = $1::uuid AND user_two_id = $2::uuid LIMIT 1", [myId < targetId ? myId : targetId, myId < targetId ? targetId : myId]),
+              queryDatabase("SELECT 1 FROM likes WHERE user_id = $1::uuid AND liked_user_id = $2::uuid LIMIT 1", [myId, targetId]),
+              queryDatabase("SELECT 1 FROM likes WHERE user_id = $1::uuid AND liked_user_id = $2::uuid LIMIT 1", [targetId, myId]),
+            ]),
+            queryDatabase("SELECT post_id, user_id, reaction FROM user_post_likes WHERE post_id IN (SELECT id FROM user_posts WHERE user_id = $1::uuid AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 60)", [targetId]).catch(() => ({ rows: [] })),
+            queryDatabase("SELECT post_id FROM user_post_comments WHERE post_id IN (SELECT id FROM user_posts WHERE user_id = $1::uuid AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 60) AND deleted_at IS NULL", [targetId]).catch(() => ({ rows: [] })),
+            queryDatabase("SELECT post_id, user_id, reaction FROM community_post_reactions WHERE post_id IN (SELECT id FROM community_posts WHERE author_id = $1::uuid ORDER BY created_at DESC LIMIT 60)", [targetId]).catch(() => ({ rows: [] })),
+            queryDatabase("SELECT post_id FROM community_post_comments WHERE post_id IN (SELECT id FROM community_posts WHERE author_id = $1::uuid ORDER BY created_at DESC LIMIT 60) AND deleted_at IS NULL", [targetId]).catch(() => ({ rows: [] })),
+          ]);
+
+          const profile = profR.rows[0] || null;
+          if (!profile) {
+            return new Response(JSON.stringify({ success: false, error: "USER_NOT_FOUND" }), { status: 404, headers: cors });
+          }
+
+          // viewer context
+          const matchIds = (matchesR.rows || []).map(m => m.user_one_id === myId ? m.user_two_id : m.user_one_id);
+          const circleIds = (circlesR.rows || []).map(r => r.circle_id);
+          const communityIds = (commMembershipsR.rows || []).map(r => r.community_id);
+
+          // relationship (only when viewing someone else)
+          let relationship = { matched: false, myLike: false, theyLikedMe: false };
+          if (!isSelf && Array.isArray(likeCheckR)) {
+            relationship = { matched: !!(likeCheckR[0]?.rows?.length), myLike: !!(likeCheckR[1]?.rows?.length), theyLikedMe: !!(likeCheckR[2]?.rows?.length) };
+          }
+
+          // visibility (only when viewing someone else)
+          let visibility = null;
+          if (!isSelf && targetSettingsR.rows[0]) {
+            const s = targetSettingsR.rows[0];
+            const ctx = { matched: relationship.matched, isFollowerOfOwner: false };
+            const myFollow = await queryDatabase("SELECT 1 FROM follows WHERE follower_id = $1::uuid AND following_id = $2::uuid LIMIT 1", [myId, targetId]).catch(() => ({ rows: [] }));
+            ctx.isFollowerOfOwner = myFollow.rows.length > 0;
+            const levelFor = (k) => s[k] || 'everyone';
+            const canSee = (k) => { const lv = levelFor(k); if (lv === 'everyone') return true; if (lv === 'only_me') return false; if (lv === 'matches') return ctx.matched; if (lv === 'followers') return ctx.isFollowerOfOwner; return false; };
+            visibility = {
+              phone: canSee('phone_visibility'), email: canSee('email_visibility'),
+              birthday: canSee('birthday_visibility'), relationship: canSee('relationship_visibility'),
+              contact_info: canSee('contact_info_visibility'), followers_list: canSee('followers_list_visibility'),
+              matches_list: canSee('matches_list_visibility'), communities_membership: canSee('communities_membership_visibility'),
+            };
+          } else if (isSelf) {
+            visibility = { phone: true, email: true, birthday: true, relationship: true, contact_info: true, followers_list: true, matches_list: true, communities_membership: true };
+          }
+
+          // communities the profile belongs to (with names)
+          let communities = [];
+          if (targetCommunitiesR.rows.length > 0) {
+            const cids = targetCommunitiesR.rows.map(r => r.community_id);
+            const cmR = await queryDatabase("SELECT id, name, slug, emoji, cover_color FROM communities WHERE id = ANY($1::bigint[])", [cids]).catch(() => ({ rows: [] }));
+            communities = cmR.rows || [];
+          }
+
+          // aggregation: like/comment counts per post
+          const agg = { personal: {}, community: {} };
+          for (const r of personalLikesR.rows || []) {
+            const k = "personal:" + r.post_id;
+            agg.personal[k] = agg.personal[k] || { count: 0, mine: false, myReaction: null, reactions: [] };
+            agg.personal[k].count++;
+            if (r.user_id === myId) { agg.personal[k].mine = true; agg.personal[k].myReaction = r.reaction || "❤️"; }
+            if (agg.personal[k].reactions.length < 3) agg.personal[k].reactions.push({ userId: r.user_id, emoji: r.reaction || "❤️" });
+          }
+          for (const r of personalCommentsR.rows || []) {
+            const k = "personal:" + r.post_id;
+            agg.personal[k] = agg.personal[k] || { count: 0, mine: false, myReaction: null, reactions: [] };
+            agg.personal[k].commentCount = (agg.personal[k].commentCount || 0) + 1;
+          }
+          for (const r of commLikesR.rows || []) {
+            const k = "community:" + r.post_id;
+            agg.community[k] = agg.community[k] || { count: 0, mine: false, myReaction: null, reactions: [] };
+            agg.community[k].count++;
+            if (r.user_id === myId) { agg.community[k].mine = true; agg.community[k].myReaction = r.reaction || "❤️"; }
+            if (agg.community[k].reactions.length < 3) agg.community[k].reactions.push({ userId: r.user_id, emoji: r.reaction || "❤️" });
+          }
+          for (const r of commCommentsR.rows || []) {
+            const k = "community:" + r.post_id;
+            agg.community[k] = agg.community[k] || { count: 0, mine: false, myReaction: null, reactions: [] };
+            agg.community[k].commentCount = (agg.community[k].commentCount || 0) + 1;
+          }
+
+          // reactor profiles (for top 3 names on each post)
+          const reactorIds = new Set();
+          for (const k of Object.keys(agg.personal)) for (const r of agg.personal[k].reactions) reactorIds.add(r.userId);
+          for (const k of Object.keys(agg.community)) for (const r of agg.community[k].reactions) reactorIds.add(r.userId);
+          let reactorProfiles = {};
+          if (reactorIds.size > 0) {
+            const profR2 = await queryDatabase("SELECT id, display_name, username FROM profiles WHERE id = ANY($1::uuid[])", [[...reactorIds].slice(0, 100)]).catch(() => ({ rows: [] }));
+            for (const p of profR2.rows) reactorProfiles[p.id] = p;
+          }
+
+          // followed-by (shared followers)
+          let followedBy = { people: [], more: 0 };
+          if (!isSelf) {
+            const myFollows = await queryDatabase("SELECT following_id FROM follows WHERE follower_id = $1::uuid LIMIT 500", [myId]).catch(() => ({ rows: [] }));
+            const theirFollowers = await queryDatabase("SELECT follower_id FROM follows WHERE following_id = $1::uuid LIMIT 500", [targetId]).catch(() => ({ rows: [] }));
+            const myFollowSet = new Set(myFollows.rows.map(r => r.following_id));
+            const blockedSet = new Set();
+            for (const b of blocksR.rows) { if (b.blocker_id === myId) blockedSet.add(b.blocked_id); if (b.blocked_id === myId) blockedSet.add(b.blocker_id); }
+            const shared = (theirFollowers.rows || []).map(r => r.follower_id).filter(id => myFollowSet.has(id) && id !== myId && id !== targetId && !blockedSet.has(id));
+            if (shared.length > 0) {
+              const top = shared.slice(0, 3);
+              const ppl = await queryDatabase("SELECT id, display_name, username FROM profiles WHERE id = ANY($1::uuid[])", [top]).catch(() => ({ rows: [] }));
+              followedBy = { people: ppl.rows || [], more: Math.max(0, shared.length - ppl.rows.length) };
+            }
+          }
+
+          return new Response(JSON.stringify({
+            success: true,
+            data: {
+              profile, canView: true, canSeeLocation, visibility,
+              photos: photosR.rows, prompts: promptsR.rows,
+              interests: interestsR.rows.map(r => r.name).filter(Boolean),
+              reels: reelsR.rows, communityPosts: communityPostsR.rows,
+              followersCount: followersCountR.rows[0]?.n || 0,
+              followingCount: followingCountR.rows[0]?.n || 0,
+              communities,
+              context: { matchIds, circleIds, communityIds },
+              relationship, followedBy, aggregation: agg, reactorProfiles
+            }
+          }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          console.error("[profile/view] " + String((err && err.message) || "").slice(0, 200));
+          return new Response(JSON.stringify({ success: false, error: "VIEW_FAILED" }), { status: 500, headers: cors });
+        }
+      }
 
       
       // 12. TELEMETRY EVENTS (Fire-and-Forget)
