@@ -16,8 +16,8 @@ Meta-style social network from Burundi for the world: feeds, posts, stories, ree
 2. Patch scripts live in scripts/*.cjs, anchor-checked, abort with nothing written if an anchor misses.
 3. git push auto-deploys the Worker LIVE. Worker changes must stay compatible with the installed APK. New enforcement ships log-only behind a flag first.
 4. Daily loop: patch -> npm run build -> Chrome test (npm run dev -- --host) -> commit -> push.
-5. APK only at milestones: before AUTH_ENFORCE=1, native/Capacitor changes, FCM push, end of a big phase, before real users.
-6. APK commands, one at a time, on screen, no wake locks: npm run build ; npx cap sync android ; cd android && ./gradlew clean assembleDebug --no-daemon --console=plain ; cp app/build/outputs/apk/debug/app-debug.apk ~/storage/downloads/nakubonye-NAME.apk
+5. APK builds in CI. Every git push to main: (a) auto-deploys Worker via Cloudflare, (b) triggers GitHub Actions Android build → downloadable from Actions run artifacts. NO local gradlew. Milestone APK = the latest Actions artifact at that commit.
+6. GitHub Actions workflow (.github/workflows/android-build.yml) builds the debug APK on every push. Download from: GitHub repo → Actions → latest run → Artifacts → app-debug.apk. Same artifact is what users install — no Termux gradle needed.
 7. Free only: no service that needs a payment method until revenue (R2 deferred).
 8. Never paste secrets or tokens.
 
@@ -110,3 +110,10 @@ DO NOT run scripts/DO-NOT-RUN-profile-bff.txt. Any patch from another AI must be
 Pending tests: (1) sign in via curl, then GET /api/inbox, expect 200; INBOX_FAILED means read the [inbox] line in the Cloudflare log. (2) Chrome Incognito sign-up wizard, then Neon: select id, length(id) as len, "createdAt", (select count(*) from profiles p where p.id::text = u.id) as has_profile from "user" u order by "createdAt" desc limit 3; expect len 36, has_profile 1. (3) shadow logs [AUTH] [MEMBER] [WS].
 Next: S3 Chat.jsx purge (recon first: sed -n '195,330p;640,740p;770,860p' src/screens/Chat.jsx); POST /api/messages must accept expires_at, view_once, viewed_by, metadata with sender = session user; Messages.jsx actions, block, stories, realtime; profile screen via /api/profile/view (column whitelist, block and visibility checks, never SELECT *); then AUTH_ENFORCE + MEMBER_ENFORCE (needs a milestone APK); Phase 1f rate limits + Turnstile; Phase 1.5 Supabase account migration.
 Open questions: are the 20 Neon profiles real people? Is the Resend domain verified? Legacy cleanup SQL: delete non-uuid rows from session, account, user.
+
+## CURRENT STATUS — UPDATED 2026-11-23
+**T1 COMPLETE.** Chat.jsx, Messages.jsx, ProfileView.jsx, Feed.jsx = 0 supabase calls (verified via check-undef + build). Worker routes served: /api/feed/v2, /api/feed/loadMore, /api/feed/{impression,click,notify,poll}, /api/profile/{view,actions,connections}, /api/inbox/{read,action}, /api/messages/action (edit), /api/conversations/timer, /api/stories.
+**Neon functions ported:** get_suggested_reels, get_pymk_profiles, can_view_profile, can_see_location, can_send_request, record_profile_view, decline_like, like_user (all with explicit `me uuid` first arg replacing auth.uid()).
+**Not yet verified at runtime** — Chrome test still owed.
+**Enforcement flags still log-only:** AUTH_ENFORCE, MEMBER_ENFORCE, MESSAGES_ENFORCE all unset in Cloudflare. Flip only after Chrome test passes.
+**Next:** Chrome test (7-step sequence) → flip flags → rate limits → idempotency → Phase 5 observability → T2 supabase cleanup.
