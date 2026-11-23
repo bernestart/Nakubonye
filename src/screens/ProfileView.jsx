@@ -1,10 +1,9 @@
 import OnlineDot from '../components/OnlineDot';
-import { API_BASE_URL, toggleLikeAPI } from '../lib/api';
+import { getMediaUrl, API_BASE_URL, toggleLikeAPI } from '../lib/api';
 import { getUserPosts } from '../lib/api';
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Heart, Flag, Ban, MoreVertical, X , MessageCircle, Search, Pencil, MapPin } from 'lucide-react'
-import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl, calcAge } from '../lib/photo'
 import { tap } from '../lib/haptic'
@@ -165,7 +164,12 @@ export default function ProfileView() {
   async function handleLike() {
     if (busy || myLike || isMe) return
     setBusy(true); tap('medium')
-    const { error: err } = await supabase.rpc('like_user', { target_user_id: userId })
+    const likeRes = await fetch(`${API_BASE_URL}/api/profile/actions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'like', targetUserId: userId })
+    }).then(r => r.json()).catch(() => ({ success: false, error: 'Network error' }))
+    const err = !likeRes.success ? { message: likeRes.error || 'Like failed' } : null
     setBusy(false)
     if (err) { setError(err.message); return }
     setMyLike(true)
@@ -174,7 +178,13 @@ export default function ProfileView() {
   async function handleLikeBack() {
     if (busy || myLike || isMe) return
     setBusy(true); tap('medium')
-    const { data, error: err } = await supabase.rpc('like_user', { target_user_id: userId })
+    const likeRes = await fetch(`${API_BASE_URL}/api/profile/actions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'like_back', targetUserId: userId })
+    }).then(r => r.json()).catch(() => ({ success: false, error: 'Network error' }))
+    const err = !likeRes.success ? { message: likeRes.error || 'Like failed' } : null
+    const data = likeRes.success ? (likeRes.data || {}) : null
     setBusy(false)
     if (err) { setError(err.message); return }
     if (data?.denied) { setError(data.reason || 'Request not allowed'); return }
@@ -185,7 +195,12 @@ export default function ProfileView() {
   async function handleDecline() {
     if (busy || isMe) return
     setBusy(true); tap('light')
-    const { error: err } = await supabase.rpc('decline_like', { target_user_id: userId })
+    const decRes = await fetch(`${API_BASE_URL}/api/profile/actions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'decline', targetUserId: userId })
+    }).then(r => r.json()).catch(() => ({ success: false, error: 'Network error' }))
+    const err = !decRes.success ? { message: decRes.error || 'Decline failed' } : null
     setBusy(false)
     if (err) { setError(err.message); return }
     setTheyLikedMe(false)
@@ -197,69 +212,25 @@ export default function ProfileView() {
     let cancelled = false
     ;(async () => {
       setConnLoading(true)
-
-      // Followers of this user
-      const { data: followerRows } = await supabase
-        .from('follows')
-        .select('follower_id')
-        .eq('following_id', userId)
-        .limit(100)
-      const followerIds = (followerRows || []).map((r) => r.follower_id)
-
-      // People this user follows
-      const { data: followingRows } = await supabase
-        .from('follows')
-        .select('following_id')
-        .eq('follower_id', userId)
-        .limit(100)
-      const followingIds = (followingRows || []).map((r) => r.following_id)
-
-      // Matches (both sides)
-      const { data: matchRows } = await supabase
-        .from('matches')
-        .select('user_one_id, user_two_id')
-        .or('user_one_id.eq.' + userId + ',user_two_id.eq.' + userId)
-        .limit(100)
-      const matchIds = (matchRows || []).map((m) => m.user_one_id === userId ? m.user_two_id : m.user_one_id)
-
-      // Fetch profiles + photos for all of them
-      const allIds = [...new Set([...followerIds, ...followingIds, ...matchIds])]
-      let profMap = new Map(), photoMap = new Map()
-      if (allIds.length > 0) {
-        const { data: profs } = await supabase
-          .from('profiles')
-          .select('id, display_name, username, is_verified')
-          .in('id', allIds)
-        ;(profs || []).forEach((pr) => profMap.set(pr.id, pr))
-
-        const { data: ph } = await supabase
-          .from('profile_photos')
-          .select('user_id, storage_path, is_primary, display_order')
-          .in('user_id', allIds)
-          .order('is_primary', { ascending: false })
-          .order('display_order', { ascending: true })
-        ;(ph || []).forEach((ph2) => { if (!photoMap.has(ph2.user_id)) photoMap.set(ph2.user_id, ph2.storage_path) })
-      }
-      if (cancelled) return
-
-      const toPerson = (id) => {
-        const pr = profMap.get(id)
-        if (!pr) return null
-        return {
-          id,
-          display_name: pr.display_name,
-          username: pr.username,
-          is_verified: pr.is_verified,
-          photo_url: photoMap.get(id) ? publicPhotoUrl(photoMap.get(id)) : null,
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/profile/connections?userId=${userId}`)
+          .then(r => r.json()).catch(() => ({ success: false }))
+        if (cancelled) return
+        if (res && res.success && res.data) {
+          const hydrate = (arr) => (arr || []).map(p => ({
+            ...p,
+            photo_url: p.photo_path ? publicPhotoUrl(p.photo_path) : null
+          }))
+          setConnections({
+            followers: hydrate(res.data.followers),
+            following: hydrate(res.data.following),
+            matches: hydrate(res.data.matches),
+          })
         }
+      } catch (e) {
+        console.warn('connections load failed', e)
       }
-
-      setConnections({
-        followers: followerIds.map(toPerson).filter(Boolean),
-        following: followingIds.map(toPerson).filter(Boolean),
-        matches:   matchIds.map(toPerson).filter(Boolean),
-      })
-      setConnLoading(false)
+      if (!cancelled) setConnLoading(false)
     })()
     return () => { cancelled = true }
   }, [activeTab, userId])
@@ -561,7 +532,7 @@ export default function ProfileView() {
                     <p className="text-purple-400 text-[10.5px] font-black tracking-[0.16em] uppercase mb-2">Featured</p>
                     <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
                       {pinned.slice(0, 6).map((p) => {
-                        const url = p.image_path ? supabase.storage.from('community-media').getPublicUrl(p.image_path).data?.publicUrl : null
+                        const url = p.image_path ? getMediaUrl(p.image_path, 'community-media') : null
                         return (
                           <button
                             key={p._source + '-' + p.id}
