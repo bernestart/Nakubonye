@@ -428,10 +428,11 @@ export default function Chat() {
           setMessages((cur) => cur.some((x) => x.id === m.id) ? cur.map(x => x.id === m.id ? {...x, ...m} : x) : [...cur, m]);
           
           if (m.sender_id !== myId) {
-            supabase.from('conversation_reads').upsert(
-              { conversation_id: conversationId, user_id: myId, last_read_at: new Date().toISOString() },
-              { onConflict: 'conversation_id,user_id' }
-            );
+            fetch(`${API_BASE_URL}/api/inbox/read`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ type: 'dm', rows: [{ conversation_id: conversationId, user_id: myId }] })
+            }).catch(() => null);
           }
         }
         
