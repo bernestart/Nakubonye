@@ -199,119 +199,46 @@ export default function Chat() {
     if (!myId || !otherId) return
     setLoading(true); setError('')
 
-    const { data: prof } = await supabase
-      .from('profiles').select('id, display_name, username, is_verified, last_seen_at').eq('id', otherId).single()
-    const { data: photo } = await supabase
-      .from('profile_photos').select('storage_path').eq('user_id', otherId)
-      .order('is_primary', { ascending: false }).order('display_order', { ascending: true }).limit(1)
-    if (prof) setOther({ ...prof, photo_url: publicPhotoUrl(photo?.[0]?.storage_path) })
-
-    const lo = myId < otherId ? myId : otherId
-    const hi = myId < otherId ? otherId : myId
-
-    // Try match first
-    const { data: match } = await supabase
-      .from('matches').select('id').eq('user_one_id', lo).eq('user_two_id', hi).maybeSingle()
-
-    let convId = null
-    let isDirect = null  // null = unknown, true = direct, false = matched
-
-    if (match) {
-      isDirect = false
-      // 1. Existing match conversation?
-      const { data: existingConv } = await supabase
-        .from('conversations').select('id').eq('match_id', match.id).maybeSingle()
-      if (existingConv) {
-        convId = existingConv.id
-      } else {
-        // 2. Before creating a new one, adopt a direct conversation if it exists.
-        //    This prevents losing the paid-DM chat history when you match.
-        const { data: directToAdopt } = await supabase
-          .from('conversations')
-          .select('id')
-          .eq('is_direct', true)
-          .or(`and(initiator_id.eq.${myId},recipient_id.eq.${otherId}),and(initiator_id.eq.${otherId},recipient_id.eq.${myId})`)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-        if (directToAdopt) {
-          await fetch(`${API_BASE_URL}/api/conversations/adopt`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ matchId: match.id, directToAdoptId: directToAdopt.id }) });
-          convId = directToAdopt.id
-        } else {
-        const { data: created, error: createErr } = await supabase
-          .from('conversations').insert({ match_id: match.id }).select('id').single()
-        if (createErr) {
-          const { data: retry } = await supabase
-            .from('conversations').select('id').eq('match_id', match.id).maybeSingle()
-          if (retry) {
-            convId = retry.id
-          } else {
-            setError(createErr.message)
-            setLoading(false)
-            return
-          }
-        } else {
-          convId = created.id
-        }
-        }
-      }
-    } else {
-      // No match — find or create a direct conversation
-      let directConv = null
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const { data: directConvs } = await supabase
-          .from('conversations')
-          .select('id, is_direct, match_id')
-          .eq('is_direct', true)
-          .or(`and(initiator_id.eq.${myId},recipient_id.eq.${otherId}),and(initiator_id.eq.${otherId},recipient_id.eq.${myId})`)
-          .order('created_at', { ascending: false })
-          .limit(1)
-        if (directConvs && directConvs.length > 0) {
-          directConv = directConvs[0]
-          break
-        }
-        if (attempt === 0) await new Promise((r) => setTimeout(r, 600))
-      }
-
-      if (directConv) {
-        convId = directConv.id
-        isDirect = true
-      } else {
-        // No conversation yet — check we're allowed to start one
-        const { data: allowed } = await supabase.rpc('can_send_message', {
-          sender: myId, recipient: otherId,
-        })
-        if (allowed === false) {
-          setError("This person isn't accepting new messages.")
-          setLoading(false)
-          return
-        }
-        // Create the direct conversation
-        const { data: created, error: cErr } = await supabase
-          .from('conversations')
-          .insert({ match_id: null, initiator_id: myId, recipient_id: otherId, is_direct: true })
-          .select('id')
-          .single()
-        if (cErr || !created) {
-          setError(cErr?.message || 'Could not start conversation.')
-          setLoading(false)
-          return
-        }
-        convId = created.id
-        isDirect = true
-      }
+    // Open conversation — server resolves match/direct/create in one round-trip
+    const openRes = await fetch(`${API_BASE_URL}/api/conversations/open`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ otherUserId: otherId })
+    }).then(r => r.json()).catch(() => ({ success: false }));
+    if (!openRes.success || !openRes.id) {
+      setError(openRes.error === 'ONLY_MATCHES_CAN_MESSAGE'
+        ? "This person isn't accepting new messages."
+        : (openRes.error || 'Could not start conversation.'));
+      setLoading(false);
+      return;
     }
-    setConversationId(convId)
-    setOther((cur) => cur ? { ...cur, isDirect } : cur)
+    const convId = openRes.id;
+    const isDirect = openRes.isDirect !== false;
+
+    // Profile + primary photo — one bulk call
+    const profRes = await fetch(`${API_BASE_URL}/api/profiles/bulk`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [otherId] })
+    }).then(r => r.json()).catch(() => ({ success: false }));
+    const otherProfile = profRes.success && profRes.data && profRes.data[0];
+    if (otherProfile) {
+      setOther({
+        ...otherProfile,
+        photo_url: otherProfile.primary_photo_path ? publicPhotoUrl(otherProfile.primary_photo_path) : null,
+        isDirect
+      });
+    } else {
+      setOther((cur) => cur ? { ...cur, isDirect } : { isDirect });
+    }
+
+    setConversationId(convId);
 
     // Load disappearing timer from conversation so it persists across sessions
     try {
-      const { data: convRow } = await supabase
-        .from("conversations")
-        .select("disappearing_timer_seconds")
-        .eq("id", convId)
-        .maybeSingle()
-      if (convRow) setDisappearingTimer(convRow.disappearing_timer_seconds || null)
+      const timerRes = await fetch(`${API_BASE_URL}/api/conversations/timer?conversationId=${convId}`)
+        .then(r => r.json()).catch(() => ({ success: false }));
+      if (timerRes.success) setDisappearingTimer(timerRes.seconds || null);
     } catch (e) { console.warn("load disappearing timer failed", e) }
 
     let msgs = null;
@@ -678,13 +605,13 @@ export default function Chat() {
     if (!body) return
     tap('light'); setSending(true)
     const nowIso = new Date().toISOString()
-    const { error: err } = await supabase
-      .from('messages')
-      .update({ content: body.slice(0, 2000), edited_at: nowIso })
-      .eq('id', editingMsg.id)
-      .eq('sender_id', myId)
+    const editRes = await fetch(`${API_BASE_URL}/api/messages/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "edit", messageId: editingMsg.id, content: body.slice(0, 2000) })
+    }).then(r => r.json()).catch(() => ({ success: false }))
     setSending(false)
-    if (err) { setError(err.message); return }
+    if (!editRes.success) { setError(editRes.error || "Edit failed"); return }
     setMessages((cur) => cur.map((m) => m.id === editingMsg.id ? { ...m, content: body.slice(0, 2000), edited_at: nowIso } : m))
     setEditingMsg(null); setText('')
   }
