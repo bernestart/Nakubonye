@@ -1520,6 +1520,95 @@ export default {
           return new Response(JSON.stringify({ success: false, error: "LOADMORE_FAILED" }), { status: 500, headers: cors });
         }
       }
+      if (path === "/api/feed/impression" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const b = await request.json().catch(() => ({}));
+          const rows = Array.isArray(b.rows) ? b.rows.slice(0, 100) : [];
+          let written = 0;
+          for (const r of rows) {
+            if (!r || typeof r !== "object") continue;
+            const cols = Object.keys(r).filter(k => r[k] !== undefined && k !== "id");
+            if (cols.length === 0) continue;
+            const ph = cols.map((_, i) => "$" + (i + 1)).join(", ");
+            const vals = cols.map(k => r[k]);
+            try {
+              await queryDatabase("INSERT INTO feed_impressions (" + cols.join(", ") + ") VALUES (" + ph + ") ON CONFLICT DO NOTHING", vals);
+              written++;
+            } catch (e) { /* best-effort */ }
+          }
+          return new Response(JSON.stringify({ success: true, written }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: "IMPRESSION_FAILED" }), { status: 500, headers: cors });
+        }
+      }
+      if (path === "/api/feed/click" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const b = await request.json().catch(() => ({}));
+          const rows = Array.isArray(b.rows) ? b.rows.slice(0, 100) : [];
+          let written = 0;
+          for (const r of rows) {
+            if (!r || typeof r !== "object") continue;
+            const cols = Object.keys(r).filter(k => r[k] !== undefined && k !== "id");
+            if (cols.length === 0) continue;
+            const ph = cols.map((_, i) => "$" + (i + 1)).join(", ");
+            const vals = cols.map(k => r[k]);
+            try {
+              await queryDatabase("INSERT INTO feed_clicks (" + cols.join(", ") + ") VALUES (" + ph + ") ON CONFLICT DO NOTHING", vals);
+              written++;
+            } catch (e) { /* best-effort */ }
+          }
+          return new Response(JSON.stringify({ success: true, written }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: "CLICK_FAILED" }), { status: 500, headers: cors });
+        }
+      }
+      if (path === "/api/feed/notify" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const myId = String(me.id);
+        try {
+          const b = await request.json().catch(() => ({}));
+          const targetId = String(b.userId || "");
+          const type = String(b.type || "");
+          const refId = b.refId != null ? String(b.refId) : null;
+          const refType = b.refType != null ? String(b.refType) : null;
+          const body = b.body != null ? String(b.body) : "";
+          if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId)) {
+            return new Response(JSON.stringify({ success: false, error: "BAD_TARGET" }), { status: 400, headers: cors });
+          }
+          if (targetId === myId) return new Response(JSON.stringify({ success: true, skipped: "self" }), { headers: { ...cors, "Content-Type": "application/json" } });
+          if (!type) return new Response(JSON.stringify({ success: false, error: "MISSING_TYPE" }), { status: 400, headers: cors });
+          await queryDatabase(
+            "INSERT INTO notifications (user_id, actor_id, type, ref_id, ref_type, body) VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6)",
+            [targetId, myId, type, refId, refType, body]
+          );
+          return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          console.error("[feed/notify] " + String((err && err.message) || "").slice(0, 160));
+          return new Response(JSON.stringify({ success: false, error: "NOTIFY_FAILED" }), { status: 500, headers: cors });
+        }
+      }
+      if (path === "/api/feed/poll" && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const myId = String(me.id);
+        const since = url.searchParams.get("since") || new Date(0).toISOString();
+        try {
+          const [upR, cpR, reelR] = await Promise.all([
+            queryDatabase("SELECT COUNT(*)::int AS n FROM user_posts WHERE created_at > $1::timestamptz AND is_active = true", [since]),
+            queryDatabase("SELECT COUNT(*)::int AS n FROM community_posts WHERE created_at > $1::timestamptz", [since]),
+            queryDatabase("SELECT COUNT(*)::int AS n FROM reels WHERE created_at > $1::timestamptz AND is_active = true AND audience = 'public'", [since]),
+          ]);
+          const total = (upR.rows[0]?.n || 0) + (cpR.rows[0]?.n || 0) + (reelR.rows[0]?.n || 0);
+          return new Response(JSON.stringify({ success: true, count: total }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: "POLL_FAILED" }), { status: 500, headers: cors });
+        }
+      }
       if (path === "/api/profile/view" && request.method === "GET") {
         const me = await getSessionUser(request, env, url);
         if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
