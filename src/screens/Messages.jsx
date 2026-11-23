@@ -4,7 +4,6 @@ import { motion } from 'framer-motion'
 import { MessageCircle, RefreshCw, PenSquare, BellOff, Search, X, Users, MoreVertical, Archive, Inbox, CheckCheck, Flag, Ban, Pin, Trash2, Settings, Check, Bell } from 'lucide-react'
 import { friendlyError } from '../lib/errors'
 import { API_BASE_URL } from '../lib/api';
-import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl } from '../lib/photo'
 import { isOnline } from '../lib/usePresence'
@@ -123,17 +122,9 @@ export default function Messages() {
   useEffect(() => {
     const uid = session?.user?.id
     if (!uid) return
-    let debounce = null
-    const schedule = () => {
-      if (debounce) clearTimeout(debounce)
-      debounce = setTimeout(() => load(), 400)
-    }
-    const ch = supabase
-      .channel('messages-list-' + uid)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, schedule)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversations' }, schedule)
-      .subscribe()
-    return () => { if (debounce) clearTimeout(debounce); }
+    // Poll every 5s (replaces dead Supabase channel)
+    const pollId = setInterval(() => { if (!document.hidden) load(); }, 5000)
+    return () => clearInterval(pollId)
   }, [session?.user?.id, load])
 
   function onTouchStart(e) {
@@ -172,17 +163,14 @@ export default function Messages() {
     const uid = session?.user?.id
     if (!uid) return
     const now = new Date().toISOString()
-    if (item.isGroup) {
-      await supabase.from("group_reads").upsert(
-        { group_id: item.groupId, user_id: uid, last_read_at: now },
-        { onConflict: "group_id,user_id" }
-      )
-    } else if (item.conversationId) {
-      await supabase.from("conversation_reads").upsert(
-        { conversation_id: item.conversationId, user_id: uid, last_read_at: now },
-        { onConflict: "conversation_id,user_id" }
-      )
-    }
+    const isGroup = item.isGroup
+    const type = isGroup ? "group" : "dm"
+    const row = isGroup ? { group_id: item.groupId, user_id: uid, last_read_at: now } : { conversation_id: item.conversationId, user_id: uid, last_read_at: now }
+    await fetch(`${API_BASE_URL}/api/inbox/read`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type, rows: [row] })
+    }).catch(() => null)
     setRowMenuFor(null)
     load()
   }
@@ -213,22 +201,19 @@ export default function Messages() {
     const uid = session?.user?.id
     if (!uid) return
     const key = item.isGroup ? ("g:" + item.groupId) : ("c:" + item.conversationId)
-    const table = item.isGroup ? "group_pins" : "conversation_pins"
-    const column = item.isGroup ? "group_id" : "conversation_id"
-    const value = item.isGroup ? item.groupId : item.conversationId
     const isPinned = pinnedKeys.has(key)
-
-    if (isPinned) {
-      await supabase.from(table).delete().eq(column, value).eq("user_id", uid)
-      setPinnedKeys((prev) => {
-        const next = new Set(prev)
-        next.delete(key)
-        return next
-      })
-    } else {
-      await supabase.from(table).insert({ [column]: value, user_id: uid })
-      setPinnedKeys((prev) => new Set([...prev, key]))
-    }
+    const type = item.isGroup ? "group" : "dm"
+    const id = item.isGroup ? item.groupId : item.conversationId
+    await fetch(`${API_BASE_URL}/api/inbox/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: isPinned ? "unpin" : "pin", type, id, userId: uid })
+    }).catch(() => null)
+    setPinnedKeys((prev) => {
+      const next = new Set(prev)
+      isPinned ? next.delete(key) : next.add(key)
+      return next
+    })
     setRowMenuFor(null)
   }
 
@@ -237,16 +222,14 @@ export default function Messages() {
     const uid = session?.user?.id
     if (!uid) return
     const key = item.isGroup ? ("g:" + item.groupId) : ("c:" + item.conversationId)
-    const table = item.isGroup ? "group_archives" : "conversation_archives"
-    const column = item.isGroup ? "group_id" : "conversation_id"
-    const value = item.isGroup ? item.groupId : item.conversationId
     const isArchived = archivedKeys.has(key)
-
-    if (isArchived) {
-      await supabase.from(table).delete().eq(column, value).eq("user_id", uid)
-    } else {
-      await supabase.from(table).insert({ [column]: value, user_id: uid })
-    }
+    const type = item.isGroup ? "group" : "dm"
+    const id = item.isGroup ? item.groupId : item.conversationId
+    await fetch(`${API_BASE_URL}/api/inbox/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: isArchived ? "unarchive" : "archive", type, id, userId: uid })
+    }).catch(() => null)
     setRowMenuFor(null)
     load()
   }
@@ -255,20 +238,16 @@ export default function Messages() {
     tap("light")
     const uid = session?.user?.id
     if (!uid) return
-    // Set last_read_at to a time BEFORE the last message → row appears unread
     const t = item.lastMessageAt || new Date().toISOString()
     const before = new Date(new Date(t).getTime() - 60000).toISOString()
-    if (item.isGroup) {
-      await supabase.from("group_reads").upsert(
-        { group_id: item.groupId, user_id: uid, last_read_at: before },
-        { onConflict: "group_id,user_id" }
-      )
-    } else if (item.conversationId) {
-      await supabase.from("conversation_reads").upsert(
-        { conversation_id: item.conversationId, user_id: uid, last_read_at: before },
-        { onConflict: "conversation_id,user_id" }
-      )
-    }
+    const isGroup = item.isGroup
+    const type = isGroup ? "group" : "dm"
+    const row = isGroup ? { group_id: item.groupId, user_id: uid, last_read_at: before } : { conversation_id: item.conversationId, user_id: uid, last_read_at: before }
+    await fetch(`${API_BASE_URL}/api/inbox/read`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type, rows: [row] })
+    }).catch(() => null)
     setRowMenuFor(null)
     load()
   }
@@ -278,11 +257,13 @@ export default function Messages() {
     tap("medium")
     const uid = session?.user?.id
     if (!uid) return
-    if (item.isGroup) {
-      await supabase.from("group_deletes").insert({ group_id: item.groupId, user_id: uid })
-    } else if (item.conversationId) {
-      await supabase.from("conversation_deletes").insert({ conversation_id: item.conversationId, user_id: uid })
-    }
+    const type = item.isGroup ? "group" : "dm"
+    const id = item.isGroup ? item.groupId : item.conversationId
+    await fetch(`${API_BASE_URL}/api/inbox/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete", type, id, userId: uid })
+    }).catch(() => null)
     setRowMenuFor(null)
     load()
   }
@@ -293,7 +274,11 @@ export default function Messages() {
     tap("medium")
     const uid = session?.user?.id
     if (!uid) return
-    await supabase.from("blocks").insert({ blocker_id: uid, blocked_id: item.userId })
+    await fetch(`${API_BASE_URL}/api/inbox/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "block", userId: uid, targetId: item.userId })
+    }).catch(() => null)
     setRowMenuFor(null)
     load()
   }
@@ -515,12 +500,9 @@ export default function Messages() {
                       key={u.userId}
                       onClick={async () => {
                         tap("light")
-                        const { data: stories } = await supabase
-                          .from("stories")
-                          .select("id, user_id, media_url, media_type, created_at")
-                          .eq("user_id", u.userId)
-                          .gt("expires_at", new Date().toISOString())
-                          .order("created_at", { ascending: true })
+                        const storiesRes = await fetch(`${API_BASE_URL}/api/stories?userId=${u.userId}`)
+                          .then(r => r.json()).catch(() => ({ success: false }))
+                        const stories = storiesRes.success ? storiesRes.data : null
                         if (!stories || stories.length === 0) return
                         setViewerOpen({
                           groups: [{
