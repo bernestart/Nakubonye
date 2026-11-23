@@ -6,8 +6,20 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App.jsx'
 import './index.css'
 
-// FORCE CLEAR BAD TOKEN SO APP BOOTS
-try { localStorage.removeItem('auth_token'); } catch(e) {}
+// Validate token before boot: keep valid sessions, clear stale ones (Roadmap P1 cleanup).
+try {
+  const tok = localStorage.getItem('auth_token');
+  // Synchronous: obviously-bad format (Better Auth tokens are >=20 chars)
+  if (tok && tok.length < 20) {
+    console.log('[boot] removed malformed token');
+    localStorage.removeItem('auth_token');
+  } else if (tok) {
+    // Async: verify against /api/whoami, clear only on real 401
+    fetch('https://nakubonye.bernestart.workers.dev/api/whoami')
+      .then(r => { if (r.status === 401) { console.log('[boot] removed stale token'); localStorage.removeItem('auth_token'); } })
+      .catch(() => { /* network error — keep token, next request will retry */ });
+  }
+} catch(e) {}
 
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false, error: null }; }
