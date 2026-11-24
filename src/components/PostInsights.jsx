@@ -10,7 +10,7 @@ export default function PostInsights({ post, onClose }) {
     ;(async () => {
       const [likes, comments, views] = await Promise.all([
         supabase.from("user_post_likes").select("id", { count: "exact", head: true }).eq("post_id", post.id),
-        supabase.from("user_post_comments").select("id", { count: "exact", head: true }).eq("post_id", post.id).is("deleted_at", null),
+        supabase.from("user_post_comments").select("id", { count: "exact", head: true }).eq("post_id", post.id).filter("deleted_at", 'is', null),
         supabase.from("post_views").select("id", { count: "exact", head: true }).eq("post_id", String(post.id))
       ])
       setStats({

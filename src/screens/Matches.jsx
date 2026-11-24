@@ -212,7 +212,7 @@ export default function Matches() {
     supabase
       .from('matches')
       .update({ seen_at: new Date().toISOString() })
-      .is('seen_at', null)
+      .filter('seen_at', 'is', null)
       .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`)
       .then(() => {})
   }, [session?.user?.id])

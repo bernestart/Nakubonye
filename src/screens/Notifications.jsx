@@ -141,7 +141,7 @@ export default function Notifications() {
     if (!ids || ids.length === 0) return
     tap("light")
     const now = new Date().toISOString()
-    await supabase.from("notifications").update({ read_at: now }).in("id", ids).is("read_at", null)
+    await supabase.from("notifications").update({ read_at: now }).in("id", ids).filter("read_at", 'is', null)
     setItems((prev) => prev.map((x) => ids.includes(x.id) && !x.read_at ? { ...x, read_at: now } : x))
     setActionFor(null)
   }
@@ -186,7 +186,7 @@ export default function Notifications() {
     tap("light")
     const now = new Date().toISOString()
     setUnreadCount(0); // Instantly drop the badge to 0
-    await supabase.from("notifications").update({ read_at: now }).eq("user_id", myId).is("read_at", null)
+    await supabase.from("notifications").update({ read_at: now }).eq("user_id", myId).filter("read_at", 'is', null)
     setItems((prev) => prev.map((x) => x.read_at ? x : { ...x, read_at: now }))
   }
 

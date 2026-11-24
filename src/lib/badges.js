@@ -85,7 +85,7 @@ export function useMatchesUnread() {
       const { data } = await supabase
         .from("matches")
         .select("id")
-        .is("seen_at", null)
+        .filter("seen_at", 'is', null)
         .or(`user_one_id.eq.${myId},user_two_id.eq.${myId}`)
       if (!cancelled) setCount(data?.length || 0)
     }

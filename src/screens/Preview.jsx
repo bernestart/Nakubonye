@@ -132,7 +132,7 @@ export default function Preview() {
       if (personalIds.length > 0) {
         const [likesRes, cmtsRes] = await Promise.all([
           supabase.from("user_post_likes").select("post_id, user_id, reaction").in("post_id", personalIds),
-          supabase.from("user_post_comments").select("post_id").in("post_id", personalIds).is("deleted_at", null),
+          supabase.from("user_post_comments").select("post_id").in("post_id", personalIds).filter("deleted_at", 'is', null),
         ])
         ;(likesRes.data || []).forEach((r) => {
           const k = "personal:" + r.post_id
@@ -147,7 +147,7 @@ export default function Preview() {
       if (communityIds.length > 0) {
         const [likesRes, cmtsRes] = await Promise.all([
           supabase.from("community_post_reactions").select("post_id, user_id, reaction").in("post_id", communityIds),
-          supabase.from("community_post_comments").select("post_id").in("post_id", communityIds).is("deleted_at", null),
+          supabase.from("community_post_comments").select("post_id").in("post_id", communityIds).filter("deleted_at", 'is', null),
         ])
         ;(likesRes.data || []).forEach((r) => {
           const k = "community:" + r.post_id

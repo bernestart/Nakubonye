@@ -69,7 +69,7 @@ export async function syncMissedNotifications() {
     .from("notifications")
     .select("id, actor_id, type, ref_id, ref_type, body, created_at")
     .eq("user_id", user.id)
-    .is("read_at", null)
+    .filter("read_at", 'is', null)
     .gt("created_at", since)
     .order("created_at", { ascending: true })
     .limit(MAX_PER_SYNC)
