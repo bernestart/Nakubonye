@@ -34,3 +34,18 @@ const mockClient = {
 }
 
 export const supabase = realClient || mockClient;
+
+// ===== Realtime shim (added 2026-11-24) =====
+// Realtime is dead (messages live in Neon + Cloudflare Durable Objects).
+// These no-ops prevent crashes in ~12 files still calling supabase.channel()/.removeChannel().
+// Safe: any call returns chainable noop, cleanup is noop, nothing subscribes.
+try {
+  const _noopChannel = {
+    on: () => _noopChannel,
+    subscribe: () => _noopChannel,
+    unsubscribe: () => _noopChannel,
+  }
+  supabase.channel = () => _noopChannel
+  supabase.removeChannel = () => {}
+  supabase.removeAllChannels = () => {}
+} catch (e) { console.warn("[supabase shim]", e) }
