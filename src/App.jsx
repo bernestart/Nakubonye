@@ -156,7 +156,7 @@ function BannedScreen({ reason }) {
             const { supabase } = await import('./lib/supabase')
             const { detachDeviceToken } = await import('./lib/deviceToken.js')
             await detachDeviceToken()
-            await supabase.auth.signOut()
+            localStorage.removeItem('auth_token'); window.location.reload();
           }}
           className="block w-full mt-8 h-11 rounded-full bg-white/[0.06] border border-white/12 text-cream font-semibold text-[14px]"
         >
