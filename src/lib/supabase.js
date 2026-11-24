@@ -1,51 +1,51 @@
-import { createClient } from '@supabase/supabase-js'
+// ==============================================================================
+// SUPABASE BLACK HOLE (Temporary bridge during T1 -> T2 migration)
+// Any call made here silently returns empty data instead of crashing the app.
+// Do NOT use this for T1 screens (Feed, Chat, Messages, ProfileView).
+// ==============================================================================
 
-const url = import.meta.env.VITE_SUPABASE_URL
-const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY
+const fakeResponse = { data: [], error: null, count: 0 };
 
-let realClient = null;
-// Only try to initialize if we actually have real keys
-if (url && key && !url.includes('placeholder')) {
-  try {
-    realClient = createClient(url, key);
-  } catch (e) {
-    console.warn("Supabase failed to initialize, falling back to mock.", e);
-  }
-}
+const makeChain = () => {
+  const handler = {
+    get: (target, prop) => {
+      // 1. Handle Storage URLs
+      if (prop === 'getPublicUrl') return () => ({ data: { publicUrl: '' } });
+      
+      // 2. Handle Promise/Await resolution
+      if (prop === 'then') return (resolve) => resolve(fakeResponse);
+      
+      // 3. Handle Supabase channel/removeChannel
+      if (prop === 'subscribe' || prop === 'on' || prop === 'unsubscribe') return () => proxy;
+      if (prop === 'removeChannel' || prop === 'removeAllChannels') return () => {};
 
-// Safe Mock Client to prevent crashes in the 145 files
-const mockClient = {
+      // 4. Handle `.data` access if someone does `const { data } = await supabase...`
+      if (prop === 'data') return [];
+      if (prop === 'error') return null;
+
+      // 5. Any other function (.from, .select, .eq, .is, .update, etc) returns the chain
+      return () => proxy;
+    }
+  };
+  
+  const proxy = new Proxy(function() {}, handler);
+  return proxy;
+};
+
+const globalProxy = makeChain();
+
+export const supabase = {
+  from: () => globalProxy,
+  rpc: () => globalProxy,
   auth: {
-    getSession: async () => ({ data: { session: null }, error: null }),
+    getSession: () => Promise.resolve({ data: { session: null }, error: null }),
     onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
-    signOut: async () => ({ error: null }),
+    signOut: () => Promise.resolve({ error: null }),
   },
-  from: () => {
-    const chain = {
-      select: () => chain, insert: () => chain, update: () => chain, delete: () => chain,
-      eq: () => chain, in: () => chain, or: () => chain, order: () => chain, limit: () => chain,
-      single: async () => ({ data: null, error: null }),
-      then: (resolve) => resolve({ data: [], error: null })
-    };
-    return chain;
-  },
-  rpc: async () => ({ data: [], error: null }),
-  channel: () => ({ on: () => ({ subscribe: () => {} }) })
-}
-
-export const supabase = realClient || mockClient;
-
-// ===== Realtime shim (added 2026-11-24) =====
-// Realtime is dead (messages live in Neon + Cloudflare Durable Objects).
-// These no-ops prevent crashes in ~12 files still calling supabase.channel()/.removeChannel().
-// Safe: any call returns chainable noop, cleanup is noop, nothing subscribes.
-try {
-  const _noopChannel = {
-    on: () => _noopChannel,
-    subscribe: () => _noopChannel,
-    unsubscribe: () => _noopChannel,
+  channel: () => globalProxy,
+  removeChannel: () => {},
+  removeAllChannels: () => {},
+  storage: {
+    from: () => globalProxy
   }
-  supabase.channel = () => _noopChannel
-  supabase.removeChannel = () => {}
-  supabase.removeAllChannels = () => {}
-} catch (e) { console.warn("[supabase shim]", e) }
+};
