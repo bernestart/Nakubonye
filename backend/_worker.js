@@ -1266,6 +1266,22 @@ export default {
             const rR = await queryDatabase("SELECT * FROM get_ranked_feed($1::uuid)", [myId]);
             rankedRows = rR.rows;
           } catch (e) { console.warn("[feed/v2] ranked failed: " + String(e.message || "").slice(0, 120)); }
+
+          // DISCOVERY FALLBACK: If feed is empty (new user), grab recent public posts
+          if (rankedRows.length < 10) {
+            try {
+              const fallbackR = await queryDatabase(
+                `SELECT id AS post_id, user_id, content, image_path, image_paths, audience, created_at, location_text, feeling_text, publish_at 
+                 FROM user_posts 
+                 WHERE audience = 'public' AND is_active = true AND publish_at <= NOW() 
+                 ORDER BY created_at DESC LIMIT 10`
+              );
+              const existingIds = new Set(rankedRows.map(r => String(r.post_id)));
+              const fallbackPosts = fallbackR.rows.filter(r => !existingIds.has(String(r.post_id)));
+              rankedRows = [...rankedRows, ...fallbackPosts];
+            } catch (e) { console.warn("[feed/v2] fallback failed: " + String(e.message || "").slice(0, 120)); }
+          }
+
           const personalPosts = rankedRows.map(r => ({
             id: r.post_id, user_id: r.user_id, author_id: r.user_id, _source: "personal",
             content: r.content, image_path: r.image_path, image_paths: r.image_paths,
