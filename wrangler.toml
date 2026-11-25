@@ -14,3 +14,8 @@ new_sqlite_classes = ["ChatRoom"]
 [[migrations]]
 tag = "v2"
 renamed_classes = [{ from = "ChatRoom", to = "ChatRoomSQLite" }]
+
+[vars]
+AUTH_ENFORCE = "1"
+MEMBER_ENFORCE = "1"
+MESSAGES_ENFORCE = "1"
