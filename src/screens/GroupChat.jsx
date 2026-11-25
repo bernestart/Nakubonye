@@ -1,4 +1,4 @@
-import { uploadMedia } from '../lib/api';
+import { uploadMedia, API_BASE_URL } from '../lib/api';;
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { Timer, Search, ArrowLeft, Send, Paperclip, X, MoreVertical, Users, Camera, Trash2, Flag, LogOut, UserPlus , Pencil , Link2 , Bell , Mic, Square , Pin , Eraser} from "lucide-react"

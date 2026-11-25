@@ -42,7 +42,38 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 1000 * 60 * 5, retry: 1 } },
 })
 
-ReactDOM.createRoot(document.getElementById('root')).render(
+ReactDOM.
+// P5: Global Error Logger
+window.addEventListener('error', (event) => {
+  try {
+    fetch('https://nakubonye.bernestart.workers.dev/api/logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        error: event.message,
+        stack: event.error?.stack || '',
+        url: window.location.href,
+        userAgent: navigator.userAgent
+      })
+    }).catch(() => {});
+  } catch (e) {}
+});
+window.addEventListener('unhandledrejection', (event) => {
+  try {
+    fetch('https://nakubonye.bernestart.workers.dev/api/logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        error: event.reason?.message || String(event.reason),
+        stack: event.reason?.stack || '',
+        url: window.location.href,
+        userAgent: navigator.userAgent
+      })
+    }).catch(() => {});
+  } catch (e) {}
+});
+
+createRoot(document.getElementById('root')).render(
   <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <HashRouter>

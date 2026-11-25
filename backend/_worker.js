@@ -2133,6 +2133,28 @@ export default {
         }
       }
 
+
+      if (path === "/api/health" && request.method === "GET") {
+        try {
+          await queryDatabase("SELECT 1");
+          return new Response(JSON.stringify({ status: "ok", time: new Date().toISOString() }), { headers: cors });
+        } catch (e) {
+          return new Response(JSON.stringify({ status: "error", error: e.message }), { status: 500, headers: cors });
+        }
+      }
+      if (path === "/api/logs" && request.method === "POST") {
+        try {
+          const { error, stack, url, userAgent } = await request.json();
+          await queryDatabase(
+            "INSERT INTO client_errors (message, stack, url, user_agent) VALUES ($1, $2, $3, $4)",
+            [error, stack, url, userAgent]
+          );
+          return new Response(JSON.stringify({ success: true }), { headers: cors });
+        } catch (e) {
+          return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers: cors });
+        }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
