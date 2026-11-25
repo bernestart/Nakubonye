@@ -487,8 +487,22 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
     }
 
     setText(""); const bodyToSend = body; clearAttachment()
+    
+    // P4: Optimistic UI
+    const tempId = 'temp-' + Date.now();
+    const optimisticMsg = { 
+      id: tempId, 
+      sender_id: myId, 
+      content: bodyToSend || "", 
+      media_url: mediaUrl, 
+      media_type: mediaType, 
+      media_name: mediaName, 
+      reply_to_id: replyingTo?.id,
+      created_at: new Date().toISOString(),
+      _optimistic: true 
+    };
+    setMessages((cur) => [...cur, optimisticMsg]);
 
-    // META-SCALE: Send to Neon via Cloudflare
     try {
       const res = await fetchWithRetry("https://nakubonye.bernestart.workers.dev/api/community/messages", {
         method: "POST",
@@ -507,12 +521,14 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
       });
       const json = await res.json();
       if (json.success && json.data) {
-        setMessages((cur) => cur.some((x) => x.id === json.data.id) ? cur : [...cur, json.data]);
+        setMessages((cur) => cur.map((m) => m.id === tempId ? json.data : m));
       } else {
-        setError(json.error || "Failed to send message");
+        throw new Error(json.error || "Failed to send message");
       }
     } catch (err) {
-      setError(err.message);
+      // Rollback
+      setMessages((cur) => cur.filter((m) => m.id !== tempId));
+      setError(err.message); setText(body);
     }
     
     setReplyingTo(null)

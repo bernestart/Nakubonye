@@ -511,16 +511,28 @@ export default function GroupChat() {
     setReplyingTo(null)
 
     setText(""); clearAttachment()
+    
+    // P4: Optimistic UI
+    const tempId = 'temp-' + Date.now();
+    const optimisticMsg = { ...payload, id: tempId, created_at: new Date().toISOString(), _optimistic: true };
+    setMessages((cur) => [...cur, optimisticMsg]);
 
-    const { data: inserted, error: sendErr } = await supabase
-      .from("group_messages")
-      .insert(payload)
-      .select("id, sender_id, content, media_url, media_type, media_name, reply_to_id, deleted_at, edited_at, created_at, is_system, expires_at, view_once, viewed_by")
-      .single()
-
-    if (sendErr) { setError(sendErr.message); setText(body) }
-    else if (inserted) {
-      setMessages((cur) => cur.some((x) => x.id === inserted.id) ? cur : [...cur, inserted])
+    try {
+      const res = await fetchWithRetry(`${API_BASE_URL}/api/group/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Idempotency-Key": genIdemKey() },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      if (json.success && json.data) {
+        setMessages((cur) => cur.map((m) => m.id === tempId ? json.data : m));
+      } else {
+        throw new Error(json.error || "Failed to send");
+      }
+    } catch (err) {
+      // Rollback
+      setMessages((cur) => cur.filter((m) => m.id !== tempId));
+      setError(err.message); setText(body);
     }
     setBusy(false)
   }
