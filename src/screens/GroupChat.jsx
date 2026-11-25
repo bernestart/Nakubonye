@@ -25,6 +25,23 @@ import ImageLightbox from "../components/chat/ImageLightbox"
 import { useVoiceRecorder } from "../components/chat/useVoiceRecorder"
 import DocBubble from "../components/chat/DocBubble"
 
+// P3 Helper
+function genIdemKey() {
+  return typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36);
+}
+async function fetchWithRetry(url, options, maxRetries = 2) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const res = await fetch(url, options);
+      if (res.ok) return res;
+      if (res.status === 429) throw new Error("Rate limited");
+    } catch (e) {
+      if (i === maxRetries - 1) throw e;
+      await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+    }
+  }
+}
+
 const TIMER_OPTIONS = [
   { value: null,   label: "Off",      sub: "Messages stay forever" },
   { value: 300,    label: "5 minutes" },
@@ -340,11 +357,14 @@ export default function GroupChat() {
     let inserted = null;
     let sendErr = null;
     try {
-      const res = await fetch("https://nakubonye.bernestart.workers.dev/api/group/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
+      const res = await fetchWithRetry("https://nakubonye.bernestart.workers.dev/api/group/messages", {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "X-Idempotency-Key": genIdemKey()
+          },
+          body: JSON.stringify(payload)
+        }).then(async r => await r.json()).catch(() => ({ success: false, error: "Network error" }))
       const json = await res.json();
       if (json.success) { inserted = json.data; } else { sendErr = new Error(json.error); }
     } catch (err) { sendErr = err; }

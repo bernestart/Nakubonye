@@ -939,13 +939,33 @@ export default {
       // 5. COMMUNITY MESSAGES (CHAT)
       if (path === "/api/community/messages") {
         if (request.method === "POST") {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+
+          // P1f: Rate Limit
+          const rlKey = `rl:msg:${me.id}`;
+          const rl = await redisCommand(["INCR", rlKey]);
+          if (rl.result === 1) await redisCommand(["EXPIRE", rlKey, 60]);
+          if (rl.result > 60) return new Response(JSON.stringify({ success: false, error: "RATE_LIMITED" }), { status: 429, headers: cors });
+
           const body = await request.json();
+
+          // P3: Idempotency Check
+          const idemKey = request.headers.get("X-Idempotency-Key");
+          if (idemKey) {
+            const cached = await redisCommand(["GET", `idem:${idemKey}`]);
+            if (cached && cached.result) return new Response(cached.result, { headers: { ...cors, "Content-Type": "application/json" } });
+          }
+
+          // P1g: Derive sender from session
+          const senderId = String(me.id);
+
           const insertQuery = `
-            INSERT INTO community_messages (community_id, sender_id, content, media_url, media_type, media_name, voice_duration_seconds) 
+            INSERT INTO community_messages (community_id, sender_id, content, media_url, media_type, media_name, voice_duration_seconds)
             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *;
           `;
           const data = await queryDatabase(insertQuery, [
-            body.communityId, body.senderId, body.content, body.mediaUrl, body.mediaType, body.mediaName, body.voiceDuration
+            body.communityId, senderId, body.content, body.mediaUrl, body.mediaType, body.mediaName, body.voiceDuration
           ]);
           
           const newMessage = data.rows[0];

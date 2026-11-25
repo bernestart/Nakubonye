@@ -46,6 +46,25 @@ import ChatSearchSheet from '../components/ChatSearchSheet'
 import MessageActionsSheet from '../components/MessageActionsSheet'
 import MessagePopover from '../components/MessagePopover'
 
+// P3: Idempotency & Retry Helper
+function genIdemKey() {
+  return typeof crypto !== 'undefined' && crypto.randomUUID 
+    ? crypto.randomUUID() 
+    : Math.random().toString(36).substring(2) + Date.now().toString(36);
+}
+async function fetchWithRetry(url, options, maxRetries = 2) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const res = await fetch(url, options);
+      if (res.ok) return res; // Success
+      if (res.status === 429) throw new Error("Rate limited");
+    } catch (e) {
+      if (i === maxRetries - 1) throw e;
+      await new Promise(r => setTimeout(r, 1000 * (i + 1))); // Exponential backoff
+    }
+  }
+}
+
 const TIMER_OPTIONS = [
   { value: null, label: "Off",     sub: "Messages stay forever" },
   { value: 300,  label: "5 minutes" },
@@ -578,11 +597,18 @@ export default function Chat() {
     setReplyingTo(null)
     setViewOnce(false)
 
-    const sendRes = await fetch(`${API_BASE_URL}/api/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    }).then(r => r.json()).catch(() => ({ success: false, error: "Network error" }));
+    let sendRes;
+      try {
+        const idemKey = genIdemKey();
+        const res = await fetchWithRetry(`${API_BASE_URL}/api/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Idempotency-Key": idemKey },
+          body: JSON.stringify(payload)
+        });
+        sendRes = await res.json();
+      } catch (e) {
+        sendRes = { success: false, error: "Network failed. Message not sent." };
+      }
     const inserted = sendRes.success ? sendRes.data : null;
     const sendErr = !sendRes.success ? { message: sendRes.error || "Send failed" } : null;
 
@@ -625,11 +651,18 @@ export default function Chat() {
       metadata: { poll },
     }
     if (disappearingTimer) payload.expires_at = new Date(Date.now() + disappearingTimer * 1000).toISOString()
-    const pollRes = await fetch(`${API_BASE_URL}/api/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    }).then(r => r.json()).catch(() => ({ success: false, error: "Network error" }));
+    let pollRes;
+      try {
+        const idemKey = genIdemKey();
+        const res = await fetchWithRetry(`${API_BASE_URL}/api/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Idempotency-Key": idemKey },
+          body: JSON.stringify(payload)
+        });
+        pollRes = await res.json();
+      } catch (e) {
+        pollRes = { success: false, error: "Network failed. Message not sent." };
+      }
     const inserted = pollRes.success ? pollRes.data : null;
     const err = !pollRes.success ? { message: pollRes.error || "Poll send failed" } : null;
     if (!err && inserted) {
@@ -715,11 +748,18 @@ export default function Chat() {
     if (mediaUrl) { payload.media_url = mediaUrl; payload.media_type = mediaType; payload.media_name = mediaName }
     if (replyingTo?.id) payload.reply_to_id = replyingTo.id
     setText(''); clearAttachment(); setReplyingTo(null); setStoryReply(null); setViewOnce(false)
-    const send2Res = await fetch(`${API_BASE_URL}/api/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    }).then(r => r.json()).catch(() => ({ success: false, error: "Network error" }));
+    let send2Res;
+      try {
+        const idemKey = genIdemKey();
+        const res = await fetchWithRetry(`${API_BASE_URL}/api/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Idempotency-Key": idemKey },
+          body: JSON.stringify(payload)
+        });
+        send2Res = await res.json();
+      } catch (e) {
+        send2Res = { success: false, error: "Network failed. Message not sent." };
+      }
     const inserted = send2Res.success ? send2Res.data : null;
     const sendErr = !send2Res.success ? { message: send2Res.error || "Send failed" } : null;
 

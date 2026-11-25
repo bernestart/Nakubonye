@@ -22,6 +22,23 @@ import PollMessage from './PollMessage'
 import { useVoiceRecorder } from './chat/useVoiceRecorder'
 import DocBubble from './chat/DocBubble'
 
+// P3 Helper
+function genIdemKey() {
+  return typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36);
+}
+async function fetchWithRetry(url, options, maxRetries = 2) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const res = await fetch(url, options);
+      if (res.ok) return res;
+      if (res.status === 429) throw new Error("Rate limited");
+    } catch (e) {
+      if (i === maxRetries - 1) throw e;
+      await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+    }
+  }
+}
+
 const TIMER_OPTIONS = [
   { value: null,   label: "Off",      sub: "Messages stay forever" },
   { value: 300,    label: "5 minutes" },
@@ -473,12 +490,14 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
 
     // META-SCALE: Send to Neon via Cloudflare
     try {
-      const res = await fetch("https://nakubonye.bernestart.workers.dev/api/community/messages", {
+      const res = await fetchWithRetry("https://nakubonye.bernestart.workers.dev/api/community/messages", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "X-Idempotency-Key": genIdemKey()
+        },
         body: JSON.stringify({
           communityId: communityId,
-          senderId: myId,
           content: bodyToSend || "",
           mediaUrl: mediaUrl,
           mediaType: mediaType,
