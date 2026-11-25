@@ -1190,6 +1190,13 @@ export default {
         const me = await getSessionUser(request, env, url);
         if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
         const myId = String(me.id);
+        // P2.5: Redis Caching (30s TTL)
+        const cacheKey = `cache:feed:${myId}`;
+        const cached = await redisCommand(["GET", cacheKey]);
+        if (cached && cached.result) {
+          return new Response(cached.result, { headers: { ...cors, "Content-Type": "application/json" } });
+        }
+
         try {
           // === 1. Context (all parallel) ===
           const [myCommR, matchR, followR, circleR, blockR, muteR, mutedWordsR] = await Promise.all([
@@ -1403,7 +1410,7 @@ export default {
             reelAffinity = postCount > 0 ? Math.max(0.5, Math.min(2, reelCount / postCount)) : 1;
           } catch (e) { console.warn("[feed/v2] interactions failed: " + String(e.message || "").slice(0, 120)); }
 
-          return new Response(JSON.stringify({
+          const finalData = JSON.stringify({
             success: true,
             data: {
               sources: { community: communityPosts, personal: personalPosts, reels: reelItems, listings: listingItems, services: serviceItems },
@@ -1414,7 +1421,9 @@ export default {
               signalScores, authorSignals,
               interactions, reelAffinity,
             }
-          }), { headers: { ...cors, "Content-Type": "application/json" } });
+          }); { ...cors, "Content-Type": "application/json" } });
+          await redisCommand(["SETEX", cacheKey, 30, finalData]);
+          return new Response(finalData, { headers: { ...cors, "Content-Type": "application/json" } });
         } catch (err) {
           console.error("[feed/v2] " + String((err && err.message) || "").slice(0, 200));
           return new Response(JSON.stringify({ success: false, error: "FEED_LOAD_FAILED" }), { status: 500, headers: cors });
@@ -1647,6 +1656,13 @@ export default {
           return new Response(JSON.stringify({ success: false, error: "BAD_USER_ID" }), { status: 400, headers: cors });
         }
         const isSelf = myId === targetId;
+        // P2.5: Redis Caching (60s TTL)
+        const cacheKey = `cache:profile:${myId}:${targetId}`;
+        const cached = await redisCommand(["GET", cacheKey]);
+        if (cached && cached.result) {
+          return new Response(cached.result, { headers: { ...cors, "Content-Type": "application/json" } });
+        }
+
         try {
           // ---- fire-and-forget: record profile view (only when viewing someone else) ----
           if (!isSelf) {
@@ -1795,7 +1811,7 @@ export default {
             }
           }
 
-          return new Response(JSON.stringify({
+          const finalData = JSON.stringify({
             success: true,
             data: {
               profile, canView: true, canSeeLocation, visibility,
@@ -1808,7 +1824,9 @@ export default {
               context: { matchIds, circleIds, communityIds },
               relationship, followedBy, aggregation: agg, reactorProfiles
             }
-          }), { headers: { ...cors, "Content-Type": "application/json" } });
+          }); { ...cors, "Content-Type": "application/json" } });
+          await redisCommand(["SETEX", cacheKey, 60, finalData]);
+          return new Response(finalData, { headers: { ...cors, "Content-Type": "application/json" } });
         } catch (err) {
           console.error("[profile/view] " + String((err && err.message) || "").slice(0, 200));
           return new Response(JSON.stringify({ success: false, error: "VIEW_FAILED" }), { status: 500, headers: cors });
