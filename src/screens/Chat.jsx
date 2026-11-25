@@ -558,7 +558,8 @@ export default function Chat() {
       if (json.success) { inserted = json.data; } else { sendErr = new Error(json.error); }
     } catch (err) { sendErr = err; }
     if (!sendErr) setViewOnce(false); // Reset toggle after send
-    if (sendErr) setError(sendErr.message); else if (inserted) setMessages(cur => [...cur, inserted])
+    if (sendErr) { setMessages(cur => cur.filter(m => m.id !== tempId1)); setError(sendErr.message); }
+       else if (inserted) setMessages(cur => cur.map(m => m.id === tempId1 ? inserted : m))
     setSending(false); setReplyingTo(null); if (docInputRef.current) docInputRef.current.value = ''
   }
 
@@ -596,6 +597,11 @@ export default function Chat() {
       }
     setReplyingTo(null)
     setViewOnce(false)
+
+    // P4: Optimistic UI
+    const tempId1 = 'temp-' + Date.now();
+    const optimisticMsg1 = { ...payload, id: tempId1, created_at: new Date().toISOString(), _optimistic: true };
+    setMessages((cur) => [...cur, optimisticMsg1]);
 
     let sendRes;
       try {
@@ -748,6 +754,11 @@ export default function Chat() {
     if (mediaUrl) { payload.media_url = mediaUrl; payload.media_type = mediaType; payload.media_name = mediaName }
     if (replyingTo?.id) payload.reply_to_id = replyingTo.id
     setText(''); clearAttachment(); setReplyingTo(null); setStoryReply(null); setViewOnce(false)
+    // P4: Optimistic UI
+    const tempId2 = 'temp-' + Date.now();
+    const optimisticMsg2 = { ...payload, id: tempId2, created_at: new Date().toISOString(), _optimistic: true };
+    setMessages((cur) => [...cur, optimisticMsg2]);
+
     let send2Res;
       try {
         const idemKey = genIdemKey();
