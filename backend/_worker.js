@@ -2155,6 +2155,48 @@ export default {
         }
       }
 
+
+      if (path === "/api/notifications") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const myId = String(me.id);
+
+        if (request.method === "GET") {
+          try {
+            const data = await queryDatabase(
+              "SELECT id, actor_id, type, ref_id, ref_type, body, created_at, read_at FROM notifications WHERE user_id = $1::uuid ORDER BY created_at DESC LIMIT 50",
+              [myId]
+            );
+            return new Response(JSON.stringify({ success: true, data: data.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (e) {
+            return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers: cors });
+          }
+        }
+
+        if (request.method === "POST") {
+          try {
+            const body = await request.json();
+            const action = body.action;
+
+            if (action === "delete" && Array.isArray(body.ids)) {
+              await queryDatabase("DELETE FROM notifications WHERE id = ANY($1::bigint[]) AND user_id = $2::uuid", [body.ids.map(Number), myId]);
+            } else if (action === "mark_read" && Array.isArray(body.ids)) {
+              await queryDatabase("UPDATE notifications SET read_at = NOW() WHERE id = ANY($1::bigint[]) AND user_id = $2::uuid AND read_at IS NULL", [body.ids.map(Number), myId]);
+            } else if (action === "mark_read_single" && body.id) {
+              await queryDatabase("UPDATE notifications SET read_at = NOW() WHERE id = $1::bigint AND user_id = $2::uuid AND read_at IS NULL", [Number(body.id), myId]);
+            } else if (action === "mark_all_read") {
+              await queryDatabase("UPDATE notifications SET read_at = NOW() WHERE user_id = $1::uuid AND read_at IS NULL", [myId]);
+            } else {
+              return new Response(JSON.stringify({ success: false, error: "BAD_ACTION" }), { status: 400, headers: cors });
+            }
+            return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (e) {
+            return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers: cors });
+          }
+        }
+        return new Response(JSON.stringify({ success: false, error: "METHOD_NOT_ALLOWED" }), { status: 405, headers: cors });
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });

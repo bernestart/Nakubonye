@@ -8,6 +8,7 @@ import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 import VerifiedBadge from "../components/VerifiedBadge"
 import BrandGlow from "../components/BrandGlow"
+import { API_BASE_URL } from '../lib/api';
 
 function relTime(iso) {
   if (!iso) return ""
@@ -132,7 +133,7 @@ export default function Notifications() {
   async function deleteNotif(ids) {
     if (!ids || ids.length === 0) return
     tap("light")
-    await supabase.from("notifications").delete().in("id", ids)
+    await fetch(`${API_BASE_URL}/api/notifications`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', ids }) })
     setItems((prev) => prev.filter((x) => !ids.includes(x.id)))
     setActionFor(null)
   }
@@ -141,7 +142,7 @@ export default function Notifications() {
     if (!ids || ids.length === 0) return
     tap("light")
     const now = new Date().toISOString()
-    await supabase.from("notifications").update({ read_at: now }).in("id", ids).filter("read_at", 'is', null)
+    await fetch(`${API_BASE_URL}/api/notifications`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'mark_read', ids }) })
     setItems((prev) => prev.map((x) => ids.includes(x.id) && !x.read_at ? { ...x, read_at: now } : x))
     setActionFor(null)
   }
@@ -150,7 +151,7 @@ export default function Notifications() {
     tap("light")
     if (!n.read_at) {
       setUnreadCount(prev => Math.max(0, prev - 1)); // Decrement badge
-    await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", n.id)
+    await fetch(`${API_BASE_URL}/api/notifications`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'mark_read_single', id: n.id }) })
       setItems((prev) => prev.map((x) => x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x))
     }
     const t = n.type || ""
@@ -177,7 +178,7 @@ export default function Notifications() {
     const unreadIds = group.filter((n) => !n.read_at).map((n) => n.id)
     if (unreadIds.length === 0) return
     const now = new Date().toISOString()
-    await supabase.from("notifications").update({ read_at: now }).in("id", unreadIds)
+    await fetch(`${API_BASE_URL}/api/notifications`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'mark_read', ids: unreadIds }) })
     setItems((prev) => prev.map((x) => unreadIds.includes(x.id) ? { ...x, read_at: now } : x))
   }
 
@@ -186,7 +187,7 @@ export default function Notifications() {
     tap("light")
     const now = new Date().toISOString()
     setUnreadCount(0); // Instantly drop the badge to 0
-    await supabase.from("notifications").update({ read_at: now }).eq("user_id", myId).filter("read_at", 'is', null)
+    await fetch(`${API_BASE_URL}/api/notifications`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'mark_all_read' }) })
     setItems((prev) => prev.map((x) => x.read_at ? x : { ...x, read_at: now }))
   }
 
