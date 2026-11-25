@@ -633,6 +633,15 @@ export default {
 
       // 1. UPLOAD
       if (path === "/api/upload" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+
+        // Rate limit uploads: max 10 per minute per user
+        const rlKey = `rl:upload:${me.id}`;
+        const rl = await redisCommand(["INCR", rlKey]);
+        if (rl.result === 1) await redisCommand(["EXPIRE", rlKey, 60]);
+        if (rl.result > 10) return new Response(JSON.stringify({ success: false, error: "RATE_LIMITED" }), { status: 429, headers: cors });
+
         try {
           const MAX_BYTES = 20 * 1024 * 1024;
           const contentLength = Number(request.headers.get("content-length") || 0);
@@ -840,6 +849,22 @@ export default {
           return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
         }
         const senderId = sessionUser ? String(sessionUser.id) : (body.sender_id ? String(body.sender_id) : null);
+
+        // Rate limit messages: max 30 per minute per user
+        const rlKey = `rl:msg:${senderId}`;
+        const rl = await redisCommand(["INCR", rlKey]);
+        if (rl.result === 1) await redisCommand(["EXPIRE", rlKey, 60]);
+        if (rl.result > 30) return new Response(JSON.stringify({ success: false, error: "RATE_LIMITED" }), { status: 429, headers: cors });
+
+        // Idempotency: prevent duplicate sends on network retry
+        const idemKey = request.headers.get("X-Idempotency-Key");
+        if (idemKey) {
+          const cached = await redisCommand(["GET", `idem:${idemKey}`]);
+          if (cached && cached.result) {
+            return new Response(cached.result, { headers: { ...cors, "Content-Type": "application/json" } });
+          }
+        }
+
         if (!sessionUser && body.sender_id) console.warn("[MSG] legacy sender from body");
         if (sessionUser && body.sender_id && String(body.sender_id) !== String(sessionUser.id)) console.warn("[MSG] sender mismatch: using session");
         if (!senderId) return new Response(JSON.stringify({ success: false, error: "MISSING_SENDER" }), { status: 400, headers: cors });
@@ -882,7 +907,11 @@ export default {
           const obj = env.CHAT_ROOMS.get(id);
           await obj.fetch("https://dummy.com/", { method: "POST", body: JSON.stringify(newMsg) });
         } catch (e) { console.error(e); }
-        return new Response(JSON.stringify({ success: true, data: newMsg }), { headers: { ...cors, "Content-Type": "application/json" } });
+        const finalRes = JSON.stringify({ success: true, data: newMsg });
+        if (idemKey) {
+          await redisCommand(["SETEX", `idem:${idemKey}`, 60, finalRes]);
+        }
+        return new Response(finalRes, { headers: { ...cors, "Content-Type": "application/json" } });
       }
 
       // 4.6 GROUP MESSAGES
