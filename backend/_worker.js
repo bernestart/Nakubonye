@@ -1421,7 +1421,7 @@ export default {
               signalScores, authorSignals,
               interactions, reelAffinity,
             }
-          }); { ...cors, "Content-Type": "application/json" } });
+          });
           await redisCommand(["SETEX", cacheKey, 30, finalData]);
           return new Response(finalData, { headers: { ...cors, "Content-Type": "application/json" } });
         } catch (err) {
@@ -1824,7 +1824,7 @@ export default {
               context: { matchIds, circleIds, communityIds },
               relationship, followedBy, aggregation: agg, reactorProfiles
             }
-          }); { ...cors, "Content-Type": "application/json" } });
+          });
           await redisCommand(["SETEX", cacheKey, 60, finalData]);
           return new Response(finalData, { headers: { ...cors, "Content-Type": "application/json" } });
         } catch (err) {
