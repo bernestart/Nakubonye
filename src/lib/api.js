@@ -37,12 +37,18 @@ export const getRankedFeed = async (userId) => {
 };
 
 export const toggleLikeAPI = async (postId, userId, action) => {
-  const res = await fetch(`${API_BASE_URL}/api/likes`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ postId, userId, action })
-  });
-  return await res.json();
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/likes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ postId, userId, action })
+    });
+    if (!res.ok) throw new Error("Like failed");
+    return await res.json();
+  } catch (e) {
+    console.error("toggleLikeAPI error:", e);
+    throw e; // Re-throw so Feed.jsx can rollback
+  }
 };
 
 export const getCommunityPosts = async (communityIds, userId) => {

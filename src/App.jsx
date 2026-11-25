@@ -1,6 +1,6 @@
 import { useMyPresence } from './hooks/usePresence';
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { StatusBar } from '@capacitor/status-bar';
 import { Capacitor } from '@capacitor/core';
 import { useSafeArea } from './lib/useSafeArea'
@@ -20,94 +20,94 @@ import { supabase } from './lib/supabase'
 import BottomNav from './components/BottomNav'
 import BrandGlow from './components/BrandGlow'
 
-import Welcome from './screens/Welcome'
-import SignUp from './screens/SignUp'
-import SignIn from './screens/SignIn'
-import ResetPassword from './screens/ResetPassword'
-import Onboarding from './screens/Onboarding'
-import OnboardingSuggestions from './screens/OnboardingSuggestions'
-import Discover from './screens/Discover'
-import Filters from './screens/Filters'
-import Terms from './screens/Terms'
-import About from './screens/About'
-import Privacy from './screens/Privacy'
-import Verify from './screens/Verify'
-import VerifyIdentity from './screens/VerifyIdentity'
-import Roadmap from './screens/Roadmap'
-import Feed from './screens/Feed'
-import PostDetail from './screens/PostDetail'
-import Saved from './screens/Saved'
-import EventDetail from './screens/EventDetail'
-import CommunityRequests from './screens/CommunityRequests'
-import StoryArchive from './screens/StoryArchive'
-import Memories from './screens/Memories'
-import Drafts from './screens/Drafts'
-import MutedWords from './screens/MutedWords'
-import MutedUsers from './screens/MutedUsers'
-import InnerCircle from './screens/InnerCircle'
-import Circles from './screens/Circles'
-import CircleDetail from './screens/CircleDetail'
-import OfflineReels from './screens/OfflineReels'
-import NotificationSettings from './screens/NotificationSettings'
-import Reels from './screens/Reels'
-import FollowList from './screens/FollowList'
-import Create from './screens/Create'
-import Search from './screens/Search'
-import HashtagPage from './screens/HashtagPage'
-import Online from './screens/Online'
-import AdminVerifications from './screens/AdminVerifications'
-import Likes from './screens/Likes'
-import Matches from './screens/Matches'
-import Messages from './screens/Messages'
-import MessagesSearch from './screens/MessagesSearch'
-import MessagingSettings from './screens/MessagingSettings'
-import ChatInfo from './screens/ChatInfo'
-import ArchivedMessages from './screens/ArchivedMessages'
-import MessageRequests from './screens/MessageRequests'
-import Chat from './screens/Chat'
-import SafetyCenter from './screens/SafetyCenter'
-import BlockedList from './screens/BlockedList'
-import ProfileView from './screens/ProfileView'
-import EditProfile from './screens/EditProfile'
-import Preview from './screens/Preview'
-import ProfileSettings from './screens/ProfileSettings'
-import Monetization from './screens/Monetization'
-import PrivacySettings from './screens/PrivacySettings'
-import YourData from './screens/settings/YourData'
-import BlockingMuted from './screens/settings/BlockingMuted'
-import ContentAudience from './screens/settings/ContentAudience'
-import PendingTags from './screens/PendingTags'
-import Marketplace from './screens/Marketplace'
-import CreateGroup from './screens/CreateGroup'
-import GroupChat from './screens/GroupChat'
-import JoinGroup from './screens/JoinGroup'
-import EditGroup from './screens/EditGroup'
-import GroupMembers from './screens/GroupMembers'
-import AddGroupMembers from './screens/AddGroupMembers'
-import CreateListing from './screens/CreateListing'
-import Services from './screens/Services'
-import MyBookings from './screens/MyBookings'
-import BookService from './screens/BookService'
-import CreateService from './screens/CreateService'
-import ServiceDetail from './screens/ServiceDetail'
-import MyListings from './screens/MyListings'
-import EditListing from './screens/EditListing'
-import ListingDetail from './screens/ListingDetail'
-import ComingSoon from './screens/_ComingSoon'
-import Admin from './screens/Admin'
-import FacebookReward from './screens/FacebookReward'
-import AccountSecurity from './screens/AccountSecurity'
-import Account from './screens/settings/Account'
-import TermsPolicies from './screens/settings/TermsPolicies'
-import Invite from './screens/Invite'
-import Communities from './screens/Communities'
-import CreateCommunity from './screens/CreateCommunity'
-import CommunityView from './screens/CommunityView'
-import EditCommunity from './screens/EditCommunity'
-import JoinCommunity from './screens/JoinCommunity'
-import Notifications from './screens/Notifications'
-import CreatorMode from './screens/CreatorMode'
-import CreatorDashboardScreen from './screens/CreatorDashboardScreen'
+const Welcome = lazy(() => import('./screens/Welcome'));
+const SignUp = lazy(() => import('./screens/SignUp'));
+const SignIn = lazy(() => import('./screens/SignIn'));
+const ResetPassword = lazy(() => import('./screens/ResetPassword'));
+const Onboarding = lazy(() => import('./screens/Onboarding'));
+const OnboardingSuggestions = lazy(() => import('./screens/OnboardingSuggestions'));
+const Discover = lazy(() => import('./screens/Discover'));
+const Filters = lazy(() => import('./screens/Filters'));
+const Terms = lazy(() => import('./screens/Terms'));
+const About = lazy(() => import('./screens/About'));
+const Privacy = lazy(() => import('./screens/Privacy'));
+const Verify = lazy(() => import('./screens/Verify'));
+const VerifyIdentity = lazy(() => import('./screens/VerifyIdentity'));
+const Roadmap = lazy(() => import('./screens/Roadmap'));
+const Feed = lazy(() => import('./screens/Feed'));
+const PostDetail = lazy(() => import('./screens/PostDetail'));
+const Saved = lazy(() => import('./screens/Saved'));
+const EventDetail = lazy(() => import('./screens/EventDetail'));
+const CommunityRequests = lazy(() => import('./screens/CommunityRequests'));
+const StoryArchive = lazy(() => import('./screens/StoryArchive'));
+const Memories = lazy(() => import('./screens/Memories'));
+const Drafts = lazy(() => import('./screens/Drafts'));
+const MutedWords = lazy(() => import('./screens/MutedWords'));
+const MutedUsers = lazy(() => import('./screens/MutedUsers'));
+const InnerCircle = lazy(() => import('./screens/InnerCircle'));
+const Circles = lazy(() => import('./screens/Circles'));
+const CircleDetail = lazy(() => import('./screens/CircleDetail'));
+const OfflineReels = lazy(() => import('./screens/OfflineReels'));
+const NotificationSettings = lazy(() => import('./screens/NotificationSettings'));
+const Reels = lazy(() => import('./screens/Reels'));
+const FollowList = lazy(() => import('./screens/FollowList'));
+const Create = lazy(() => import('./screens/Create'));
+const Search = lazy(() => import('./screens/Search'));
+const HashtagPage = lazy(() => import('./screens/HashtagPage'));
+const Online = lazy(() => import('./screens/Online'));
+const AdminVerifications = lazy(() => import('./screens/AdminVerifications'));
+const Likes = lazy(() => import('./screens/Likes'));
+const Matches = lazy(() => import('./screens/Matches'));
+const Messages = lazy(() => import('./screens/Messages'));
+const MessagesSearch = lazy(() => import('./screens/MessagesSearch'));
+const MessagingSettings = lazy(() => import('./screens/MessagingSettings'));
+const ChatInfo = lazy(() => import('./screens/ChatInfo'));
+const ArchivedMessages = lazy(() => import('./screens/ArchivedMessages'));
+const MessageRequests = lazy(() => import('./screens/MessageRequests'));
+const Chat = lazy(() => import('./screens/Chat'));
+const SafetyCenter = lazy(() => import('./screens/SafetyCenter'));
+const BlockedList = lazy(() => import('./screens/BlockedList'));
+const ProfileView = lazy(() => import('./screens/ProfileView'));
+const EditProfile = lazy(() => import('./screens/EditProfile'));
+const Preview = lazy(() => import('./screens/Preview'));
+const ProfileSettings = lazy(() => import('./screens/ProfileSettings'));
+const Monetization = lazy(() => import('./screens/Monetization'));
+const PrivacySettings = lazy(() => import('./screens/PrivacySettings'));
+const YourData = lazy(() => import('./screens/settings/YourData'));
+const BlockingMuted = lazy(() => import('./screens/settings/BlockingMuted'));
+const ContentAudience = lazy(() => import('./screens/settings/ContentAudience'));
+const PendingTags = lazy(() => import('./screens/PendingTags'));
+const Marketplace = lazy(() => import('./screens/Marketplace'));
+const CreateGroup = lazy(() => import('./screens/CreateGroup'));
+const GroupChat = lazy(() => import('./screens/GroupChat'));
+const JoinGroup = lazy(() => import('./screens/JoinGroup'));
+const EditGroup = lazy(() => import('./screens/EditGroup'));
+const GroupMembers = lazy(() => import('./screens/GroupMembers'));
+const AddGroupMembers = lazy(() => import('./screens/AddGroupMembers'));
+const CreateListing = lazy(() => import('./screens/CreateListing'));
+const Services = lazy(() => import('./screens/Services'));
+const MyBookings = lazy(() => import('./screens/MyBookings'));
+const BookService = lazy(() => import('./screens/BookService'));
+const CreateService = lazy(() => import('./screens/CreateService'));
+const ServiceDetail = lazy(() => import('./screens/ServiceDetail'));
+const MyListings = lazy(() => import('./screens/MyListings'));
+const EditListing = lazy(() => import('./screens/EditListing'));
+const ListingDetail = lazy(() => import('./screens/ListingDetail'));
+const ComingSoon = lazy(() => import('./screens/_ComingSoon'));
+const Admin = lazy(() => import('./screens/Admin'));
+const FacebookReward = lazy(() => import('./screens/FacebookReward'));
+const AccountSecurity = lazy(() => import('./screens/AccountSecurity'));
+const Account = lazy(() => import('./screens/settings/Account'));
+const TermsPolicies = lazy(() => import('./screens/settings/TermsPolicies'));
+const Invite = lazy(() => import('./screens/Invite'));
+const Communities = lazy(() => import('./screens/Communities'));
+const CreateCommunity = lazy(() => import('./screens/CreateCommunity'));
+const CommunityView = lazy(() => import('./screens/CommunityView'));
+const EditCommunity = lazy(() => import('./screens/EditCommunity'));
+const JoinCommunity = lazy(() => import('./screens/JoinCommunity'));
+const Notifications = lazy(() => import('./screens/Notifications'));
+const CreatorMode = lazy(() => import('./screens/CreatorMode'));
+const CreatorDashboardScreen = lazy(() => import('./screens/CreatorDashboardScreen'));
 import DeleteAccountModal from './components/DeleteAccountModal'
 import CallOverlay from './components/CallOverlay'
 
