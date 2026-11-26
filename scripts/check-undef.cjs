@@ -18,7 +18,8 @@ for(const f of walk('src',[])){
   const body=src.replace(IMP,'').replace(/\/\*[\s\S]*?\*\//g,'').replace(/(^|\s)\/\/.*$/gm,'$1');
   for(const [id,re] of CHECKS){
     if(!re.test(body))continue;
-    const imported=new RegExp('import\\s+(?:[\\w$]+\\s*,\\s*)?(?:\\{[^}]*\\b'+id+'\\b[^}]*\\}|\\*\\s+as\\s+'+id+'\\b|'+id+'\\b)').test(imports);
+    const imported=new RegExp('import\\s+(?:[\\w$]+\\s*,\\s*)?(?:\\{[^}]*\\b'+id+'\\b[^}]*\\}|\\*\\s+as\\s+'+id+'\\b|'+id+'\\b)').test(imports) ||
+                    new RegExp('(?:\\{[^}]*\\b'+id+'\\b[^}]*\\}|\\*\\s+as\\s+'+id+'\\b)\\s*=\\s*await\\s+import\\s*\\(').test(src);
     const local=new RegExp('(?:const|let|var|function|class)\\s+'+id+'\\b').test(src);
     if(!imported&&!local){console.log('MISSING '+id+' in '+f);bad++;}
   }

@@ -9,6 +9,7 @@ import VerifiedBadge from "../components/VerifiedBadge"
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
+import { API_BASE_URL } from '../lib/api';
 
 const RECENT_KEY = "search_recent_v1"
 
@@ -57,7 +58,7 @@ export default function Search() {
     }
     setLoading(true)
     try {
-      const res = await fetch('/api/search?q=' + encodeURIComponent(term) + '&limit=60')
+      const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(term)}&limit=60`)
       const j = await res.json()
       if (!j.success) {
         setPeople([]); setPosts([]); setReels([])
@@ -109,7 +110,7 @@ export default function Search() {
   const loadSuggestions = useCallback(async () => {
     if (!myId || suggestionsLoaded) return
     try {
-      const res = await fetch('/api/search/suggestions')
+      const res = await fetch(`${API_BASE_URL}/api/search/suggestions`)
       const j = await res.json()
       if (!j.success) return
       const d = j.data || {}
