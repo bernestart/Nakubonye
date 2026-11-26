@@ -1,0 +1,1 @@
+-- (paste the migration SQL from Step 1 above)

@@ -2025,11 +2025,20 @@ export default {
         try {
           const body = await request.json();
           const content = String(body.content || "").trim();
-          if (!content) return new Response(JSON.stringify({ success: false, error: "content required" }), { status: 400, headers: cors });
+          const mediaUrl = body.media_url ? String(body.media_url) : null;
+          const mediaType = body.media_type ? String(body.media_type) : null;
+          if (!content && !mediaUrl) return new Response(JSON.stringify({ success: false, error: "content or media_url required" }), { status: 400, headers: cors });
           const sRes = await queryDatabase("SELECT id, user_id, media_url, media_type FROM stories WHERE id = $1::uuid AND expires_at > NOW()", [storyId]);
           if (!sRes.rows.length) return new Response(JSON.stringify({ success: false, error: "STORY_NOT_FOUND" }), { status: 404, headers: cors });
           const story = sRes.rows[0];
           if (story.user_id === myId) return new Response(JSON.stringify({ success: false, error: "CANNOT_REPLY_SELF" }), { status: 400, headers: cors });
+
+          try {
+            const gate = await queryDatabase("SELECT can_story_reply($1::uuid, $2::uuid) AS allowed", [myId, story.user_id]);
+            if (gate.rows[0] && gate.rows[0].allowed === false) {
+              return new Response(JSON.stringify({ success: false, error: "NOT_ALLOWED_TO_REPLY" }), { status: 403, headers: cors });
+            }
+          } catch (e) { /* allow on RPC error */ }
           const conv = await queryDatabase("SELECT id FROM conversations WHERE (initiator_id = $1::uuid AND recipient_id = $2::uuid) OR (initiator_id = $2::uuid AND recipient_id = $1::uuid) LIMIT 1", [myId, story.user_id]);
           let convId = conv.rows[0]?.id;
           if (!convId) {
@@ -2043,7 +2052,7 @@ export default {
           }
           const msg = await queryDatabase(
             "INSERT INTO messages (conversation_id, sender_id, content, media_url, media_type, metadata) VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6::jsonb) RETURNING *",
-            [convId, myId, content, story.media_url, story.media_type, JSON.stringify({ story_reply: { story_id: storyId, owner_id: story.user_id } })]
+            [convId, myId, content, mediaUrl || story.media_url, mediaType || story.media_type, JSON.stringify({ story_reply: { story_id: storyId, owner_id: story.user_id } })]
           );
           try {
             const id = env.CHAT_ROOMS.idFromName("dm-" + convId);
@@ -2053,6 +2062,185 @@ export default {
           return new Response(JSON.stringify({ success: true, data: { message: msg.rows[0], conversation_id: convId } }), { headers: { ...cors, "Content-Type": "application/json" } });
         } catch (err) {
           console.error("[STORIES/REPLY]", err.message);
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+      // T2: viewer privacy check (port of can_story_reply)
+      if (/^\/api\/stories\/can-reply\/[0-9a-f-]{36}$/.test(path) && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const myId = String(me.id);
+        const recipientId = path.split("/")[4];
+        try {
+          const r = await queryDatabase("SELECT can_story_reply($1::uuid, $2::uuid) AS allowed", [myId, recipientId]);
+          const allowed = r.rows[0]?.allowed;
+          return new Response(JSON.stringify({ success: true, data: { allowed: allowed !== false } }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (e) {
+          return new Response(JSON.stringify({ success: true, data: { allowed: true } }), { headers: { ...cors, "Content-Type": "application/json" } });
+        }
+      }
+      // T2: viewer list (owner only) — single query with joined profiles + photos
+      if (/^\/api\/stories\/[0-9a-f-]{36}\/viewers$/.test(path) && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const myId = String(me.id);
+        const storyId = path.split("/")[3];
+        try {
+          const own = await queryDatabase("SELECT user_id FROM stories WHERE id = $1::uuid", [storyId]);
+          if (!own.rows.length || own.rows[0].user_id !== myId) return new Response(JSON.stringify({ success: false, error: "FORBIDDEN" }), { status: 403, headers: cors });
+          const r = await queryDatabase(
+            "SELECT sv.user_id, sv.viewed_at, p.display_name, p.username, (SELECT storage_path FROM profile_photos pp WHERE pp.user_id = sv.user_id ORDER BY is_primary DESC, display_order ASC LIMIT 1) AS avatar_path FROM story_views sv LEFT JOIN profiles p ON p.id = sv.user_id WHERE sv.story_id = $1::uuid ORDER BY sv.viewed_at DESC LIMIT 100",
+            [storyId]
+          );
+          return new Response(JSON.stringify({ success: true, data: r.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+      // T2: list highlights for a user
+      if (/^\/api\/stories\/highlights\/[0-9a-f-]{36}$/.test(path) && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const userId = path.split("/")[4];
+        try {
+          const r = await queryDatabase("SELECT id, user_id, title, cover_story_id, created_at FROM story_highlights WHERE user_id = $1::uuid ORDER BY created_at DESC", [userId]);
+          return new Response(JSON.stringify({ success: true, data: r.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+      // T2: create a highlight
+      if (path === "/api/stories/highlights" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const myId = String(me.id);
+        try {
+          const body = await request.json();
+          const title = String(body.title || "").trim().slice(0, 40);
+          if (!title) return new Response(JSON.stringify({ success: false, error: "title required" }), { status: 400, headers: cors });
+          const r = await queryDatabase("INSERT INTO story_highlights (user_id, title, cover_story_id) VALUES ($1::uuid, $2, $3) RETURNING id, user_id, title, cover_story_id, created_at", [myId, title, body.cover_story_id || null]);
+          return new Response(JSON.stringify({ success: true, data: r.rows[0] }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+      // T2: add a story to a highlight (idempotent)
+      if (/^\/api\/stories\/highlights\/[0-9a-f-]{36}\/items$/.test(path) && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const myId = String(me.id);
+        const highlightId = path.split("/")[4];
+        try {
+          const body = await request.json();
+          if (!body.story_id) return new Response(JSON.stringify({ success: false, error: "story_id required" }), { status: 400, headers: cors });
+          const own = await queryDatabase("SELECT user_id FROM story_highlights WHERE id = $1::uuid", [highlightId]);
+          if (!own.rows.length || own.rows[0].user_id !== myId) return new Response(JSON.stringify({ success: false, error: "FORBIDDEN" }), { status: 403, headers: cors });
+          await queryDatabase("INSERT INTO story_highlight_items (highlight_id, story_id, display_order) VALUES ($1::uuid, $2::uuid, COALESCE((SELECT MAX(display_order)+1 FROM story_highlight_items WHERE highlight_id = $1::uuid), 0)) ON CONFLICT (highlight_id, story_id) DO NOTHING", [highlightId, body.story_id]);
+          return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+      // T2: Discover — server-side filtered feed (Redis 60s cache)
+      if (path === "/api/discover/profiles" && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const myId = String(me.id);
+        const limit = Math.min(parseInt(url.searchParams.get("limit") || "20", 10), 50);
+        const flags = ["sameCity","sharedInterests","sameCountry","verifiedOnly","onlineOnly"].map(k => url.searchParams.get(k) === "1");
+        const communityId = url.searchParams.get("communityId");
+        try {
+          const cacheKey = "discover:profiles:" + myId + ":" + limit + ":" + flags.join(",") + ":" + (communityId || "");
+          try {
+            const cached = await redisCommand(["GET", cacheKey]);
+            if (cached && cached.result) return new Response(cached.result, { headers: { ...cors, "Content-Type": "application/json", "X-Cache": "HIT" } });
+          } catch {}
+          const r = await queryDatabase(
+            "SELECT * FROM get_discover_profiles($1::uuid, $2::int, $3::boolean, $4::boolean, $5::boolean, $6::boolean, $7::boolean, $8::bigint)",
+            [myId, limit, flags[0], flags[1], flags[2], flags[3], flags[4], communityId ? Number(communityId) : null]
+          );
+          const rows = r.rows || [];
+          const ids = rows.map(x => x.id);
+          let storySet = new Set();
+          if (ids.length) {
+            const sRes = await queryDatabase(
+              "SELECT DISTINCT user_id FROM stories WHERE expires_at > NOW() AND user_id = ANY($1::uuid[])",
+              [ids]
+            ).catch(() => ({ rows: [] }));
+            storySet = new Set((sRes.rows || []).map(x => String(x.user_id)));
+          }
+          const data = rows.map(x => {
+            let age = null;
+            if (x.date_of_birth) {
+              const dob = new Date(x.date_of_birth);
+              const diff = Date.now() - dob.getTime();
+              age = Math.floor(diff / (365.25 * 24 * 3600 * 1000));
+            }
+            return {
+              id: x.id, display_name: x.display_name, username: x.username,
+              age, date_of_birth: x.date_of_birth, city: x.city, country: x.country,
+              bio: x.bio, is_verified: !!x.is_verified,
+              primary_photo: x.primary_photo, last_seen_at: x.last_seen_at,
+              is_boosted: !!x.is_boosted, hasStory: storySet.has(String(x.id)),
+              _canSeeLocation: true, _canSeeOnline: true,
+            };
+          });
+          const payload = JSON.stringify({ success: true, data });
+          try { await redisCommand(["SETEX", cacheKey, 60, payload]); } catch {}
+          return new Response(payload, { headers: { ...cors, "Content-Type": "application/json", "X-Cache": "MISS" } });
+        } catch (err) {
+          console.error("[DISCOVER/PROFILES]", err.message);
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+      // T2: Discover swipe — records swipe + calls like_user/decline_like + returns match card
+      if (path === "/api/discover/swipe" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const myId = String(me.id);
+        try {
+          const body = await request.json();
+          const targetId = String(body.targetId || "");
+          const action = String(body.action || "");
+          if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId)) return new Response(JSON.stringify({ success: false, error: "BAD_TARGET" }), { status: 400, headers: cors });
+          if (myId === targetId) return new Response(JSON.stringify({ success: false, error: "SELF_ACTION" }), { status: 400, headers: cors });
+          if (!["like","pass"].includes(action)) return new Response(JSON.stringify({ success: false, error: "BAD_ACTION" }), { status: 400, headers: cors });
+          await queryDatabase(
+            "INSERT INTO swipes (swiper_id, target_id, action) VALUES ($1::uuid, $2::uuid, $3) ON CONFLICT (swiper_id, target_id) DO UPDATE SET action = EXCLUDED.action",
+            [myId, targetId, action]
+          );
+          try { await redisCommand(["DEL", "discover:profiles:" + myId + ":20:false,false,false,false,false:"]); } catch {}
+          if (action === "like") {
+            const lr = await queryDatabase("SELECT like_user($1::uuid, $2::uuid) AS result", [myId, targetId]);
+            const result = lr.rows[0]?.result || {};
+            let match_card = null;
+            if (result && result.matched) {
+              const cr = await queryDatabase(
+                "SELECT p.id, p.display_name, p.username, p.is_verified, p.last_seen_at, (SELECT storage_path FROM profile_photos WHERE user_id = p.id ORDER BY is_primary DESC, display_order ASC LIMIT 1) AS primary_photo FROM profiles p WHERE p.id = $1::uuid",
+                [targetId]
+              );
+              match_card = cr.rows[0] || null;
+            }
+            return new Response(JSON.stringify({ success: true, data: { ...result, match_card } }), { headers: { ...cors, "Content-Type": "application/json" } });
+          }
+          await queryDatabase("SELECT decline_like($1::uuid, $2::uuid)", [myId, targetId]).catch(() => {});
+          return new Response(JSON.stringify({ success: true, data: { matched: false } }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          console.error("[DISCOVER/SWIPE]", err.message);
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+      // T2: Undo swipe
+      if (/^\/api\/discover\/swipe\/[0-9a-f-]{36}$/.test(path) && request.method === "DELETE") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const myId = String(me.id);
+        const targetId = path.split("/")[4];
+        try {
+          await queryDatabase("DELETE FROM swipes WHERE swiper_id = $1::uuid AND target_id = $2::uuid", [myId, targetId]);
+          try { await redisCommand(["DEL", "discover:profiles:" + myId + ":20:false,false,false,false,false:"]); } catch {}
+          return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
           return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
         }
       }

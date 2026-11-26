@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { motion, useMotionValue, useTransform } from 'framer-motion'
 import { X, Heart, MapPin, Check, Undo2, MessageCircle, SlidersHorizontal } from 'lucide-react'
 import { friendlyError } from '../lib/errors'
-import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { isOnline } from '../lib/usePresence'
 import { publicPhotoUrl, calcAge } from '../lib/photo'
@@ -16,78 +15,9 @@ import NotificationBell from '../components/NotificationBell'
 
 const SWIPE_THRESHOLD = 130
 
-async function decorateLocationVisibility(cards, myId) {
-  if (!cards.length || !myId) return cards
-  const ids = cards.map((c) => c.id).filter((id) => id !== myId)
-  if (!ids.length) return cards
-  const [settingsRes, blocksRes, matchesRes] = await Promise.all([
-    supabase.from('user_settings').select('user_id, who_can_see_location, show_location_on_profile').in('user_id', ids),
-    supabase.from('blocks').select('blocker_id, blocked_id').or(`blocker_id.eq.${myId},blocked_id.eq.${myId}`),
-    supabase.from('matches').select('user_one_id, user_two_id').or(`user_one_id.eq.${myId},user_two_id.eq.${myId}`),
-  ])
-  const sMap = new Map((settingsRes.data || []).map((r) => [r.user_id, r]))
-  const blockSet = new Set()
-  ;(blocksRes.data || []).forEach((b) => {
-    if (b.blocker_id === myId) blockSet.add(b.blocked_id)
-    if (b.blocked_id === myId) blockSet.add(b.blocker_id)
-  })
-  const matchSet = new Set()
-  ;(matchesRes.data || []).forEach((m) => {
-    if (m.user_one_id === myId) matchSet.add(m.user_two_id)
-    if (m.user_two_id === myId) matchSet.add(m.user_one_id)
-  })
 
-  return cards.map((c) => {
-    if (c.id === myId) return { ...c, _canSeeLocation: true }
-    if (blockSet.has(c.id)) return { ...c, _canSeeLocation: false }
-    const row = sMap.get(c.id)
-    if (!row) return { ...c, _canSeeLocation: true }
-    if (row.show_location_on_profile === false) return { ...c, _canSeeLocation: false }
-    const v = row.who_can_see_location || 'matches'
-    if (v === 'nobody') return { ...c, _canSeeLocation: false }
-    if (v === 'everyone') return { ...c, _canSeeLocation: true }
-    if (v === 'matches') return { ...c, _canSeeLocation: matchSet.has(c.id) }
-    return { ...c, _canSeeLocation: true }
-  })
-}
 
-async function decorateOnlineVisibility(cards, myId) {
-  if (!cards.length || !myId) return cards
-  const ownerIds = cards.map((c) => c.id).filter((id) => id !== myId)
-  if (!ownerIds.length) return cards
-  const [settingsRes, blocksRes, matchesRes, followsRes] = await Promise.all([
-    supabase.from('user_settings').select('user_id, who_can_see_online, show_activity_status').in('user_id', ownerIds),
-    supabase.from('blocks').select('blocker_id, blocked_id').or(`blocker_id.eq.${myId},blocked_id.eq.${myId}`),
-    supabase.from('matches').select('user_one_id, user_two_id').or(`user_one_id.eq.${myId},user_two_id.eq.${myId}`),
-    supabase.from('follows').select('following_id').eq('follower_id', myId),
-  ])
-  const sMap = new Map((settingsRes.data || []).map((r) => [r.user_id, r]))
-  const blockSet = new Set()
-  ;(blocksRes.data || []).forEach((b) => {
-    if (b.blocker_id === myId) blockSet.add(b.blocked_id)
-    if (b.blocked_id === myId) blockSet.add(b.blocker_id)
-  })
-  const matchSet = new Set()
-  ;(matchesRes.data || []).forEach((m) => {
-    if (m.user_one_id === myId) matchSet.add(m.user_two_id)
-    if (m.user_two_id === myId) matchSet.add(m.user_one_id)
-  })
-  const followSet = new Set((followsRes.data || []).map((f) => f.following_id))
 
-  return cards.map((c) => {
-    if (c.id === myId) return { ...c, _canSeeOnline: true }
-    if (blockSet.has(c.id)) return { ...c, _canSeeOnline: false }
-    const row = sMap.get(c.id)
-    if (!row) return { ...c, _canSeeOnline: true }
-    if (row.show_activity_status === false) return { ...c, _canSeeOnline: false }
-    const v = row.who_can_see_online || 'everyone'
-    if (v === 'nobody') return { ...c, _canSeeOnline: false }
-    if (v === 'everyone') return { ...c, _canSeeOnline: true }
-    if (v === 'matches') return { ...c, _canSeeOnline: matchSet.has(c.id) }
-    if (v === 'following') return { ...c, _canSeeOnline: followSet.has(c.id) }
-    return { ...c, _canSeeOnline: true }
-  })
-}
 
 export default function Discover() {
   const nav = useNavigate()
@@ -124,91 +54,32 @@ export default function Discover() {
   const load = useCallback(async () => {
     if (!session?.user?.id) return
     setLoading(true); setError('')
-    const { data, error: rpcError } = await supabase.rpc('get_discover_profiles', {
-      p_limit: 20,
-      p_same_city: sameCity,
-      p_shared_interests: sharedInterests,
-      p_same_country: sameCountry,
-      p_verified_only: verifiedOnly,
-      p_online_only: onlineOnly,
-      p_community_id: communityId ? Number(communityId) : null,
-    })
-    if (rpcError) { setError(friendlyError(rpcError)); setLoading(false); return }
-
-    const list = (data || []).map((r) => ({
-      id: r.id,
-      display_name: r.display_name,
-      username: r.username,
-      age: r.age ?? calcAge(r.date_of_birth),
-      city: r.city,
-      country: r.country,
-      bio: r.bio,
-      is_verified: r.is_verified,
-      photo_url: publicPhotoUrl(r.primary_photo),
-      last_seen_at: r.last_seen_at || null,
-      is_boosted: !!r.is_boosted,
-      hasStory: false,
-    }))
-
-    // Attach hasStory flag from active stories
-    const ids = list.map((c) => c.id).filter(Boolean)
-    if (ids.length > 0) {
-      const { data: storyRows } = await supabase
-        .from("stories")
-        .select("user_id")
-        .gt("expires_at", new Date().toISOString())
-        .in("user_id", ids)
-      const storySet = new Set((storyRows || []).map((r) => r.user_id))
-      list.forEach((c) => { c.hasStory = storySet.has(c.id) })
+    try {
+      const qs = new URLSearchParams({ limit: '20' })
+      if (sameCity) qs.set('sameCity', '1')
+      if (sharedInterests) qs.set('sharedInterests', '1')
+      if (sameCountry) qs.set('sameCountry', '1')
+      if (verifiedOnly) qs.set('verifiedOnly', '1')
+      if (onlineOnly) qs.set('onlineOnly', '1')
+      if (communityId) qs.set('communityId', communityId)
+      const res = await fetch('/api/discover/profiles?' + qs.toString())
+      const j = await res.json()
+      if (!j.success) { setError(j.error || 'Failed to load'); setLoading(false); return }
+      const list = (j.data || []).map((r) => ({
+        ...r,
+        photo_url: r.primary_photo ? publicPhotoUrl(r.primary_photo) : null,
+      }))
+      setCards(list)
+    } catch (e) {
+      setError(e.message || 'Network error')
     }
-
-    const onlineDecorated = await decorateOnlineVisibility(list, session?.user?.id)
-    setCards(await decorateLocationVisibility(onlineDecorated, session?.user?.id))
     setLoading(false)
   }, [session?.user?.id, sameCity, sharedInterests, sameCountry, verifiedOnly, onlineOnly, communityId])
 
   useEffect(() => { load() }, [load])
 
-  // Realtime: celebrate any new match involving me — swipe, DM-reply, or anything else.
-  const celebratedRef = useRef(new Set())
-  useEffect(() => {
-    const myId = session?.user?.id
-    if (!myId) return
-    const ch = supabase
-      .channel("match-celebration-" + myId)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "matches" },
-        async (payload) => {
-          const m = payload.new
-          if (!m) return
-          if (m.user_one_id !== myId && m.user_two_id !== myId) return
-          const otherId = m.user_one_id === myId ? m.user_two_id : m.user_one_id
-          // skip if we already celebrated this user very recently (swipe path fires first)
-          if (celebratedRef.current.has(otherId)) return
-          celebratedRef.current.add(otherId)
-          setTimeout(() => celebratedRef.current.delete(otherId), 5000)
-          const { data: card } = await supabase
-            .from("profiles")
-            .select("id, display_name, username, photo_url, photos, is_verified, city, country")
-            .eq("id", otherId)
-            .maybeSingle()
-          if (!card) return
-          tap("match")
-          setMatchModal(card)
-        }
-      )
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
-  }, [session?.user?.id])
 
-  async function recordSwipe(targetId, action) {
-    if (!session?.user?.id) return
-    await supabase.from('swipes').upsert(
-      { swiper_id: session.user.id, target_id: targetId, action },
-      { onConflict: 'swiper_id,target_id', ignoreDuplicates: true }
-    )
-  }
+  async function recordSwipe() { /* handled server-side in /api/discover/swipe */ }
 
   async function handlePass() {
     if (busy) return
@@ -216,7 +87,13 @@ export default function Discover() {
     tap('light'); setBusy(true)
     setCards((c) => c.slice(1))
     setUndoStack((s) => [...s, { card, action: 'pass' }])
-    await recordSwipe(card.id, 'pass')
+    try {
+      await fetch('/api/discover/swipe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetId: card.id, action: 'pass' }),
+      })
+    } catch {}
     setBusy(false)
   }
 
@@ -226,21 +103,39 @@ export default function Discover() {
     tap('medium'); setBusy(true)
     setCards((c) => c.slice(1))
     setUndoStack((s) => [...s, { card, action: 'like' }])
-
-    const { data, error: likeErr } = await supabase.rpc('like_user', {
-      target_user_id: card.id,
-    })
-    if (likeErr) { setError(likeErr.message); setBusy(false); setCards((c) => [card, ...c]); setUndoStack((st) => st.slice(0, -1)); return }
-    if (data?.denied) {
-      // User not accepting requests — put card back silently
+    try {
+      const res = await fetch('/api/discover/swipe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetId: card.id, action: 'like' }),
+      })
+      const j = await res.json()
+      if (!j.success) {
+        setError(j.error || 'Swipe failed')
+        setCards((c) => [card, ...c])
+        setUndoStack((st) => st.slice(0, -1))
+        setBusy(false)
+        return
+      }
+      if (j.data?.denied) {
+        setCards((c) => [card, ...c])
+        setUndoStack((st) => st.slice(0, -1))
+        setError(j.data.reason || "This user isn't accepting new requests")
+        setBusy(false)
+        return
+      }
+      if (j.data?.matched && j.data.match_card) {
+        tap('match')
+        setMatchModal({
+          ...j.data.match_card,
+          photo_url: publicPhotoUrl(j.data.match_card.primary_photo),
+        })
+      }
+    } catch (e) {
+      setError(e.message || 'Network error')
       setCards((c) => [card, ...c])
       setUndoStack((st) => st.slice(0, -1))
-      setError(data.reason || "This user isn't accepting new requests")
-      setBusy(false)
-      return
     }
-    await recordSwipe(card.id, 'like')
-    if (data?.matched) { tap('match'); setMatchModal(card) }
     setBusy(false)
   }
 
@@ -251,8 +146,9 @@ export default function Discover() {
     tap('light'); setBusy(true)
     setUndoStack((s) => s.slice(0, -1))
     setCards((c) => [top.card, ...c])
-    await supabase.from('swipes').delete()
-      .eq('swiper_id', session.user.id).eq('target_id', top.card.id)
+    try {
+      await fetch('/api/discover/swipe/' + top.card.id, { method: 'DELETE' })
+    } catch {}
     setBusy(false)
   }
 
