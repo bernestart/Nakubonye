@@ -2274,6 +2274,65 @@ export default {
           return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
         }
       }
+      // T2: Matches aggregate — 4 queries + 1 mutual-count + Redis 30s cache
+      if (path === "/api/matches/data" && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const myId = String(me.id);
+        const markSeen = url.searchParams.get("markSeen") === "1";
+        try {
+          const cacheKey = "matches:data:" + myId;
+          try {
+            const cached = await redisCommand(["GET", cacheKey]);
+            if (cached && cached.result) return new Response(cached.result, { headers: { ...cors, "Content-Type": "application/json", "X-Cache": "HIT" } });
+          } catch {}
+          const calcAge = (dob) => dob ? Math.floor((Date.now() - new Date(dob).getTime()) / (365.25 * 24 * 3600 * 1000)) : null;
+          const [matchesRes, likesRes, sentRes, suggestedRes] = await Promise.all([
+            queryDatabase("SELECT m.id AS match_id, m.created_at AS matched_at, CASE WHEN m.user_one_id = $1::uuid THEN m.user_two_id ELSE m.user_one_id END AS user_id, p.display_name, p.username, p.is_verified, (to_jsonb(p)->>'city') AS city, (to_jsonb(p)->>'country') AS country, (to_jsonb(p)->>'date_of_birth')::date AS date_of_birth, (SELECT storage_path FROM profile_photos pp WHERE pp.user_id = p.id ORDER BY is_primary DESC, display_order ASC LIMIT 1) AS photo_path FROM matches m JOIN profiles p ON p.id = (CASE WHEN m.user_one_id = $1::uuid THEN m.user_two_id ELSE m.user_one_id END) WHERE m.user_one_id = $1::uuid OR m.user_two_id = $1::uuid ORDER BY m.created_at DESC LIMIT 100", [myId]),
+            queryDatabase("SELECT l.user_id AS liker_id, l.created_at AS liked_at, p.display_name, p.username, p.is_verified, (to_jsonb(p)->>'city') AS city, (to_jsonb(p)->>'country') AS country, (to_jsonb(p)->>'date_of_birth')::date AS date_of_birth, (SELECT storage_path FROM profile_photos pp WHERE pp.user_id = p.id ORDER BY is_primary DESC, display_order ASC LIMIT 1) AS photo_path FROM likes l JOIN profiles p ON p.id = l.user_id WHERE l.liked_user_id = $1::uuid AND NOT EXISTS (SELECT 1 FROM matches m WHERE (m.user_one_id = $1::uuid AND m.user_two_id = l.user_id) OR (m.user_two_id = $1::uuid AND m.user_one_id = l.user_id)) ORDER BY l.created_at DESC LIMIT 60", [myId]),
+            queryDatabase("SELECT l.liked_user_id AS target_id, l.created_at AS sent_at, p.display_name, p.username, p.is_verified, (to_jsonb(p)->>'city') AS city, (to_jsonb(p)->>'country') AS country, (to_jsonb(p)->>'date_of_birth')::date AS date_of_birth, (SELECT storage_path FROM profile_photos pp WHERE pp.user_id = p.id ORDER BY is_primary DESC, display_order ASC LIMIT 1) AS photo_path FROM likes l JOIN profiles p ON p.id = l.liked_user_id WHERE l.user_id = $1::uuid AND NOT EXISTS (SELECT 1 FROM matches m WHERE (m.user_one_id = $1::uuid AND m.user_two_id = l.liked_user_id) OR (m.user_two_id = $1::uuid AND m.user_one_id = l.liked_user_id)) ORDER BY l.created_at DESC LIMIT 60", [myId]),
+            queryDatabase("SELECT p.id AS user_id, p.display_name, p.username, p.is_verified, (to_jsonb(p)->>'city') AS city, (SELECT COUNT(DISTINCT f2.follower_id) FROM follows f1 JOIN follows f2 ON f1.follower_id = f2.following_id WHERE f1.following_id = p.id AND f2.follower_id = $1::uuid) AS mutual_count, (SELECT storage_path FROM profile_photos pp WHERE pp.user_id = p.id ORDER BY is_primary DESC, display_order ASC LIMIT 1) AS photo_path FROM profiles p WHERE p.id <> $1::uuid AND p.id NOT IN (SELECT liked_user_id FROM likes WHERE user_id = $1::uuid) AND p.id NOT IN (SELECT target_id FROM swipes WHERE swiper_id = $1::uuid) AND p.id NOT IN (SELECT user_id FROM likes WHERE liked_user_id = $1::uuid) AND NOT EXISTS (SELECT 1 FROM matches m WHERE (m.user_one_id = $1::uuid AND m.user_two_id = p.id) OR (m.user_two_id = $1::uuid AND m.user_one_id = p.id)) AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $1::uuid AND b.blocked_id = p.id) OR (b.blocker_id = p.id AND b.blocked_id = $1::uuid)) ORDER BY mutual_count DESC NULLS LAST, p.last_seen_at DESC NULLS LAST LIMIT 40", [myId]).catch(() => ({ rows: [] })),
+          ]);
+          const matches = (matchesRes.rows || []).map(r => ({ match_id: r.match_id, user_id: r.user_id, display_name: r.display_name, username: r.username, is_verified: !!r.is_verified, city: r.city, country: r.country, age: calcAge(r.date_of_birth), photo_url: r.photo_path || null, matched_at: r.matched_at }));
+          const likes = (likesRes.rows || []).map(r => ({ user_id: r.liker_id, display_name: r.display_name, username: r.username, is_verified: !!r.is_verified, city: r.city, country: r.country, age: calcAge(r.date_of_birth), photo_url: r.photo_path || null, liked_at: r.liked_at }));
+          const sent = (sentRes.rows || []).map(r => ({ user_id: r.target_id, display_name: r.display_name, username: r.username, is_verified: !!r.is_verified, city: r.city, country: r.country, age: calcAge(r.date_of_birth), photo_url: r.photo_path || null, sent_at: r.sent_at }));
+          const suggested = (suggestedRes.rows || []).map(r => ({ user_id: r.user_id, display_name: r.display_name, username: r.username, is_verified: !!r.is_verified, city: r.city, mutuals: Number(r.mutual_count) || 0, photo_url: r.photo_path || null }));
+          const mutuals = {};
+          const allIds = [...new Set([...likes.map(x => String(x.user_id)), ...sent.map(x => String(x.user_id))])];
+          if (allIds.length) {
+            const myFollowsRes = await queryDatabase("SELECT following_id FROM follows WHERE follower_id = $1::uuid LIMIT 500", [myId]).catch(() => ({ rows: [] }));
+            const mySet = (myFollowsRes.rows || []).map(r => String(r.following_id));
+            if (mySet.length) {
+              const mr = await queryDatabase("SELECT following_id, COUNT(*) AS c FROM follows WHERE following_id = ANY($1::uuid[]) AND follower_id = ANY($2::uuid[]) GROUP BY following_id", [allIds, mySet]).catch(() => ({ rows: [] }));
+              for (const r of (mr.rows || [])) mutuals[String(r.following_id)] = Number(r.c);
+            }
+          }
+          if (markSeen) {
+            await queryDatabase("UPDATE matches SET seen_at = NOW() WHERE (user_one_id = $1::uuid OR user_two_id = $1::uuid) AND seen_at IS NULL", [myId]).catch(() => {});
+          }
+          const payload = JSON.stringify({ success: true, data: { matches, likes, sent, suggested, mutuals } });
+          try { await redisCommand(["SETEX", cacheKey, 30, payload]); } catch {}
+          return new Response(payload, { headers: { ...cors, "Content-Type": "application/json", "X-Cache": "MISS" } });
+        } catch (err) {
+          console.error("[MATCHES/DATA]", err.message);
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+      // T2: Cancel a sent like
+      if (/^\/api\/matches\/like\/[0-9a-f-]{36}$/.test(path) && request.method === "DELETE") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const myId = String(me.id);
+        const targetId = path.split("/")[4];
+        try {
+          await queryDatabase("DELETE FROM likes WHERE user_id = $1::uuid AND liked_user_id = $2::uuid", [myId, targetId]).catch(() => {});
+          await queryDatabase("DELETE FROM swipes WHERE swiper_id = $1::uuid AND target_id = $2::uuid AND action = 'like'", [myId, targetId]).catch(() => {});
+          try { await redisCommand(["DEL", "matches:data:" + myId]); } catch {}
+          return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
       if (/^\/api\/stories\/[0-9a-f-]{36}$/.test(path) && request.method === "DELETE") {
         const me = await getSessionUser(request, env, url);
         if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });

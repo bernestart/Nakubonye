@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Heart, RefreshCw, MapPin, MessageCircle, Check, X, MoreHorizontal } from 'lucide-react'
 import { friendlyError } from '../lib/errors'
-import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl, calcAge } from '../lib/photo'
 import { tap } from '../lib/haptic'
@@ -40,247 +39,81 @@ export default function Matches() {
   const load = useCallback(async () => {
     if (!session?.user?.id) return
     setLoading(true); setError('')
-    const userId = session.user.id
-
-    const { data: rows, error: matchErr } = await supabase
-      .from('matches')
-      .select('id, user_one_id, user_two_id, created_at')
-      .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`)
-      .order('created_at', { ascending: false })
-
-    if (matchErr) { setError(friendlyError(matchErr)); setLoading(false); return }
-
-    const list = rows || []
-    const otherIds = list.map((m) => m.user_one_id === userId ? m.user_two_id : m.user_one_id)
-    const matchOtherSet = new Set(otherIds)
-
-    let profMap = new Map()
-    let photoMap = new Map()
-    if (otherIds.length) {
-      const { data: profs } = await supabase
-        .from('profiles')
-        .select('id, display_name, username, date_of_birth, city, country, is_verified')
-        .in('id', otherIds)
-
-      const { data: photos } = await supabase
-        .from('profile_photos')
-        .select('user_id, storage_path, is_primary, display_order')
-        .in('user_id', otherIds)
-        .order('is_primary', { ascending: false })
-        .order('display_order', { ascending: true })
-
-      ;(photos || []).forEach((ph) => { if (!photoMap.has(ph.user_id)) photoMap.set(ph.user_id, ph.storage_path) })
-      profMap = new Map((profs || []).map((p) => [p.id, p]))
+    try {
+      const res = await fetch('/api/matches/data?markSeen=1')
+      const j = await res.json()
+      if (!j.success) { setError(j.error || 'Failed to load'); setLoading(false); return }
+      const d = j.data || {}
+      setMatches((d.matches || []).map(x => ({ ...x, photo_url: x.photo_url ? publicPhotoUrl(x.photo_url) : null })))
+      setLikes((d.likes || []).map(x => ({ ...x, photo_url: x.photo_url ? publicPhotoUrl(x.photo_url) : null })))
+      setSentLikes((d.sent || []).map(x => ({ ...x, photo_url: x.photo_url ? publicPhotoUrl(x.photo_url) : null })))
+      setSuggested((d.suggested || []).map(x => ({ ...x, photo_url: x.photo_url ? publicPhotoUrl(x.photo_url) : null })))
+      setMutuals(d.mutuals || {})
+    } catch (e) {
+      setError(e.message || 'Network error')
     }
-
-    setMatches(list.map((m) => {
-      const otherId = m.user_one_id === userId ? m.user_two_id : m.user_one_id
-      const p = profMap.get(otherId)
-      if (!p) return null
-      return {
-        match_id: m.id,
-        user_id: p.id,
-        display_name: p.display_name,
-        username: p.username,
-        age: calcAge(p.date_of_birth),
-        city: p.city,
-        country: p.country,
-        is_verified: p.is_verified,
-        photo_url: publicPhotoUrl(photoMap.get(p.id)),
-        matched_at: m.created_at,
-      }
-    }).filter(Boolean))
-
-    const { data: likesData } = await supabase.rpc('get_likes_received', { p_limit: 60 })
-    setLikes((likesData || []).filter((r) => !matchOtherSet.has(r.id)).map((r) => ({
-      user_id: r.id,
-      display_name: r.display_name,
-      username: r.username,
-      is_verified: r.is_verified,
-      photo_url: publicPhotoUrl(r.primary_photo),
-      city: r.city,
-      country: r.country,
-      age: r.age ?? calcAge(r.date_of_birth),
-      liked_at: r.liked_at,
-    })))
-
-    const { data: sentRows } = await supabase
-      .from('likes')
-      .select('liked_user_id, created_at')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(60)
-
-    let sentList = []
-    if (sentRows?.length) {
-      const sentIds = sentRows.map((r) => r.liked_user_id)
-      const { data: sentProfs } = await supabase
-        .from('profiles')
-        .select('id, display_name, username, is_verified, city, country, date_of_birth')
-        .in('id', sentIds)
-
-      const { data: sentPhotos } = await supabase
-        .from('profile_photos')
-        .select('user_id, storage_path, is_primary, display_order')
-        .in('user_id', sentIds)
-        .order('is_primary', { ascending: false })
-        .order('display_order', { ascending: true })
-
-      const spMap = new Map()
-      ;(sentPhotos || []).forEach((ph) => { if (!spMap.has(ph.user_id)) spMap.set(ph.user_id, ph.storage_path) })
-      const sprofMap = new Map((sentProfs || []).map((p) => [p.id, p]))
-
-      sentList = sentRows.filter((r) => !matchOtherSet.has(r.liked_user_id)).map((r) => {
-        const p2 = sprofMap.get(r.liked_user_id)
-        if (!p2) return null
-        return {
-          user_id: p2.id,
-          display_name: p2.display_name,
-          username: p2.username,
-          is_verified: p2.is_verified,
-          photo_url: publicPhotoUrl(spMap.get(p2.id)),
-          city: p2.city,
-          country: p2.country,
-          age: p2.date_of_birth ? calcAge(p2.date_of_birth) : null,
-          sent_at: r.created_at,
-        }
-      }).filter(Boolean)
-    }
-    setSentLikes(sentList)
     setLoading(false)
   }, [session?.user?.id])
 
   useEffect(() => { load() }, [load])
 
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      const { data, error } = await supabase.rpc('get_suggested_people', { p_limit: 40 })
-      if (cancelled || error) return
-      const rows = data || []
-      if (rows.length === 0) { setSuggested([]); return }
-      const ids = rows.map(r => r.id)
-      const { data: ph } = await supabase
-        .from('profile_photos')
-        .select('user_id, storage_path, is_primary, display_order')
-        .in('user_id', ids)
-        .order('is_primary', { ascending: false })
-        .order('display_order', { ascending: true })
-      if (cancelled) return
-      const pm = new Map()
-      ;(ph || []).forEach(x => { if (!pm.has(x.user_id)) pm.set(x.user_id, x.storage_path) })
-      setSuggested(rows.map(r => ({
-        user_id: r.id,
-        display_name: r.display_name,
-        username: r.username,
-        is_verified: r.is_verified,
-        city: r.city,
-        mutuals: r.mutual_count,
-        photo_url: pm.get(r.id) ? publicPhotoUrl(pm.get(r.id)) : null,
-      })))
-    })()
-    return () => { cancelled = true }
-  }, [])
-
-  useEffect(() => {
-    const userId = session?.user?.id
-    if (!userId) return
-    const ids = [...new Set([...likes.map(l => l.user_id), ...sentLikes.map(x => x.user_id)])]
-    if (ids.length === 0) return
-    let cancelled = false
-    ;(async () => {
-      const { data: myRows } = await supabase
-        .from('follows').select('following_id').eq('follower_id', userId).limit(500)
-      const mySet = (myRows || []).map(r => r.following_id)
-      if (mySet.length === 0) return
-      const { data: mutualRows } = await supabase
-        .from('follows')
-        .select('following_id')
-        .in('following_id', ids)
-        .in('follower_id', mySet)
-      if (cancelled) return
-      const counts = {}
-      ;(mutualRows || []).forEach(r => { counts[r.following_id] = (counts[r.following_id] || 0) + 1 })
-      setMutuals(counts)
-    })()
-    return () => { cancelled = true }
-  }, [likes, sentLikes, session?.user?.id])
-
-  useEffect(() => {
-    const userId = session?.user?.id
-    if (!userId) return
-    supabase
-      .from('matches')
-      .update({ seen_at: new Date().toISOString() })
-      .filter('seen_at', 'is', null)
-      .or(`user_one_id.eq.${userId},user_two_id.eq.${userId}`)
-      .then(() => {})
-  }, [session?.user?.id])
-
   // ---- Realtime: reload when likes / matches / follows change for me ----
-  useEffect(() => {
-    const userId = session?.user?.id
-    if (!userId) return
-
-    let timer = null
-    const debouncedLoad = () => {
-      if (timer) clearTimeout(timer)
-      timer = setTimeout(() => { load() }, 400)
-    }
-
-    const ch = supabase
-      .channel('matches-rt-' + userId)
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'likes', filter: `liked_user_id=eq.${userId}` },
-        debouncedLoad)
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'likes', filter: `user_id=eq.${userId}` },
-        debouncedLoad)
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'matches', filter: `user_one_id=eq.${userId}` },
-        debouncedLoad)
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'matches', filter: `user_two_id=eq.${userId}` },
-        debouncedLoad)
-      .subscribe((status) => {
-        console.log('[Matches] realtime status:', status)
-      })
-
-    return () => {
-      if (timer) clearTimeout(timer)
-      supabase.removeChannel(ch)
-    }
-  }, [session?.user?.id, load])
 
   async function handleLikeBack(userId) {
     if (busy[userId]) return
     setBusy((b) => ({ ...b, [userId]: true }))
     tap('medium')
-    const { data, error: err } = await supabase.rpc('like_user', { target_user_id: userId })
-    setBusy((b) => ({ ...b, [userId]: false }))
-    if (err) { setError(friendlyError(err)); return }
-    await load()
-    if (data?.matched) setActiveTab('matches')
+    try {
+      const res = await fetch('/api/profile/actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'like', targetUserId: userId }),
+      })
+      const j = await res.json()
+      setBusy((b) => ({ ...b, [userId]: false }))
+      if (!j.success) { setError(j.error || 'Failed'); return }
+      await load()
+      if (j.data?.matched) setActiveTab('matches')
+    } catch (e) {
+      setBusy((b) => ({ ...b, [userId]: false }))
+      setError(e.message || 'Network error')
+    }
   }
 
   async function handleDecline(userId) {
     if (busy[userId]) return
     setBusy((b) => ({ ...b, [userId]: true }))
     tap('light')
-    const { error: err } = await supabase.rpc('decline_like', { target_user_id: userId })
-    setBusy((b) => ({ ...b, [userId]: false }))
-    if (err) { setError(friendlyError(err)); return }
-    setLikes((prev) => prev.filter((x) => x.user_id !== userId))
+    try {
+      const res = await fetch('/api/profile/actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'decline', targetUserId: userId }),
+      })
+      const j = await res.json()
+      setBusy((b) => ({ ...b, [userId]: false }))
+      if (!j.success) { setError(j.error || 'Failed'); return }
+      setLikes((prev) => prev.filter((x) => x.user_id !== userId))
+    } catch (e) {
+      setBusy((b) => ({ ...b, [userId]: false }))
+      setError(e.message || 'Network error')
+    }
   }
 
   async function handleCancelSent(userId) {
     if (busy[userId]) return
     setBusy((b) => ({ ...b, [userId]: true }))
     tap('light')
-    const { error: err } = await supabase.rpc('delete_sent_like', { target_user_id: userId })
-    setBusy((b) => ({ ...b, [userId]: false }))
-    if (err) { setError(friendlyError(err)); return }
-    setSentLikes((prev) => prev.filter((x) => x.user_id !== userId))
+    try {
+      const res = await fetch('/api/matches/like/' + userId, { method: 'DELETE' })
+      const j = await res.json()
+      setBusy((b) => ({ ...b, [userId]: false }))
+      if (!j.success) { setError(j.error || 'Failed'); return }
+      setSentLikes((prev) => prev.filter((x) => x.user_id !== userId))
+    } catch (e) {
+      setBusy((b) => ({ ...b, [userId]: false }))
+      setError(e.message || 'Network error')
+    }
   }
 
   const currentList = activeTab === 'matches' ? matches : activeTab === 'likes' ? likes : activeTab === 'sent' ? sentLikes : suggested
@@ -413,7 +246,7 @@ export default function Matches() {
                       <button
                         onClick={async () => {
                           tap('medium')
-                          const { error: rpcErr } = await supabase.rpc('like_user', { target_user_id: u.user_id })
+                          const { error: rpcErr } = await fetch('/api/profile/actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'like', targetUserId: u.user_id }) }).then(r => r.json()).then(j => ({ error: j.success ? null : { message: j.error || 'Failed' } }))
                           if (rpcErr) { setError(rpcErr.message); return }
                           setSuggested(prev => prev.filter(x => x.user_id !== u.user_id))
                         }}
