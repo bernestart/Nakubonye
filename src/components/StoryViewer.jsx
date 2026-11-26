@@ -85,7 +85,7 @@ export default function StoryViewer({
   async function loadHighlights() {
   if (!myId) return;
   try {
-    const res = await fetch("/api/stories/highlights/" + myId);
+    const res = await fetch(API_BASE_URL + "/api/stories/highlights/" + myId);
     const j = await res.json();
     setMyHighlights(j.success ? (j.data || []) : []);
   } catch (e) {
@@ -96,7 +96,7 @@ export default function StoryViewer({
   async function addToHighlight(highlightId) {
   if (!story?.id || !highlightId) return;
   try {
-    const res = await fetch("/api/stories/highlights/" + highlightId + "/items", {
+    const res = await fetch(API_BASE_URL + "/api/stories/highlights/" + highlightId + "/items", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ story_id: story.id }),
@@ -137,7 +137,7 @@ export default function StoryViewer({
   setViewersLoading(true);
   (async () => {
     try {
-      const res = await fetch("/api/stories/" + story.id + "/viewers");
+      const res = await fetch(API_BASE_URL + "/api/stories/" + story.id + "/viewers");
       const j = await res.json();
       if (cancelled) return;
       if (!j.success) { setViewers([]); setViewersLoading(false); return; }
@@ -344,7 +344,7 @@ export default function StoryViewer({
   async function canReply() {
   if (!group?.user_id) return false;
   try {
-    const res = await fetch("/api/stories/can-reply/" + group.user_id);
+    const res = await fetch(API_BASE_URL + "/api/stories/can-reply/" + group.user_id);
     const j = await res.json();
     if (!j.success) return true;
     return j.data?.allowed !== false;
@@ -371,7 +371,7 @@ export default function StoryViewer({
     setSending(true);
     const path = await uploadMedia(blob);
     const pub = { publicUrl: getMediaUrl(path) };
-    const sendRes = await fetch("/api/stories/" + story.id + "/reply", {
+    const sendRes = await fetch(API_BASE_URL + "/api/stories/" + story.id + "/reply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -407,7 +407,7 @@ export default function StoryViewer({
   }
   setSending(true);
   try {
-    const res = await fetch("/api/stories/" + story.id + "/reply", {
+    const res = await fetch(API_BASE_URL + "/api/stories/" + story.id + "/reply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content: body }),
@@ -437,7 +437,7 @@ export default function StoryViewer({
   }
   if (emoji === "❤️") burstHeart();
   try {
-    const res = await fetch("/api/stories/" + story.id + "/reply", {
+    const res = await fetch(API_BASE_URL + "/api/stories/" + story.id + "/reply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content: emoji }),
@@ -462,7 +462,7 @@ export default function StoryViewer({
   try {
     // T2: Telegram media (file_id) has no delete API on free tier. Deleting the
     // DB row is sufficient — the file_id becomes unreachable. Media GC deferred to P6 (R2).
-    const res = await fetch("/api/stories/" + story.id, { method: "DELETE" });
+    const res = await fetch(API_BASE_URL + "/api/stories/" + story.id, { method: "DELETE" });
     const j = await res.json();
     if (!j.success) throw new Error(j.error || "Failed");
     setDeleting(false);
