@@ -9,6 +9,7 @@ import { tap } from '../lib/haptic'
 import BottomNav from '../components/BottomNav'
 import AppHeader from '../components/AppHeader'
 import BrandGlow from '../components/BrandGlow'
+import { API_BASE_URL } from '../lib/api';
 
 function timeAgo(iso) {
   if (!iso) return "";
@@ -40,7 +41,7 @@ export default function Matches() {
     if (!session?.user?.id) return
     setLoading(true); setError('')
     try {
-      const res = await fetch('/api/matches/data?markSeen=1')
+      const res = await fetch(API_BASE_URL + '/api/matches/data?markSeen=1')
       const j = await res.json()
       if (!j.success) { setError(j.error || 'Failed to load'); setLoading(false); return }
       const d = j.data || {}
@@ -64,7 +65,7 @@ export default function Matches() {
     setBusy((b) => ({ ...b, [userId]: true }))
     tap('medium')
     try {
-      const res = await fetch('/api/profile/actions', {
+      const res = await fetch(API_BASE_URL + '/api/profile/actions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'like', targetUserId: userId }),
@@ -85,7 +86,7 @@ export default function Matches() {
     setBusy((b) => ({ ...b, [userId]: true }))
     tap('light')
     try {
-      const res = await fetch('/api/profile/actions', {
+      const res = await fetch(API_BASE_URL + '/api/profile/actions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'decline', targetUserId: userId }),
@@ -105,7 +106,7 @@ export default function Matches() {
     setBusy((b) => ({ ...b, [userId]: true }))
     tap('light')
     try {
-      const res = await fetch('/api/matches/like/' + userId, { method: 'DELETE' })
+      const res = await fetch(API_BASE_URL + '/api/matches/like/' + userId, { method: 'DELETE' })
       const j = await res.json()
       setBusy((b) => ({ ...b, [userId]: false }))
       if (!j.success) { setError(j.error || 'Failed'); return }
@@ -246,7 +247,7 @@ export default function Matches() {
                       <button
                         onClick={async () => {
                           tap('medium')
-                          const { error: rpcErr } = await fetch('/api/profile/actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'like', targetUserId: u.user_id }) }).then(r => r.json()).then(j => ({ error: j.success ? null : { message: j.error || 'Failed' } }))
+                          const { error: rpcErr } = await fetch(API_BASE_URL + '/api/profile/actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'like', targetUserId: u.user_id }) }).then(r => r.json()).then(j => ({ error: j.success ? null : { message: j.error || 'Failed' } }))
                           if (rpcErr) { setError(rpcErr.message); return }
                           setSuggested(prev => prev.filter(x => x.user_id !== u.user_id))
                         }}

@@ -12,6 +12,7 @@ import AppHeader from '../components/AppHeader'
 import MatchModal from '../components/MatchModal'
 import BrandGlow from '../components/BrandGlow'
 import NotificationBell from '../components/NotificationBell'
+import { API_BASE_URL } from '../lib/api';
 
 const SWIPE_THRESHOLD = 130
 
@@ -62,7 +63,7 @@ export default function Discover() {
       if (verifiedOnly) qs.set('verifiedOnly', '1')
       if (onlineOnly) qs.set('onlineOnly', '1')
       if (communityId) qs.set('communityId', communityId)
-      const res = await fetch('/api/discover/profiles?' + qs.toString())
+      const res = await fetch(API_BASE_URL + '/api/discover/profiles?' + qs.toString())
       const j = await res.json()
       if (!j.success) { setError(j.error || 'Failed to load'); setLoading(false); return }
       const list = (j.data || []).map((r) => ({
@@ -88,7 +89,7 @@ export default function Discover() {
     setCards((c) => c.slice(1))
     setUndoStack((s) => [...s, { card, action: 'pass' }])
     try {
-      await fetch('/api/discover/swipe', {
+      await fetch(API_BASE_URL + '/api/discover/swipe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ targetId: card.id, action: 'pass' }),
@@ -104,7 +105,7 @@ export default function Discover() {
     setCards((c) => c.slice(1))
     setUndoStack((s) => [...s, { card, action: 'like' }])
     try {
-      const res = await fetch('/api/discover/swipe', {
+      const res = await fetch(API_BASE_URL + '/api/discover/swipe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ targetId: card.id, action: 'like' }),
@@ -147,7 +148,7 @@ export default function Discover() {
     setUndoStack((s) => s.slice(0, -1))
     setCards((c) => [top.card, ...c])
     try {
-      await fetch('/api/discover/swipe/' + top.card.id, { method: 'DELETE' })
+      await fetch(API_BASE_URL + '/api/discover/swipe/' + top.card.id, { method: 'DELETE' })
     } catch {}
     setBusy(false)
   }
