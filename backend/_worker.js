@@ -2665,6 +2665,246 @@ export default {
         return new Response(JSON.stringify({ success: false, error: "METHOD_NOT_ALLOWED" }), { status: 405, headers: cors });
       }
 
+      // =========================================================
+      // T2 INTERACTIONS: likes, comments, post detail
+      // =========================================================
+
+      // 1) GET /api/likes/detailed — users + reactions for a post
+      if (path === "/api/likes/detailed" && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const postId = url.searchParams.get("postId");
+        const source = url.searchParams.get("source") || "personal";
+        if (!postId) return new Response(JSON.stringify({ success: false, error: "MISSING_POST_ID" }), { status: 400, headers: cors });
+        const tbl = source === "community" ? "community_post_reactions" : "user_post_likes";
+        try {
+          const r = await queryDatabase(
+            "SELECT l.user_id, l.reaction, l.created_at, p.display_name, p.username, p.is_verified FROM " + tbl + " l LEFT JOIN profiles p ON p.id = l.user_id WHERE l.post_id = $1::bigint ORDER BY l.created_at DESC LIMIT 200",
+            [postId]
+          );
+          return new Response(JSON.stringify({ success: true, data: r.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (e) {
+          return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers: cors });
+        }
+      }
+
+      // 2) GET /api/likes/received — romantic likes toward me
+      if (path === "/api/likes/received" && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const limit = Math.min(parseInt(url.searchParams.get("limit") || "30", 10), 50);
+        try {
+          const r = await queryDatabase("SELECT * FROM get_likes_received($1::uuid, $2::int)", [String(me.id), limit]);
+          return new Response(JSON.stringify({ success: true, data: r.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (e) {
+          return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers: cors });
+        }
+      }
+
+      // 3) POST /api/likes/post — Postgres-backed like/unlike with reaction
+      if (path === "/api/likes/post" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const myId = String(me.id);
+        try {
+          const b = await request.json();
+          const postId = b.postId;
+          const source = b.source || "personal";
+          const action = b.action; // "like" | "unlike"
+          const reaction = b.reaction || "❤️";
+          if (!postId || !action) return new Response(JSON.stringify({ success: false, error: "MISSING_FIELDS" }), { status: 400, headers: cors });
+          const tbl = source === "community" ? "community_post_reactions" : "user_post_likes";
+          if (action === "unlike") {
+            await queryDatabase("DELETE FROM " + tbl + " WHERE post_id = $1::bigint AND user_id = $2::uuid", [postId, myId]);
+          } else {
+            await queryDatabase("INSERT INTO " + tbl + " (post_id, user_id, reaction) VALUES ($1::bigint, $2::uuid, $3) ON CONFLICT (post_id, user_id) DO UPDATE SET reaction = $3", [postId, myId, reaction]);
+          }
+          return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (e) {
+          return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers: cors });
+        }
+      }
+
+      // 4) POST /api/posts/view — view tracking
+      if (path === "/api/posts/view" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const b = await request.json();
+          await queryDatabase(
+            "INSERT INTO post_views (post_id, post_source, viewer_id, viewed_at) VALUES ($1, $2, $3::uuid, NOW()) ON CONFLICT (post_id, post_source, viewer_id) DO UPDATE SET viewed_at = NOW()",
+            [String(b.postId), b.postSource || "personal", String(me.id)]
+          ).catch(() => null);
+          return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (e) {
+          return new Response(JSON.stringify({ success: true, note: "view-not-tracked" }), { headers: { ...cors, "Content-Type": "application/json" } });
+        }
+      }
+
+      // 5) GET /api/posts/detail — everything for PostDetail + PostCommentsSheet in one call
+      if (path === "/api/posts/detail" && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const myId = String(me.id);
+        const postId = url.searchParams.get("id");
+        const source = url.searchParams.get("source") || "personal";
+        if (!postId) return new Response(JSON.stringify({ success: false, error: "MISSING_ID" }), { status: 400, headers: cors });
+        try {
+          const table = source === "community" ? "community_posts" : "user_posts";
+          const authorCol = source === "community" ? "author_id" : "user_id";
+          const likeTable = source === "community" ? "community_post_reactions" : "user_post_likes";
+          const cmtTable = source === "community" ? "community_post_comments" : "user_post_comments";
+          const post = await queryDatabase("SELECT * FROM " + table + " WHERE id = $1::bigint", [postId]);
+          if (post.rows.length === 0) return new Response(JSON.stringify({ success: false, error: "NOT_FOUND" }), { status: 404, headers: cors });
+          const row = post.rows[0];
+          const authorId = String(row[authorCol]);
+          const [authorR, photoR, myLikeR, likeCountR, cmtCountR] = await Promise.all([
+            queryDatabase("SELECT id, display_name, username, is_verified FROM profiles WHERE id = $1::uuid", [authorId]),
+            queryDatabase("SELECT storage_path FROM profile_photos WHERE user_id = $1::uuid ORDER BY is_primary DESC, display_order ASC LIMIT 1", [authorId]),
+            queryDatabase("SELECT reaction FROM " + likeTable + " WHERE post_id = $1::bigint AND user_id = $2::uuid LIMIT 1", [postId, myId]),
+            queryDatabase("SELECT COUNT(*)::int AS n FROM " + likeTable + " WHERE post_id = $1::bigint", [postId]),
+            queryDatabase("SELECT COUNT(*)::int AS n FROM " + cmtTable + " WHERE post_id = $1::bigint AND deleted_at IS NULL", [postId]).catch(() => ({ rows: [{ n: 0 }] })),
+          ]);
+          // Audience check
+          let allowed = true;
+          const aud = row.audience || "public";
+          if (aud === "private" && authorId !== myId) allowed = false;
+          if (aud === "matches" && authorId !== myId) {
+            const lo = myId < authorId ? myId : authorId;
+            const hi = myId < authorId ? authorId : myId;
+            const m = await queryDatabase("SELECT 1 FROM matches WHERE user_one_id = $1::uuid AND user_two_id = $2::uuid LIMIT 1", [lo, hi]);
+            allowed = m.rows.length > 0;
+          }
+          if (typeof aud === "string" && aud.startsWith("circle:") && authorId !== myId) {
+            const cid = aud.slice(7);
+            const cm = await queryDatabase("SELECT 1 FROM circle_members WHERE circle_id = $1 AND user_id = $2::uuid LIMIT 1", [cid, myId]).catch(() => ({ rows: [] }));
+            allowed = cm.rows.length > 0;
+          }
+          // Community membership check
+          if (source === "community" && row.community_id) {
+            const membership = await queryDatabase("SELECT 1 FROM community_memberships WHERE community_id = $1::bigint AND user_id = $2::uuid LIMIT 1", [row.community_id, myId]);
+            if (membership.rows.length === 0) {
+              const isPublic = await queryDatabase("SELECT privacy FROM communities WHERE id = $1::bigint LIMIT 1", [row.community_id]).catch(() => ({ rows: [] }));
+              if (!isPublic.rows[0] || isPublic.rows[0].privacy !== "public") allowed = false;
+            }
+          }
+          return new Response(JSON.stringify({
+            success: true,
+            data: {
+              post: row,
+              author: authorR.rows[0] || null,
+              photo_url: photoR.rows[0]?.storage_path || null,
+              my_reaction: myLikeR.rows[0]?.reaction || null,
+              likes_count: likeCountR.rows[0]?.n || 0,
+              comments_count: cmtCountR.rows[0]?.n || 0,
+              allowed,
+            }
+          }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (e) {
+          console.error("[posts/detail] " + e.message);
+          return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers: cors });
+        }
+      }
+
+      // 6) GET /api/profiles/mentions — autocomplete for @-mentions
+      if (path === "/api/profiles/mentions" && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const q = String(url.searchParams.get("q") || "").trim();
+        if (q.length < 1) return new Response(JSON.stringify({ success: true, data: [] }), { headers: { ...cors, "Content-Type": "application/json" } });
+        try {
+          const r = await queryDatabase(
+            "SELECT id, display_name, username, is_verified FROM profiles WHERE id <> $1::uuid AND (username ILIKE $2 OR display_name ILIKE $2) AND COALESCE(is_active, true) = true LIMIT 8",
+            [String(me.id), "%" + q + "%"]
+          );
+          return new Response(JSON.stringify({ success: true, data: r.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (e) {
+          return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers: cors });
+        }
+      }
+
+      // 7) POST /api/comments/can — permission check for commenting
+      if (path === "/api/comments/can" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const b = await request.json();
+          const postId = b.postId;
+          const source = b.source || "personal";
+          const table = source === "community" ? "community_posts" : "user_posts";
+          const authorCol = source === "community" ? "author_id" : "user_id";
+          const r = await queryDatabase("SELECT " + authorCol + " AS author FROM " + table + " WHERE id = $1::bigint LIMIT 1", [postId]);
+          if (r.rows.length === 0) return new Response(JSON.stringify({ success: false, error: "POST_NOT_FOUND" }), { status: 404, headers: cors });
+          const authorId = String(r.rows[0].author);
+          const c = await queryDatabase("SELECT can_comment($1::uuid, $2::uuid) AS allowed", [String(me.id), authorId]);
+          return new Response(JSON.stringify({ success: true, allowed: !!c.rows[0]?.allowed }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (e) {
+          return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers: cors });
+        }
+      }
+
+      // 8) DELETE /api/comments — soft delete (source-aware)
+      if (path === "/api/comments" && request.method === "DELETE") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const id = url.searchParams.get("id");
+        const source = url.searchParams.get("source") || "personal";
+        if (!id) return new Response(JSON.stringify({ success: false, error: "MISSING_ID" }), { status: 400, headers: cors });
+        const tbl = source === "community" ? "community_post_comments" : "user_post_comments";
+        try {
+          await queryDatabase("UPDATE " + tbl + " SET deleted_at = NOW(), content = '[deleted]' WHERE id = $1::bigint AND user_id = $2::uuid", [id, String(me.id)]);
+          return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (e) {
+          return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers: cors });
+        }
+      }
+
+      // 9) POST /api/comments/pin — set/clear pinned_at
+      if (path === "/api/comments/pin" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const b = await request.json();
+          const source = b.source || "personal";
+          const tbl = source === "community" ? "community_post_comments" : "user_post_comments";
+          if (b.unpinAll) {
+            await queryDatabase("UPDATE " + tbl + " SET pinned_at = NULL WHERE post_id = $1::bigint", [b.postId]);
+          }
+          if (b.commentId && b.pinnedAt !== undefined) {
+            await queryDatabase("UPDATE " + tbl + " SET pinned_at = $1::timestamptz WHERE id = $2::bigint", [b.pinnedAt, b.commentId]);
+          }
+          return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (e) {
+          return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers: cors });
+        }
+      }
+
+      // 10) POST /api/comment_reactions — add/update/delete reaction
+      if (path === "/api/comment_reactions" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const b = await request.json();
+          const source = b.source || "personal";
+          const tbl = source === "community" ? "community_comment_reactions" : "user_comment_reactions";
+          const myId = String(me.id);
+          if (b.action === "remove") {
+            await queryDatabase("DELETE FROM " + tbl + " WHERE comment_id = $1::bigint AND user_id = $2::uuid", [b.commentId, myId]);
+          } else if (b.action === "update") {
+            await queryDatabase("UPDATE " + tbl + " SET reaction = $1 WHERE comment_id = $2::bigint AND user_id = $3::uuid", [b.reaction, b.commentId, myId]);
+          } else {
+            await queryDatabase("INSERT INTO " + tbl + " (comment_id, user_id, reaction) VALUES ($1::bigint, $2::uuid, $3) ON CONFLICT (comment_id, user_id) DO UPDATE SET reaction = $3", [b.commentId, myId, b.reaction]);
+          }
+          return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (e) {
+          return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers: cors });
+        }
+      }
+
+      // 11) POST /api/comments — extend to support source (community)
+      // (existing POST stays for personal; add community support via source param)
+
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
