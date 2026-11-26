@@ -9,7 +9,7 @@ import { Capacitor } from "@capacitor/core"
 import StoryEditor from "./story/StoryEditor"
 import { base64ToBlob, uploadStoryMedia } from "../lib/storyUpload"
 import { supabase } from "../lib/supabase"
-
+import "../lib/authFetch";   // side-effect: patches window.fetch to attach Bearer token
 const MIME_TO_EXT = {
   "video/mp4": "mp4",
   "video/quicktime": "mov",
@@ -243,17 +243,21 @@ export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve
       const path = await uploadStoryMedia(blob, ext, mime, myId)
       const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
 
-      const { error: dbErr } = await supabase.from("stories").insert({
-        user_id: myId,
-        media_url: pub.publicUrl,
-        media_type: finalMediaType,
-        caption: meta.caption || null,
-        audience: meta.audience || "everyone",
-        metadata: meta.metadata || {},
-        link_url: meta.metadata?.link?.url || null,
-        music_track: meta.metadata?.music || null
+      const res = await fetch("/api/stories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          media_url: pub.publicUrl,
+          media_type: finalMediaType,
+          caption: meta.caption || null,
+          audience: meta.audience || "everyone",
+          metadata: meta.metadata || {},
+          link_url: meta.metadata?.link?.url || null,
+          music_track: meta.metadata?.music || null
+        })
       })
-      if (dbErr) throw new Error(dbErr.message)
+      const jres = await res.json()
+      if (!jres.success) throw new Error(jres.error || "Failed to create story")
 
       // Success — resolve the optimistic card using the SAME key.
       onResolve?.(clientKey)

@@ -1,57 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Plus, Play , Loader2 } from "lucide-react"
-import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
+import "../lib/authFetch";   // side-effect: patches window.fetch to attach Bearer token
 import StoryComposer from "./StoryComposer"
 import StoryViewer from "./StoryViewer"
 import StoryRing from "./StoryRing";
 
 const TILE_W = 112
 const TILE_H = 190
-
-async function filterStoriesByVisibility(stories, myId) {
-  const ownerIds = [...new Set(stories.map((r) => r.user_id).filter((id) => id !== myId))]
-  if (ownerIds.length === 0) return stories
-  const [settingsRes, blocksRes, matchesRes, followsRes, storyHidesRes, innerCircleRes] = await Promise.all([
-    supabase.from('user_settings').select('user_id, who_can_see_story').in('user_id', ownerIds),
-    supabase.from('blocks').select('blocker_id, blocked_id').or(`blocker_id.eq.${myId},blocked_id.eq.${myId}`),
-    supabase.from('matches').select('user_one_id, user_two_id').or(`user_one_id.eq.${myId},user_two_id.eq.${myId}`),
-    supabase.from('follows').select('following_id').eq('follower_id', myId),
-    supabase.from('story_hides').select('hidden_user_id').eq('owner_id', myId),
-    supabase.from('inner_circle').select('user_id, member_id').or(`user_id.eq.${myId},member_id.eq.${myId}`),
-  ])
-  const settingsMap = new Map((settingsRes.data || []).map((r) => [r.user_id, r.who_can_see_story || 'everyone']))
-  const blockedSet = new Set()
-  ;(blocksRes.data || []).forEach((b) => {
-    if (b.blocker_id === myId) blockedSet.add(b.blocked_id)
-    if (b.blocked_id === myId) blockedSet.add(b.blocker_id)
-  })
-  const matchSet = new Set()
-  ;(matchesRes.data || []).forEach((m) => {
-    if (m.user_one_id === myId) matchSet.add(m.user_two_id)
-    if (m.user_two_id === myId) matchSet.add(m.user_one_id)
-  })
-  const followSet = new Set((followsRes.data || []).map((f) => f.following_id))
-  const storyHiddenSet = new Set((storyHidesRes?.data || []).map((r) => r.hidden_user_id))
-  const innerCircleVisibleSet = new Set()
-  ;(innerCircleRes?.data || []).forEach((row) => {
-    if (row.member_id === myId) innerCircleVisibleSet.add(row.user_id)
-  })
-  return stories.filter((r) => {
-    if (r.user_id === myId) return true
-    if (blockedSet.has(r.user_id)) return false
-    if (storyHiddenSet.has(r.user_id)) return false
-    const aud = r.audience && r.audience !== 'default' ? r.audience : (settingsMap.get(r.user_id) || 'everyone')
-    if (aud === 'everyone' || aud === 'public') return true
-    if (aud === 'nobody' || aud === 'private') return false
-    if (aud === 'matches') return matchSet.has(r.user_id)
-    if (aud === 'inner_circle' || aud === 'close') return innerCircleVisibleSet.has(r.user_id)
-    if (aud === 'following') return followSet.has(r.user_id)
-    return true
-  })
-}
 
 export default function StoriesRow() {
   const { session, profile } = useAuth()
@@ -62,206 +20,71 @@ export default function StoriesRow() {
   const [composerOpen, setComposerOpen] = useState(false)
   const [pendingStories, setPendingStories] = useState([])
   const [viewerState, setViewerState] = useState(null)
-  const [storiesCursor, setStoriesCursor] = useState(null)
-  const [storiesHasMore, setStoriesHasMore] = useState(true)
-  const [storiesLoadingMore, setStoriesLoadingMore] = useState(false)
   const stripRef = useRef(null)
   const [viewed, setViewed] = useState(() => {
     try { return JSON.parse(localStorage.getItem("story_views") || "{}") } catch { return {} }
   })
+  const viewedRef = useRef(viewed)
+  useEffect(() => { viewedRef.current = viewed }, [viewed])
 
-  // Rehydrate seen-state from story_views table so it survives
-  // reinstall / clear-storage / new device.
+  const viewQueueRef = useRef([])
+  const flushTimerRef = useRef(null)
+  const flushViews = useCallback(async () => {
+    if (!viewQueueRef.current.length) return
+    const ids = [...new Set(viewQueueRef.current)]
+    viewQueueRef.current = []
+    try {
+      await fetch("/api/stories/views", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ story_ids: ids }) })
+    } catch {}
+  }, [])
+
   useEffect(() => {
-    if (!myId) return
-    let cancelled = false
-    ;(async () => {
-      const { data } = await supabase
-        .from("story_views")
-        .select("story_id")
-        .eq("user_id", myId)
-      if (cancelled || !data || data.length === 0) return
-      setViewed((prev) => {
-        const merged = { ...prev }
-        for (const row of data) merged[row.story_id] = true
-        try { localStorage.setItem("story_views", JSON.stringify(merged)) } catch {}
-        return merged
-      })
-    })()
-    return () => { cancelled = true }
-  }, [myId])
+    const onHide = () => { flushViews() }
+    window.addEventListener("pagehide", onHide)
+    window.addEventListener("beforeunload", onHide)
+    return () => {
+      window.removeEventListener("pagehide", onHide)
+      window.removeEventListener("beforeunload", onHide)
+      if (flushTimerRef.current) clearTimeout(flushTimerRef.current)
+      flushViews()
+    }
+  }, [flushViews])
 
   const load = useCallback(async () => {
     if (!myId) return
-    const { data: myPh } = await supabase
-      .from("profile_photos")
-      .select("storage_path")
-      .eq("user_id", myId)
-      .order("is_primary", { ascending: false })
-      .order("display_order", { ascending: true })
-      .limit(1)
-      .maybeSingle()
-    setMyPhoto(myPh?.storage_path ? publicPhotoUrl(myPh.storage_path) : null)
-
-    const { data: rows } = await supabase
-      .from("stories")
-      .select("id, user_id, media_url, media_type, caption, created_at, expires_at, audience")
-      .gt("expires_at", new Date().toISOString())
-      .order("created_at", { ascending: false })
-      .limit(30)
-
-    if (!rows) return
-
-    const visibleStories = await filterStoriesByVisibility(rows, myId)
-    const byUser = new Map()
-    visibleStories.forEach((s) => {
-      if (!byUser.has(s.user_id)) byUser.set(s.user_id, [])
-      byUser.get(s.user_id).push(s)
-    })
-
-    const userIds = [...byUser.keys()]
-    if (userIds.length === 0) { setGroups([]); setMyStory(null); return }
-
-    const { data: profs } = await supabase
-      .from("profiles")
-      .select("id, display_name, username")
-      .in("id", userIds)
-    const pMap = new Map((profs || []).map((p) => [p.id, p]))
-
-    const { data: photos } = await supabase
-      .from("profile_photos")
-      .select("user_id, storage_path, is_primary, display_order")
-      .in("user_id", userIds)
-      .order("is_primary", { ascending: false })
-      .order("display_order", { ascending: true })
-    const photoMap = new Map()
-    ;(photos || []).forEach((p) => {
-      if (!photoMap.has(p.user_id)) photoMap.set(p.user_id, p.storage_path)
-    })
-
-    const list = userIds.map((uid) => {
-      const prof = pMap.get(uid)
-      const sorted = byUser.get(uid).slice().reverse()
-      return {
-        user_id: uid,
-        display_name: prof?.display_name || prof?.username || "Someone",
-        avatar_path: photoMap.get(uid),
-        stories: sorted,
-      }
-    })
-
-    const mine = list.find((g) => g.user_id === myId)
-    const others = list.filter((g) => g.user_id !== myId)
-    others.sort((a, b) => {
-      const aSeen = a.stories.every((s) => viewed[s.id])
-      const bSeen = b.stories.every((s) => viewed[s.id])
-      return Number(aSeen) - Number(bSeen)
-    })
-
-    setMyStory(mine || null)
-    setGroups(others)
-    const oldest = visibleStories[visibleStories.length - 1]?.created_at || rows[rows.length - 1]?.created_at || null
-    setStoriesCursor(oldest)
-    setStoriesHasMore(rows.length === 30)
-  }, [myId, viewed])
+    try {
+      const res = await fetch("/api/stories/feed?limit=30")
+      const j = await res.json()
+      if (!j.success) return
+      const data = j.data || {}
+      const rings = data.rings || []
+      const nextViewed = { ...viewedRef.current }
+      for (const ring of rings) for (const s of ring.stories) if (s.viewed) nextViewed[s.id] = true
+      setViewed(nextViewed)
+      try { localStorage.setItem("story_views", JSON.stringify(nextViewed)) } catch {}
+      setMyPhoto(data.my_avatar_path ? publicPhotoUrl(data.my_avatar_path) : null)
+      if (data.my_story && data.my_story.stories && data.my_story.stories.length) {
+        setMyStory({ user_id: myId, display_name: data.my_story.display_name || profile?.display_name || "You", stories: data.my_story.stories })
+      } else setMyStory(null)
+      setGroups(rings)
+    } catch {}
+  }, [myId, profile])
 
   useEffect(() => { load() }, [load])
-
-  async function loadMoreStories() {
-    if (!myId || storiesLoadingMore || !storiesHasMore || !storiesCursor) return
-    setStoriesLoadingMore(true)
-    const { data: rows } = await supabase
-      .from("stories")
-      .select("id, user_id, media_url, media_type, caption, created_at, expires_at, audience")
-      .gt("expires_at", new Date().toISOString())
-      .lt("created_at", storiesCursor)
-      .order("created_at", { ascending: false })
-      .limit(30)
-    if (!rows || rows.length === 0) {
-      setStoriesHasMore(false)
-      setStoriesLoadingMore(false)
-      return
-    }
-    const visibleRows = await filterStoriesByVisibility(rows, myId)
-    const existingUserIds = new Set([...groups.map((g) => g.user_id), ...(myStory ? [myStory.user_id] : [])])
-    const newRows = visibleRows.filter((r) => !existingUserIds.has(r.user_id))
-    if (newRows.length === 0) {
-      setStoriesHasMore(rows.length === 30)
-      setStoriesLoadingMore(false)
-      if (rows.length === 30) return loadMoreStories()
-      return
-    }
-    const byUser = new Map()
-    newRows.forEach((st) => {
-      if (!byUser.has(st.user_id)) byUser.set(st.user_id, [])
-      byUser.get(st.user_id).push(st)
-    })
-    const userIds = [...byUser.keys()]
-    if (userIds.length > 0) {
-      const { data: profs } = await supabase
-        .from("profiles")
-        .select("id, display_name, username")
-        .in("id", userIds)
-      const pMap = new Map((profs || []).map((p) => [p.id, p]))
-      const { data: photos } = await supabase
-        .from("profile_photos")
-        .select("user_id, storage_path, is_primary, display_order")
-        .in("user_id", userIds)
-        .order("is_primary", { ascending: false })
-        .order("display_order", { ascending: true })
-      const photoMap = new Map()
-      ;(photos || []).forEach((pp) => {
-        if (!photoMap.has(pp.user_id)) photoMap.set(pp.user_id, pp.storage_path)
-      })
-      const list = userIds.map((uid) => {
-        const prof = pMap.get(uid)
-        const sorted = byUser.get(uid).slice().reverse()
-        return {
-          user_id: uid,
-          display_name: prof?.display_name || prof?.username || "Someone",
-          avatar_path: photoMap.get(uid),
-          stories: sorted,
-        }
-      })
-      setGroups((prev) => [...prev, ...list])
-    }
-    setStoriesCursor(rows[rows.length - 1].created_at)
-    setStoriesHasMore(rows.length === 30)
-    setStoriesLoadingMore(false)
-  }
-
   useEffect(() => {
-    const el = stripRef.current
-    if (!el) return
-    const onScroll = () => {
-      if (el.scrollLeft + el.clientWidth >= el.scrollWidth - 300) loadMoreStories()
-    }
-    el.addEventListener("scroll", onScroll, { passive: true })
-    return () => el.removeEventListener("scroll", onScroll)
-  }, [loadMoreStories])
-
-  useEffect(() => {
-    if (!myId) return
-    const ch = supabase
-      .channel("stories-row-" + myId)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "stories" }, () => load())
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "stories" }, () => load())
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
-  }, [myId, load])
+    const onVis = () => { if (document.visibilityState === "visible") load() }
+    document.addEventListener("visibilitychange", onVis)
+    return () => document.removeEventListener("visibilitychange", onVis)
+  }, [load])
 
   function markViewed(userId, storyId) {
-    const next = { ...viewed, [storyId]: true }
+    const next = { ...viewedRef.current, [storyId]: true }
     setViewed(next)
     try { localStorage.setItem("story_views", JSON.stringify(next)) } catch {}
     if (userId === myId) return
-    supabase
-      .from("story_views")
-      .upsert(
-        { story_id: storyId, user_id: myId },
-        { onConflict: "story_id,user_id", ignoreDuplicates: true }
-      )
-      .then(() => {})
+    viewQueueRef.current.push(storyId)
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current)
+    flushTimerRef.current = setTimeout(flushViews, 2000)
   }
 
   // 1. Grab pending optimistic stories for the current user
