@@ -1138,6 +1138,11 @@ export default {
         const me = await getSessionUser(request, env, url);
         if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
         const myId = String(me.id);
+          {
+            const rl = await redisCommand(["INCR", "rl:profileaction:" + myId]);
+            if (rl.result === 1) await redisCommand(["EXPIRE", "rl:profileaction:" + myId, 60]);
+            if (rl.result > 60) return new Response(JSON.stringify({ success: false, error: "RATE_LIMITED" }), { status: 429, headers: cors });
+          }
         try {
           const b = await request.json().catch(() => ({}));
           const action = String(b.action || "");
@@ -1988,6 +1993,11 @@ export default {
         const me = await getSessionUser(request, env, url);
         if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
         const myId = String(me.id);
+          {
+            const rl = await redisCommand(["INCR", "rl:storiesviews:" + myId]);
+            if (rl.result === 1) await redisCommand(["EXPIRE", "rl:storiesviews:" + myId, 60]);
+            if (rl.result > 200) return new Response(JSON.stringify({ success: false, error: "RATE_LIMITED" }), { status: 429, headers: cors });
+          }
         try {
           const body = await request.json();
           const ids = Array.isArray(body.story_ids) ? body.story_ids.filter(Boolean) : [];
@@ -2004,6 +2014,11 @@ export default {
         const me = await getSessionUser(request, env, url);
         if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
         const myId = String(me.id);
+          {
+            const rl = await redisCommand(["INCR", "rl:stories:" + myId]);
+            if (rl.result === 1) await redisCommand(["EXPIRE", "rl:stories:" + myId, 60]);
+            if (rl.result > 10) return new Response(JSON.stringify({ success: false, error: "RATE_LIMITED" }), { status: 429, headers: cors });
+          }
         try {
           const body = await request.json();
           if (!body.media_url || !body.media_type) return new Response(JSON.stringify({ success: false, error: "media_url and media_type required" }), { status: 400, headers: cors });
@@ -2021,6 +2036,11 @@ export default {
         const me = await getSessionUser(request, env, url);
         if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
         const myId = String(me.id);
+          {
+            const rl = await redisCommand(["INCR", "rl:storiesreply:" + myId]);
+            if (rl.result === 1) await redisCommand(["EXPIRE", "rl:storiesreply:" + myId, 60]);
+            if (rl.result > 30) return new Response(JSON.stringify({ success: false, error: "RATE_LIMITED" }), { status: 429, headers: cors });
+          }
         const storyId = path.split("/")[3];
         try {
           const body = await request.json();
@@ -2114,6 +2134,11 @@ export default {
         const me = await getSessionUser(request, env, url);
         if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
         const myId = String(me.id);
+          {
+            const rl = await redisCommand(["INCR", "rl:storieshighlight:" + myId]);
+            if (rl.result === 1) await redisCommand(["EXPIRE", "rl:storieshighlight:" + myId, 60]);
+            if (rl.result > 20) return new Response(JSON.stringify({ success: false, error: "RATE_LIMITED" }), { status: 429, headers: cors });
+          }
         try {
           const body = await request.json();
           const title = String(body.title || "").trim().slice(0, 40);
@@ -2198,6 +2223,11 @@ export default {
         const me = await getSessionUser(request, env, url);
         if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
         const myId = String(me.id);
+          {
+            const rl = await redisCommand(["INCR", "rl:swipe:" + myId]);
+            if (rl.result === 1) await redisCommand(["EXPIRE", "rl:swipe:" + myId, 60]);
+            if (rl.result > 60) return new Response(JSON.stringify({ success: false, error: "RATE_LIMITED" }), { status: 429, headers: cors });
+          }
         try {
           const body = await request.json();
           const targetId = String(body.targetId || "");
