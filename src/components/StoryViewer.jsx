@@ -1,4 +1,4 @@
-import { uploadMedia, getMediaUrl } from "../lib/api";
+import { uploadMedia, getMediaUrl, API_BASE_URL } from '../lib/api';;
 import { useGesture } from "@use-gesture/react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -116,7 +116,7 @@ export default function StoryViewer({
   const title = newHighlightTitle.trim();
   if (!title || !myId) return;
   try {
-    const res = await fetch("/api/stories/highlights", {
+    const res = await fetch(`${API_BASE_URL}/api/stories/highlights`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title, cover_story_id: story?.id || null }),

@@ -7,6 +7,7 @@ import "../lib/authFetch";   // side-effect: patches window.fetch to attach Bear
 import StoryComposer from "./StoryComposer"
 import StoryViewer from "./StoryViewer"
 import StoryRing from "./StoryRing";
+import { API_BASE_URL } from '../lib/api';
 
 const TILE_W = 112
 const TILE_H = 190
@@ -34,7 +35,7 @@ export default function StoriesRow() {
     const ids = [...new Set(viewQueueRef.current)]
     viewQueueRef.current = []
     try {
-      await fetch("/api/stories/views", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ story_ids: ids }) })
+      await fetch(`${API_BASE_URL}/api/stories/views`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ story_ids: ids }) })
     } catch {}
   }, [])
 
@@ -53,7 +54,7 @@ export default function StoriesRow() {
   const load = useCallback(async () => {
     if (!myId) return
     try {
-      const res = await fetch("/api/stories/feed?limit=30")
+      const res = await fetch(`${API_BASE_URL}/api/stories/feed?limit=30`)
       const j = await res.json()
       if (!j.success) return
       const data = j.data || {}

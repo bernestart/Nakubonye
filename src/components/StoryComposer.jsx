@@ -8,7 +8,7 @@ import { FilePicker } from "@capawesome/capacitor-file-picker"
 import { Capacitor } from "@capacitor/core"
 import StoryEditor from "./story/StoryEditor"
 import { base64ToBlob, uploadStoryMedia } from "../lib/storyUpload"
-import { getMediaUrl } from "../lib/api"
+import { getMediaUrl, API_BASE_URL } from '../lib/api';
 import "../lib/authFetch";   // side-effect: patches window.fetch to attach Bearer token
 const MIME_TO_EXT = {
   "video/mp4": "mp4",
@@ -243,7 +243,7 @@ export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve
       const path = await uploadStoryMedia(blob, ext, mime, myId)
       const pub = { publicUrl: getMediaUrl(path) }
 
-      const res = await fetch("/api/stories", {
+      const res = await fetch(`${API_BASE_URL}/api/stories`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
