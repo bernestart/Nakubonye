@@ -6,7 +6,6 @@ import {
   Briefcase, MessageCircle, TrendingUp, MapPin, Heart, Clock,
 } from "lucide-react"
 import VerifiedBadge from "../components/VerifiedBadge"
-import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
@@ -57,117 +56,25 @@ export default function Search() {
       return
     }
     setLoading(true)
-    const like = `%${term}%`
-
-    // 0. Load my blocks once
-    const { data: blockRows } = await supabase
-      .from("blocks")
-      .select("blocker_id, blocked_id")
-      .or("blocker_id.eq." + myId + ",blocked_id.eq." + myId)
-    const blockedIds = new Set()
-    ;(blockRows || []).forEach((b) => {
-      if (b.blocker_id === myId) blockedIds.add(b.blocked_id)
-      if (b.blocked_id === myId) blockedIds.add(b.blocker_id)
-    })
-
-    // 1. People search — ilike by name/username
-    const { data: peopleRaw } = await supabase
-      .from("profiles")
-      .select("id, display_name, username, is_verified, city")
-      .or(`display_name.ilike.${like},username.ilike.${like}`)
-      .eq("is_active", true)
-      .limit(30)
-
-    const pRes = { data: (peopleRaw || []).filter((u) => !blockedIds.has(u.id)) }
-
-    // 2. Content search — ranked full-text across posts/reels/listings/services/communities
-    let rpcRows = []
     try {
-      const { data } = await supabase.rpc("search_content", { p_query: term, p_limit: 60 })
-      rpcRows = (data || []).filter((r) => !r.author_id || !blockedIds.has(r.author_id))
+      const res = await fetch('/api/search?q=' + encodeURIComponent(term) + '&limit=60')
+      const j = await res.json()
+      if (!j.success) {
+        setPeople([]); setPosts([]); setReels([])
+        setCommunities([]); setListings([]); setServices([])
+        setLoading(false)
+        return
+      }
+      const d = j.data || {}
+      setPeople((d.people || []).map((u) => ({ ...u, photo_url: u.photo_path ? publicPhotoUrl(u.photo_path) : null })))
+      setPosts(d.posts || [])
+      setReels(d.reels || [])
+      setCommunities(d.communities || [])
+      setListings(d.listings || [])
+      setServices(d.services || [])
     } catch (e) {
-      console.warn("search_content rpc failed", e)
+      console.error('search failed', e)
     }
-
-    // Split RPC results by kind
-    const postRows   = rpcRows.filter((r) => r.kind === "post")
-    const reelRows   = rpcRows.filter((r) => r.kind === "reel")
-    const commRows   = rpcRows.filter((r) => r.kind === "community")
-    const listRows   = rpcRows.filter((r) => r.kind === "listing")
-    const servRows   = rpcRows.filter((r) => r.kind === "service")
-
-    // Rehydrate: pull full rows from each table using the ids
-    const postPersonalIds  = postRows.filter((r) => r.source === "personal").map((r) => r.id).slice(0, 20)
-    const postCommunityIds = postRows.filter((r) => r.source === "community").map((r) => r.id).slice(0, 20)
-    const reelIds          = reelRows.map((r) => r.id).slice(0, 20)
-    const commIds          = commRows.map((r) => r.id).slice(0, 20)
-    const listIds          = listRows.map((r) => r.id).slice(0, 20)
-    const servIds          = servRows.map((r) => r.id).slice(0, 20)
-
-    const [
-      upRes, cpRes, rRes, cRes, lRes, sRes,
-    ] = await Promise.all([
-      postPersonalIds.length > 0
-        ? supabase.from("user_posts").select("id, user_id, content, image_path, created_at").in("id", postPersonalIds).lte("publish_at", new Date().toISOString())
-        : Promise.resolve({ data: [] }),
-      postCommunityIds.length > 0
-        ? supabase.from("community_posts").select("id, author_id, community_id, content, image_path, created_at").in("id", postCommunityIds)
-        : Promise.resolve({ data: [] }),
-      reelIds.length > 0
-        ? supabase.from("reels").select("id, user_id, caption, thumbnail_url, video_url, created_at").in("id", reelIds)
-        : Promise.resolve({ data: [] }),
-      commIds.length > 0
-        ? supabase.from("communities").select("id, name, emoji, cover_color, member_count").in("id", commIds)
-        : Promise.resolve({ data: [] }),
-      listIds.length > 0
-        ? supabase.from("listings").select("id, title, price, currency, image_paths, location, created_at").in("id", listIds)
-        : Promise.resolve({ data: [] }),
-      servIds.length > 0
-        ? supabase.from("services").select("id, title, price, currency, duration_minutes, image_paths, created_at").in("id", servIds)
-        : Promise.resolve({ data: [] }),
-    ])
-
-    // Re-sort by the RPC's rank order (rehydrate shuffled them)
-    const byId = (arr) => new Map((arr || []).map((x) => [x.id, x]))
-    const rankOrder = (ids, rehydrated) => {
-      const m = byId(rehydrated)
-      return ids.map((id) => m.get(id)).filter(Boolean)
-    }
-
-    upRes.data = rankOrder(postPersonalIds, upRes.data)
-    cpRes.data = rankOrder(postCommunityIds, cpRes.data)
-    rRes.data  = rankOrder(reelIds, rRes.data)
-    cRes.data  = rankOrder(commIds, cRes.data)
-    lRes.data  = rankOrder(listIds, lRes.data)
-    sRes.data  = rankOrder(servIds, sRes.data)
-
-    // Load photos for people
-    // Load photos for people
-    const userList = pRes.data || []
-    if (userList.length > 0) {
-      const { data: photos } = await supabase
-        .from("profile_photos")
-        .select("user_id, storage_path, is_primary, display_order")
-        .in("user_id", userList.map((u) => u.id))
-        .order("is_primary", { ascending: false })
-        .order("display_order", { ascending: true })
-      const map = new Map()
-      ;(photos || []).forEach((p) => { if (!map.has(p.user_id)) map.set(p.user_id, p.storage_path) })
-      userList.forEach((u) => { u.photo_url = publicPhotoUrl(map.get(u.id)) })
-    }
-
-    // Merge posts (personal + community)
-    const mergedPosts = [
-      ...(upRes.data || []).map((p) => ({ ...p, _source: "personal", author_id: p.user_id })),
-      ...(cpRes.data || []).map((p) => ({ ...p, _source: "community" })),
-    ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 20)
-
-    setPeople(userList)
-    setPosts(mergedPosts)
-    setReels(rRes.data || [])
-    setCommunities(cRes.data || [])
-    setListings(lRes.data || [])
-    setServices(sRes.data || [])
     setLoading(false)
   }, [])
 
@@ -202,51 +109,17 @@ export default function Search() {
   const loadSuggestions = useCallback(async () => {
     if (!myId || suggestionsLoaded) return
     try {
-      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-      const [rp, rcp] = await Promise.all([
-        supabase.from('user_posts').select('content').gt('created_at', since).lte('publish_at', new Date().toISOString()).limit(200),
-        supabase.from('community_posts').select('content').gt('created_at', since).limit(200),
-      ])
-      const stop = new Set(['the','a','an','and','or','to','of','in','is','it','this','that','for','on','with','i','you','my','me','we','be','are','was','has','have','do','does','so','at','as','but','not','from','by','can','no','yes','all','if','just','like','get','got','out','up','about','what','when','how'])
-      const counts = new Map()
-      const all = [...(rp.data||[]), ...(rcp.data||[])]
-      all.forEach((row) => {
-        const text = (row.content || '').toLowerCase()
-        const hashtags = text.match(/#([a-z0-9_]{2,20})/g) || []
-        hashtags.forEach((h) => { const key = h.slice(1); counts.set(key, (counts.get(key) || 0) + 2) })
-        text.split(/[^a-z0-9_]+/).forEach((w) => {
-          if (w.length < 3 || stop.has(w)) return
-          counts.set(w, (counts.get(w) || 0) + 1)
-        })
-      })
-      const top = [...counts.entries()].sort((a,b) => b[1] - a[1]).slice(0, 10).map(([t]) => t)
-
-      let peopleRows = []
-      const { data: pymk, error: pymkErr } = await supabase.rpc('get_pymk_profiles', { p_limit: 12 })
-      if (!pymkErr && pymk && pymk.length > 0) {
-        peopleRows = pymk.map((r) => ({
-          id: r.id,
-          display_name: r.display_name,
-          username: r.username,
-          is_verified: r.is_verified,
-          city: r.city,
-          photo_url: r.primary_photo ? publicPhotoUrl(r.primary_photo) : null,
-          mutual_count: r.mutual_count || 0,
-        }))
-      }
-
-      const { data: commRows } = await supabase.from('communities')
-        .select('id, slug, name, emoji, cover_color, member_count')
-        .eq('is_active', true)
-        .order('member_count', { ascending: false })
-        .limit(20)
-
-      setTrendingTags(top)
-      setSuggestedPeople((peopleRows || []).slice(0, 12).map((p) => ({
+      const res = await fetch('/api/search/suggestions')
+      const j = await res.json()
+      if (!j.success) return
+      const d = j.data || {}
+      setTrendingTags(d.trending_tags || [])
+      setSuggestedPeople((d.suggested_people || []).map((p) => ({
         ...p,
-        _photo: p.photo_url || null,
+        _photo: p.photo_path ? publicPhotoUrl(p.photo_path) : null,
+        photo_url: p.photo_path ? publicPhotoUrl(p.photo_path) : null,
       })))
-      setSuggestedCommunities(commRows || [])
+      setSuggestedCommunities(d.suggested_communities || [])
       setSuggestionsLoaded(true)
     } catch (e) { console.warn('suggestions failed', e) }
   }, [myId, suggestionsLoaded])

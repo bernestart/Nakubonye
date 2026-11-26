@@ -2333,6 +2333,64 @@ export default {
           return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
         }
       }
+      // P2: Search suggestions (idle state) — trending tags + people + communities
+      if (path === "/api/search/suggestions" && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const myId = String(me.id);
+        try {
+          const [postsRes, commPostsRes, peopleRes, commRes] = await Promise.all([
+            queryDatabase("SELECT content FROM user_posts WHERE created_at > NOW() - INTERVAL '7 days' LIMIT 200").catch(() => ({ rows: [] })),
+            queryDatabase("SELECT content FROM community_posts WHERE created_at > NOW() - INTERVAL '7 days' LIMIT 200").catch(() => ({ rows: [] })),
+            queryDatabase("SELECT p.id, p.display_name, p.username, p.is_verified, (to_jsonb(p)->>'city') AS city, (SELECT storage_path FROM profile_photos pp WHERE pp.user_id = p.id ORDER BY is_primary DESC, display_order ASC LIMIT 1) AS photo_path FROM profiles p WHERE p.id <> $1::uuid AND COALESCE(p.is_active, true) = true AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $1::uuid AND b.blocked_id = p.id) OR (b.blocker_id = p.id AND b.blocked_id = $1::uuid)) ORDER BY p.last_seen_at DESC NULLS LAST LIMIT 12", [myId]).catch(() => ({ rows: [] })),
+            queryDatabase("SELECT id, name, (to_jsonb(c)->>'slug') AS slug, (to_jsonb(c)->>'emoji') AS emoji, (to_jsonb(c)->>'cover_color') AS cover_color, COALESCE((to_jsonb(c)->>'member_count')::int, 0) AS member_count FROM communities c WHERE COALESCE((to_jsonb(c)->>'is_active')::boolean, true) = true ORDER BY member_count DESC NULLS LAST LIMIT 20").catch(() => ({ rows: [] })),
+          ]);
+          const STOP = new Set(['the','a','an','and','or','to','of','in','is','it','this','that','for','on','with','i','you','my','me','we','be','are','was','has','have','do','does','so','at','as','but','not','from','by','can','no','yes','all','if','just','like','get','got','out','up','about','what','when','how']);
+          const counts = new Map();
+          [...(postsRes.rows || []), ...(commPostsRes.rows || [])].forEach((row) => {
+            const text = (row.content || '').toLowerCase();
+            const tags = text.match(/#([a-z0-9_]{2,20})/g) || [];
+            tags.forEach((h) => { const k = h.slice(1); counts.set(k, (counts.get(k) || 0) + 2); });
+            text.split(/[^a-z0-9_]+/).forEach((word) => {
+              if (word.length < 3 || STOP.has(word)) return;
+              counts.set(word, (counts.get(word) || 0) + 1);
+            });
+          });
+          const trendingTags = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([t]) => t);
+          return new Response(JSON.stringify({ success: true, data: { trending_tags: trendingTags, suggested_people: peopleRes.rows || [], suggested_communities: commRes.rows || [] } }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+      // P2: Search — inline UNION across 6 entity types (search_content RPC missing on Neon)
+      if (path === "/api/search" && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const myId = String(me.id);
+        const q = String(url.searchParams.get("q") || "").trim();
+        const limit = Math.min(parseInt(url.searchParams.get("limit") || "60", 10), 100);
+        if (q.length < 2) return new Response(JSON.stringify({ success: true, data: { people: [], posts: [], reels: [], communities: [], listings: [], services: [] } }), { headers: { ...cors, "Content-Type": "application/json" } });
+        try {
+          const like = "%" + q + "%";
+          const [peopleRes, postsPersRes, postsCommRes, reelsRes, commRes, listRes, servRes] = await Promise.all([
+            queryDatabase("SELECT p.id, p.display_name, p.username, p.is_verified, (to_jsonb(p)->>'city') AS city, (SELECT storage_path FROM profile_photos pp WHERE pp.user_id = p.id ORDER BY is_primary DESC, display_order ASC LIMIT 1) AS photo_path FROM profiles p WHERE p.id <> $1::uuid AND (p.display_name ILIKE $2 OR p.username ILIKE $2) AND COALESCE(p.is_active, true) = true AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $1::uuid AND b.blocked_id = p.id) OR (b.blocker_id = p.id AND b.blocked_id = $1::uuid)) ORDER BY p.display_name NULLS LAST LIMIT 30", [myId, like]),
+            queryDatabase("SELECT id, user_id, content, created_at, (to_jsonb(u)->>'image_path') AS image_path FROM user_posts u WHERE content ILIKE $1 AND COALESCE((to_jsonb(u)->>'publish_at')::timestamptz, NOW()) <= NOW() AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $2::uuid AND b.blocked_id = u.user_id) OR (b.blocker_id = u.user_id AND b.blocked_id = $2::uuid)) ORDER BY created_at DESC LIMIT 20", [like, myId]).catch(() => ({ rows: [] })),
+            queryDatabase("SELECT id, author_id, community_id, content, created_at, (to_jsonb(c)->>'image_path') AS image_path FROM community_posts c WHERE content ILIKE $1 AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $2::uuid AND b.blocked_id = c.author_id) OR (b.blocker_id = c.author_id AND b.blocked_id = $2::uuid)) ORDER BY created_at DESC LIMIT 20", [like, myId]).catch(() => ({ rows: [] })),
+            queryDatabase("SELECT id, user_id, created_at, (to_jsonb(r)->>'caption') AS caption, (to_jsonb(r)->>'thumbnail_url') AS thumbnail_url, (to_jsonb(r)->>'video_url') AS video_url FROM reels r WHERE (to_jsonb(r)->>'caption') ILIKE $1 AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $2::uuid AND b.blocked_id = r.user_id) OR (b.blocker_id = r.user_id AND b.blocked_id = $2::uuid)) ORDER BY created_at DESC LIMIT 20", [like, myId]).catch(() => ({ rows: [] })),
+            queryDatabase("SELECT id, name, (to_jsonb(c)->>'slug') AS slug, (to_jsonb(c)->>'emoji') AS emoji, (to_jsonb(c)->>'cover_color') AS cover_color, COALESCE((to_jsonb(c)->>'member_count')::int, 0) AS member_count FROM communities c WHERE name ILIKE $1 AND COALESCE((to_jsonb(c)->>'is_active')::boolean, true) = true ORDER BY member_count DESC NULLS LAST LIMIT 20", [like]).catch(() => ({ rows: [] })),
+            queryDatabase("SELECT id, title, created_at, (to_jsonb(l)->>'price')::numeric AS price, (to_jsonb(l)->>'currency') AS currency, to_jsonb(l)->'image_paths' AS image_paths, (to_jsonb(l)->>'location') AS location FROM listings l WHERE title ILIKE $1 AND COALESCE((to_jsonb(l)->>'status'), 'active') = 'active' ORDER BY created_at DESC LIMIT 20", [like]).catch(() => ({ rows: [] })),
+            queryDatabase("SELECT id, title, created_at, (to_jsonb(s)->>'price')::numeric AS price, (to_jsonb(s)->>'currency') AS currency, (to_jsonb(s)->>'duration_minutes')::int AS duration_minutes, to_jsonb(s)->'image_paths' AS image_paths FROM services s WHERE title ILIKE $1 AND COALESCE((to_jsonb(s)->>'is_active')::boolean, true) = true ORDER BY created_at DESC LIMIT 20", [like]).catch(() => ({ rows: [] })),
+          ]);
+          const mergedPosts = [
+            ...(postsPersRes.rows || []).map((p) => ({ ...p, _source: "personal", author_id: p.user_id })),
+            ...(postsCommRes.rows || []).map((p) => ({ ...p, _source: "community" })),
+          ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 20);
+          return new Response(JSON.stringify({ success: true, data: { people: peopleRes.rows || [], posts: mergedPosts, reels: reelsRes.rows || [], communities: commRes.rows || [], listings: listRes.rows || [], services: servRes.rows || [] } }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          console.error("[SEARCH]", err.message);
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
       if (/^\/api\/stories\/[0-9a-f-]{36}$/.test(path) && request.method === "DELETE") {
         const me = await getSessionUser(request, env, url);
         if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
