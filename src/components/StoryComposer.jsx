@@ -8,7 +8,7 @@ import { FilePicker } from "@capawesome/capacitor-file-picker"
 import { Capacitor } from "@capacitor/core"
 import StoryEditor from "./story/StoryEditor"
 import { base64ToBlob, uploadStoryMedia } from "../lib/storyUpload"
-import { supabase } from "../lib/supabase"
+import { getMediaUrl } from "../lib/api"
 import "../lib/authFetch";   // side-effect: patches window.fetch to attach Bearer token
 const MIME_TO_EXT = {
   "video/mp4": "mp4",
@@ -241,7 +241,7 @@ export default function StoryComposer({ onClose, onDone, onOptimistic, onResolve
       const ext = extFromMime(mime, finalMediaType)
       if (!blob || blob.size === 0) throw new Error("The file is empty or unreadable.")
       const path = await uploadStoryMedia(blob, ext, mime, myId)
-      const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
+      const pub = { publicUrl: getMediaUrl(path) }
 
       const res = await fetch("/api/stories", {
         method: "POST",

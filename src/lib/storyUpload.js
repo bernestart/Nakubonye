@@ -1,4 +1,3 @@
-import { supabase } from "./supabase"
 
 // ---------------------------------------------------------------------------
 // Binary conversion helpers
@@ -42,64 +41,8 @@ async function blobToArrayBuffer(blob) {
 const BUCKET = "chat-media"
 
 export async function uploadStoryMedia(blobOrBuffer, ext, contentType, myId) {
-  if (!myId) throw new Error("Not signed in.")
-  if (!blobOrBuffer) throw new Error("No media to upload.")
-
-  // Normalise input to ArrayBuffer.
-  // Supabase Storage on native WebViews does NOT accept File / Blob / FormData —
-  // it requires an ArrayBuffer. This is the fix for the silent publish failure.
-  let arrayBuffer
-  let byteLength
-
-  if (blobOrBuffer instanceof ArrayBuffer) {
-    arrayBuffer = blobOrBuffer
-    byteLength = arrayBuffer.byteLength
-  } else if (blobOrBuffer instanceof Uint8Array) {
-    arrayBuffer = blobOrBuffer.buffer.slice(
-      blobOrBuffer.byteOffset,
-      blobOrBuffer.byteOffset + blobOrBuffer.byteLength
-    )
-    byteLength = blobOrBuffer.byteLength
-  } else if (typeof Blob !== "undefined" && blobOrBuffer instanceof Blob) {
-    byteLength = blobOrBuffer.size
-    if (byteLength === 0) {
-      throw new Error("The file is empty (0 bytes). The native read failed.")
-    }
-    arrayBuffer = await blobToArrayBuffer(blobOrBuffer)
-  } else {
-    throw new Error("Unsupported media type for upload.")
-  }
-
-  if (!byteLength || byteLength === 0) {
-    throw new Error("The file is empty (0 bytes). The native read failed.")
-  }
-
-  const safeId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).substring(2, 9);
-  const path = `stories/${myId}/${safeId}.${ext}`
-
-  console.log(`[Upload] Starting. Size: ${byteLength} bytes, Type: ${contentType}, Path: ${path}`)
-
-  const { data, error } = await supabase.storage
-    .from(BUCKET)
-    .upload(path, arrayBuffer, { contentType, upsert: false })
-
-  if (error) {
-    console.error("[Upload] Supabase Error:", error)
-    const msg = (error.message || "").toLowerCase()
-
-    if (msg.includes("row-level security") || msg.includes("policy") || error.statusCode === 403) {
-      throw new Error(
-        `Upload denied. The '${BUCKET}' bucket needs an INSERT policy for authenticated users on the 'stories/' prefix.`
-      )
-    }
-    if (error.statusCode === 413) {
-      throw new Error("File is too large for Supabase limits (max 50MB).")
-    }
-    if (error.statusCode === 404) {
-      throw new Error(`Bucket '${BUCKET}' not found. Check Supabase Storage configuration.`)
-    }
-    throw new Error("Upload failed: " + error.message)
-  }
-
-  return data.path
+  // T2: stories use the same Telegram proxy as chat — no Supabase storage.
+  const { uploadMedia } = await import("./api");
+  const blob = blobOrBuffer instanceof Blob ? blobOrBuffer : new Blob([blobOrBuffer], { type: contentType || "image/jpeg" });
+  return uploadMedia(blob); // returns Telegram file_id
 }

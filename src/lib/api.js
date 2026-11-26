@@ -58,7 +58,6 @@ export const getCommunityPosts = async (communityIds, userId) => {
   return json.data || [];
 };
 
-import { supabase } from "./supabase"; // Ensure supabase is imported here
 
 export const getMediaUrl = (path, bucket = "community-media") => {
   if (!path) return null;
@@ -70,7 +69,7 @@ export const getMediaUrl = (path, bucket = "community-media") => {
   }
   
   // Fallback to Supabase for old legacy files
-  return supabase.storage.from(bucket).getPublicUrl(path).data?.publicUrl;
+  return null; // no Supabase fallback — legacy non-Telegram path unresolvable
 };
 
 export const uploadMedia = async (file) => {
