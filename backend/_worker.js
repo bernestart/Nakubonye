@@ -3135,6 +3135,44 @@ export default {
         }
       }
 
+      
+      // 32. PHASE T3: Post Comments Actions
+      if (path === "/api/comments/action" && request.method === "POST") {
+        try {
+          const { action, table, id, postId, userId, content, emoji, next } = await req.json();
+          if (action === 'insert') await queryDatabase(`INSERT INTO ${table} (post_id, user_id, content) VALUES ($1, $2, $3)`, [postId, userId, content]);
+          else if (action === 'delete') await queryDatabase(`DELETE FROM ${table} WHERE id = $1 AND user_id = $2`, [id, userId]);
+          else if (action === 'soft_delete') await queryDatabase(`UPDATE ${table} SET deleted_at = NOW(), content = '[deleted]' WHERE id = $1`, [id]);
+          else if (action === 'pin') await queryDatabase(`UPDATE ${table} SET pinned_at = $1 WHERE id = $2`, [next, id]);
+          else if (action === 'unpin') await queryDatabase(`UPDATE ${table} SET pinned_at = NULL WHERE id = $1`, [id]);
+          return new Response(JSON.stringify({ success: true }), { headers: cors });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 33. PHASE T3: Reel Comments Actions
+      if (path === "/api/reels/comments/action" && request.method === "POST") {
+        try {
+          const { action, id, reelId, userId, content, emoji, next } = await req.json();
+          if (action === 'insert') await queryDatabase(`INSERT INTO reel_comments (reel_id, user_id, content) VALUES ($1, $2, $3)`, [reelId, userId, content]);
+          else if (action === 'delete') await queryDatabase(`DELETE FROM reel_comments WHERE id = $1 AND user_id = $2`, [id, userId]);
+          else if (action === 'soft_delete') await queryDatabase(`UPDATE reel_comments SET deleted_at = NOW(), content = '' WHERE id = $1`, [id]);
+          else if (action === 'pin') await queryDatabase(`UPDATE reel_comments SET pinned_at = $1 WHERE id = $2`, [next, id]);
+          else if (action === 'unpin') await queryDatabase(`UPDATE reel_comments SET pinned_at = NULL WHERE id = $1`, [id]);
+          return new Response(JSON.stringify({ success: true }), { headers: cors });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 34. PHASE T3: Comment Reactions
+      if (path === "/api/comment_reactions" && request.method === "POST") {
+        try {
+          const { action, table, commentId, userId, emoji } = await req.json();
+          if (action === 'remove') await queryDatabase(`DELETE FROM ${table} WHERE comment_id = $1 AND user_id = $2`, [commentId, userId]);
+          else if (action === 'update') await queryDatabase(`UPDATE ${table} SET reaction = $1 WHERE comment_id = $2 AND user_id = $3`, [emoji, commentId, userId]);
+          else if (action === 'insert') await queryDatabase(`INSERT INTO ${table} (comment_id, user_id, reaction) VALUES ($1, $2, $3)`, [commentId, userId, emoji]);
+          return new Response(JSON.stringify({ success: true }), { headers: cors });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
