@@ -65,18 +65,15 @@ export default function CommunityFeed({ communityId, isMember }) {
     let photoMap = new Map()
 
     if (ids.length > 0) {
-      const { data: profs } = await supabase
-        .from('profiles')
-        .select('id, display_name, username, is_verified')
-        .in('id', ids)
+      const bulkRes = await fetch(`${API_BASE_URL}/api/profiles-photos/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids })
+      }).then(r => r.json()).catch(() => ({ success: false }))
+      const profs = bulkRes.success ? (bulkRes.data?.profiles || []) : []
       ;(profs || []).forEach((p) => profMap.set(p.id, p))
 
-      const { data: photos } = await supabase
-        .from('profile_photos')
-        .select('user_id, storage_path, is_primary, display_order')
-        .in('user_id', ids)
-        .order('is_primary', { ascending: false })
-        .order('display_order', { ascending: true })
+      const photos = bulkRes.success ? (bulkRes.data?.photos || []) : []
       ;(photos || []).forEach((p) => {
         if (!photoMap.has(p.user_id)) photoMap.set(p.user_id, p.storage_path)
       })
@@ -84,10 +81,12 @@ export default function CommunityFeed({ communityId, isMember }) {
     // Load reactions for these posts
     const postIds = (rows || []).map((r) => r.id)
     if (postIds.length > 0) {
-      const { data: reacts } = await supabase
-        .from('community_post_reactions')
-        .select('post_id, user_id, reaction')
-        .in('post_id', postIds)
+      const statsRes = await fetch(`${API_BASE_URL}/api/post-stats/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'community', ids: postIds })
+      }).then(r => r.json()).catch(() => ({ success: false }))
+      const reacts = statsRes.success ? (statsRes.data?.reactions || []) : []
       const byPost = {}
       ;(reacts || []).forEach((r) => {
         byPost[r.post_id] = byPost[r.post_id] || []
@@ -192,16 +191,10 @@ export default function CommunityFeed({ communityId, isMember }) {
     if (!confirm('Delete this post?')) return
     tap('light')
     
-    // Build query
-    let query = supabase.from('community_posts').delete().eq('id', postId)
-    
-    // If the user is NOT an admin/mod, restrict the delete to their own post
-    const isModerator = ['owner', 'admin', 'moderator'].includes(myRole)
-    if (!isModerator) {
-      query = query.eq('author_id', session.user.id)
-    }
-
-    const { error: err } = await query
+        const delRes = await fetch(`${API_BASE_URL}/api/community-posts/${postId}`, {
+      method: 'DELETE'
+    }).then(r => r.json()).catch(e => ({ success: false, error: e.message }))
+    const err = delRes.success ? null : { message: delRes.error || 'Delete failed' }
     if (err) { setError(err.message); return }
     
     // Remove from UI

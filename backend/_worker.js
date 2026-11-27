@@ -3963,6 +3963,32 @@ export default {
         }
       }
 
+
+      // 55. DELETE /api/community-posts/:id — role-checked delete
+      {
+        const m = path.match(/^\/api\/community-posts\/(\d{1,18})$/);
+        if (m && request.method === "DELETE") {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+          try {
+            const postId = m[1];
+            const postQ = await queryDatabase(`SELECT community_id, author_id FROM community_posts WHERE id = $1::bigint`, [postId]);
+            if (!postQ.rows.length) return new Response(JSON.stringify({ success: false, error: "NOT_FOUND" }), { status: 404, headers: cors });
+            const { community_id, author_id } = postQ.rows[0];
+            const isAuthor = String(author_id).toLowerCase() === String(me.id).toLowerCase();
+            if (!isAuthor) {
+              const rc = await queryDatabase(`SELECT role FROM community_memberships WHERE community_id = $1::bigint AND user_id = $2::uuid`, [community_id, me.id]);
+              const myRole = rc.rows[0]?.role;
+              if (!["owner", "admin", "moderator"].includes(myRole)) {
+                return new Response(JSON.stringify({ success: false, error: "FORBIDDEN" }), { status: 403, headers: cors });
+              }
+            }
+            await queryDatabase(`DELETE FROM community_posts WHERE id = $1::bigint`, [postId]);
+            return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+        }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
