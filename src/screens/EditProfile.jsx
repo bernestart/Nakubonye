@@ -6,7 +6,8 @@ import { Camera as NativeCamera, CameraResultType, CameraSource } from '@capacit
 import BrandGlow from '../components/BrandGlow'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
-import { publicPhotoUrl } from '../lib/photo'
+import { publicPhotoUrl } from '../lib/photo';
+import { API_BASE_URL } from '../lib/api';
 import { tap } from '../lib/haptic'
 import ProfileTabs from '../components/ProfileTabs'
 import AppHeader from '../components/AppHeader'
@@ -131,42 +132,23 @@ export default function EditProfile() {
       if (prefRows.max_age) setMaxAge(prefRows.max_age)
     }
 
-    const { data: lfRow } = await supabase
-      .from('profiles')
-      .select('looking_for, purchased_photo_slots')
-      .eq('id', myId)
-      .single()
-    if (lfRow?.looking_for) setLookingFor(lfRow.looking_for)
-
-    const { data: interRows } = await supabase.from('interests').select('id, name').order('id')
-    setAvailableInterests(interRows || [])
-
-    const { data: myInterests } = await supabase
-      .from('profile_interests').select('interest_id').eq('profile_id', myId)
-    setSelectedInterests((myInterests || []).map((r) => r.interest_id))
-
-    const { data: promptRows } = await supabase
-      .from('profile_prompts')
-      .select('prompt_key, answer, display_order')
-      .eq('profile_id', myId)
-      .order('display_order', { ascending: true })
-    setPrompts(promptRows || [])
-
-    const { data: photoRows } = await supabase
-      .from('profile_photos')
-      .select('id, storage_path, is_primary, display_order')
-      .eq('user_id', myId)
-      .order('is_primary', { ascending: false })
-      .order('display_order', { ascending: true })
-
-    setPhotos((photoRows || []).map((p) => ({
-      id: p.id,
-      storage_path: p.storage_path,
-      is_primary: p.is_primary,
-      display_order: p.display_order,
-      url: publicPhotoUrl(p.storage_path),
-    })))
-
+    const loadRes = await fetch(`${API_BASE_URL}/api/profile/edit/load?myId=${myId}`).then(r => r.json());
+    if (loadRes.success) {
+      const d = loadRes.data;
+      if (d.profile?.looking_for) setLookingFor(d.profile.looking_for);
+      
+      setAvailableInterests(d.allInterests || []);
+      setSelectedInterests(d.interests || []);
+      setPrompts(d.prompts || []);
+      
+      setPhotos((d.photos || []).map((p) => ({
+        id: p.id,
+        storage_path: p.storage_path,
+        is_primary: p.is_primary,
+        display_order: p.display_order,
+        url: publicPhotoUrl(p.storage_path),
+      })));
+    }
     setLoading(false)
   }, [myId])
 
@@ -404,34 +386,21 @@ export default function EditProfile() {
       )
     if (prefErr) { setSaving(false); setError(prefErr.message); return }
 
-    // Save prompts
-    await supabase.from('profile_prompts').delete().eq('profile_id', myId)
+    // BFF: Save everything at once
     const cleanPrompts = prompts.filter((p) => p.prompt_key && p.answer && p.answer.trim().length > 0)
-    if (cleanPrompts.length > 0) {
-      const { error: promptErr } = await supabase
-        .from('profile_prompts')
-        .insert(cleanPrompts.map((p, i) => ({
-          profile_id: myId,
-          prompt_key: p.prompt_key,
-          answer: p.answer.trim(),
-          display_order: i,
-        })))
-      if (promptErr) { setSaving(false); setError(promptErr.message); return }
-    }
+      .map((p, i) => ({ prompt_key: p.prompt_key, answer: p.answer.trim(), display_order: i }));
+    
+    const saveRes = await fetch(`${API_BASE_URL}/api/profile/edit/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ myId, prompts: cleanPrompts, interests: selectedInterests })
+    }).then(r => r.json());
 
-    await supabase.from('profile_interests').delete().eq('profile_id', myId)
-    const { error: iErr } = await supabase.from('profile_interests').insert(
-      selectedInterests.map((id) => ({ profile_id: myId, interest_id: id }))
-    )
-    if (iErr) { setSaving(false); setError(iErr.message); return }
-
-    const { data: refreshed } = await supabase
-      .from('profiles').select('*').eq('id', myId).single()
-    setProfile(refreshed)
-
+    if (!saveRes.success) { setSaving(false); setError(saveRes.error || 'Save failed'); return; }
+    
+    // Refresh local profile state
+    setProfile(prev => ({ ...prev, ...saveRes.data }));
     setSaving(false)
-    // If the profile is now complete, grant the 100-coin bonus silently.
-    try { await supabase.rpc('claim_profile_complete_bonus') } catch {}
 
     setSavedMsg('Saved.')
     tap('medium')
