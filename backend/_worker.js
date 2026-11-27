@@ -3440,6 +3440,81 @@ export default {
         } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
       }
 
+
+      // 34. GET /api/profile/suggested — PYMK (people you may know)
+      if (path === "/api/profile/suggested" && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const limit = Math.min(parseInt(url.searchParams.get("limit") || "40", 10) || 40, 100);
+          // Suggested: not me, not blocked, not already followed, active, order by mutual follows desc
+          const r = await queryDatabase(`
+            WITH my_follows AS (
+              SELECT following_id FROM follows WHERE follower_id = $1::uuid
+            ),
+            mutual_counts AS (
+              SELECT f2.follower_id AS candidate_id, COUNT(*)::int AS mutual_count
+              FROM follows f2
+              WHERE f2.following_id IN (SELECT following_id FROM my_follows)
+                AND f2.follower_id <> $1::uuid
+              GROUP BY f2.follower_id
+            )
+            SELECT p.id, p.display_name, p.username, p.is_verified, p.city,
+                   COALESCE(mc.mutual_count, 0) AS mutual_count
+            FROM profiles p
+            LEFT JOIN mutual_counts mc ON mc.candidate_id = p.id
+            WHERE p.id <> $1::uuid
+              AND p.is_active = true
+              AND p.id NOT IN (SELECT following_id FROM my_follows)
+              AND NOT EXISTS (SELECT 1 FROM blocks WHERE (blocker_id = $1::uuid AND blocked_id = p.id) OR (blocker_id = p.id AND blocked_id = $1::uuid))
+            ORDER BY COALESCE(mc.mutual_count, 0) DESC, p.created_at DESC
+            LIMIT $2
+          `, [me.id, limit]);
+          return new Response(JSON.stringify({ success: true, data: r.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 35. POST /api/profile/like — like a user (match intent)
+      if (path === "/api/profile/like" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const b = await request.json().catch(() => ({}));
+          const targetId = String(b.target_user_id || "").toLowerCase();
+          if (!targetId) return new Response(JSON.stringify({ success: false, error: "MISSING_FIELDS" }), { status: 400, headers: cors });
+          if (targetId === me.id.toLowerCase()) return new Response(JSON.stringify({ success: false, error: "CANNOT_LIKE_SELF" }), { status: 400, headers: cors });
+          // Check block
+          const bl = await queryDatabase("SELECT 1 FROM blocks WHERE (blocker_id = $1::uuid AND blocked_id = $2::uuid) OR (blocker_id = $2::uuid AND blocked_id = $1::uuid) LIMIT 1", [me.id, targetId]);
+          if (bl.rows.length) return new Response(JSON.stringify({ success: false, error: "BLOCKED" }), { status: 403, headers: cors });
+          // Insert like (idempotent); check if target already liked me -> create match
+          await queryDatabase(`
+            INSERT INTO likes (liker_id, likee_id) VALUES ($1::uuid, $2::uuid)
+            ON CONFLICT DO NOTHING
+          `, [me.id, targetId]).catch(async () => {
+            // Fallback: table might use different name (user_likes / profile_likes). Try common names.
+            for (const t of ['profile_likes', 'user_likes']) {
+              try { await queryDatabase(`INSERT INTO ${t} (liker_id, likee_id) VALUES ($1::uuid, $2::uuid) ON CONFLICT DO NOTHING`, [me.id, targetId]); return; } catch {}
+            }
+          });
+          return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 36. PATCH /api/profile/me — update current user's profile (whitelist)
+      if (path === "/api/profile/me" && request.method === "PATCH") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const b = await request.json().catch(() => ({}));
+          const allowed = ["music_genres", "profession", "education", "city", "country", "bio", "display_name", "username", "website"];
+          const sets = []; const params = [me.id];
+          for (const k of allowed) if (k in b) { params.push(b[k]); sets.push(`${k} = ${params.length}`); }
+          if (!sets.length) return new Response(JSON.stringify({ success: false, error: "NO_FIELDS" }), { status: 400, headers: cors });
+          await queryDatabase(`UPDATE profiles SET ${sets.join(", ")} WHERE id = $1::uuid`, params);
+          return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });

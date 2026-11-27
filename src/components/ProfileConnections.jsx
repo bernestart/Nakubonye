@@ -92,7 +92,9 @@ export default function ProfileConnections({ userId, visibility, fullPage = fals
     if (subTab !== 'suggested' || suggested.length > 0) return
     let cancelled = false
     ;(async () => {
-      const { data, error } = await supabase.rpc('get_suggested_people', { p_limit: 40 })
+      const sugRes = await fetch(`${API_BASE_URL}/api/profile/suggested?limit=40`).then(r => r.json()).catch(() => ({ success: false }))
+      const data = sugRes.success ? (sugRes.data || []) : []
+      const error = sugRes.success ? null : { message: sugRes.error || 'fetch failed' }
       if (cancelled || error) return
       const rows = data || []
       if (rows.length === 0) { setSuggested([]); return }
@@ -247,7 +249,12 @@ export default function ProfileConnections({ userId, visibility, fullPage = fals
                   <button
                     onClick={async () => {
                       tap("medium")
-                      const { error: rpcErr } = await supabase.rpc("like_user", { target_user_id: u.id })
+                      const likeRes = await fetch(`${API_BASE_URL}/api/profile/like`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ target_user_id: u.id })
+                      }).then(r => r.json()).catch(e => ({ success: false, error: e.message }))
+                      const rpcErr = likeRes.success ? null : { message: likeRes.error || 'Like failed' }
                       if (rpcErr) { console.warn("like_user failed", rpcErr); return }
                       setSuggested(prev => prev.filter(x => x.id !== u.id))
                     }}

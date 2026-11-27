@@ -3,6 +3,7 @@ import { createPortal } from "react-dom"
 import { X } from "lucide-react"
 import { supabase } from "../lib/supabase"
 import { tap } from "../lib/haptic"
+import { API_BASE_URL } from '../lib/api';
 
 const TAG_INTEREST_LIMIT = 12
 
@@ -53,9 +54,12 @@ export default function ProfileEditSheet({ kind, person, myId, onClose, onSaved 
           .map((s) => s.trim())
           .filter(Boolean)
           .slice(0, TAG_INTEREST_LIMIT)
-        const { error: err } = await supabase.from("profiles").update({
-          music_genres: list,
-        }).eq("id", myId)
+        const musicRes = await fetch(`${API_BASE_URL}/api/profile/me`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ music_genres: list })
+        }).then(r => r.json()).catch(e => ({ success: false, error: e.message }))
+        const err = musicRes.success ? null : { message: musicRes.error || 'Save failed' }
         if (err) throw err
         onSaved?.({ music_genres: list })
       }
