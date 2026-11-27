@@ -3801,6 +3801,120 @@ export default {
         } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
       }
 
+
+      // 48. Member management — DELETE member, PATCH role
+      {
+        const m = path.match(/^\/api\/communities\/(\d{1,18})\/members\/([^/]+)$/);
+        if (m && (request.method === "DELETE" || request.method === "PATCH")) {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+          try {
+            const communityId = m[1];
+            const targetUserId = String(m[2]).toLowerCase();
+            const isSelf = targetUserId === String(me.id).toLowerCase();
+            if (!isSelf) {
+              const rc = await queryDatabase(`SELECT role FROM community_memberships WHERE community_id = $1::bigint AND user_id = $2::uuid`, [communityId, me.id]);
+              const myRole = rc.rows[0]?.role;
+              if (request.method === "DELETE" && !["owner", "admin", "moderator"].includes(myRole)) {
+                return new Response(JSON.stringify({ success: false, error: "FORBIDDEN" }), { status: 403, headers: cors });
+              }
+              if (request.method === "PATCH" && myRole !== "owner") {
+                return new Response(JSON.stringify({ success: false, error: "FORBIDDEN" }), { status: 403, headers: cors });
+              }
+            }
+            if (request.method === "DELETE") {
+              await queryDatabase(`DELETE FROM community_memberships WHERE community_id = $1::bigint AND user_id = $2::uuid`, [communityId, targetUserId]);
+            } else {
+              const b = await request.json().catch(() => ({}));
+              const role = String(b.role || "member");
+              if (!["member", "moderator", "admin", "owner"].includes(role)) {
+                return new Response(JSON.stringify({ success: false, error: "BAD_ROLE" }), { status: 400, headers: cors });
+              }
+              await queryDatabase(`UPDATE community_memberships SET role = $1 WHERE community_id = $2::bigint AND user_id = $3::uuid`, [role, communityId, targetUserId]);
+            }
+            return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+        }
+      }
+
+      // 49. POST /api/communities/:id/bans
+      {
+        const m = path.match(/^\/api\/communities\/(\d{1,18})\/bans$/);
+        if (m && request.method === "POST") {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+          try {
+            const communityId = m[1];
+            const rc = await queryDatabase(`SELECT role FROM community_memberships WHERE community_id = $1::bigint AND user_id = $2::uuid`, [communityId, me.id]);
+            const myRole = rc.rows[0]?.role;
+            if (!["owner", "admin"].includes(myRole)) {
+              return new Response(JSON.stringify({ success: false, error: "FORBIDDEN" }), { status: 403, headers: cors });
+            }
+            const b = await request.json().catch(() => ({}));
+            const targetUserId = String(b.user_id || "").toLowerCase();
+            if (!targetUserId) return new Response(JSON.stringify({ success: false, error: "MISSING_USER_ID" }), { status: 400, headers: cors });
+            await queryDatabase(
+              `INSERT INTO community_bans (community_id, user_id, banned_by, reason) VALUES ($1::bigint, $2::uuid, $3::uuid, $4) ON CONFLICT DO NOTHING`,
+              [communityId, targetUserId, me.id, b.reason || null]
+            );
+            await queryDatabase(`DELETE FROM community_memberships WHERE community_id = $1::bigint AND user_id = $2::uuid`, [communityId, targetUserId]);
+            return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+        }
+      }
+
+      // 50. DELETE /api/communities/:id — owner-only
+      {
+        const m = path.match(/^\/api\/communities\/(\d{1,18})$/);
+        if (m && request.method === "DELETE") {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+          try {
+            const communityId = m[1];
+            const rc = await queryDatabase(`SELECT role FROM community_memberships WHERE community_id = $1::bigint AND user_id = $2::uuid`, [communityId, me.id]);
+            if (rc.rows[0]?.role !== "owner") {
+              return new Response(JSON.stringify({ success: false, error: "FORBIDDEN" }), { status: 403, headers: cors });
+            }
+            await queryDatabase(`DELETE FROM communities WHERE id = $1::bigint`, [communityId]);
+            return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+        }
+      }
+
+      // 51. POST /api/communities/:id/join-requests/:reqId — approve or reject
+      {
+        const m = path.match(/^\/api\/communities\/(\d{1,18})\/join-requests\/(\d{1,18})$/);
+        if (m && request.method === "POST") {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+          try {
+            const communityId = m[1];
+            const reqId = m[2];
+            const rc = await queryDatabase(`SELECT role FROM community_memberships WHERE community_id = $1::bigint AND user_id = $2::uuid`, [communityId, me.id]);
+            if (!["owner", "admin", "moderator"].includes(rc.rows[0]?.role)) {
+              return new Response(JSON.stringify({ success: false, error: "FORBIDDEN" }), { status: 403, headers: cors });
+            }
+            const b = await request.json().catch(() => ({}));
+            const action = String(b.action || "");
+            if (!["approve", "reject"].includes(action)) {
+              return new Response(JSON.stringify({ success: false, error: "BAD_ACTION" }), { status: 400, headers: cors });
+            }
+            if (action === "approve") {
+              const targetUserId = String(b.user_id || "").toLowerCase();
+              if (!targetUserId) return new Response(JSON.stringify({ success: false, error: "MISSING_USER_ID" }), { status: 400, headers: cors });
+              try {
+                await queryDatabase(`INSERT INTO community_memberships (community_id, user_id, role) VALUES ($1::bigint, $2::uuid, 'member')`, [communityId, targetUserId]);
+              } catch (e) { /* duplicate is OK */ }
+            }
+            await queryDatabase(
+              `UPDATE community_join_requests SET status = $1, reviewed_by = $2::uuid, reviewed_at = NOW() WHERE id = $3::bigint`,
+              [action === "approve" ? "approved" : "rejected", me.id, reqId]
+            );
+            return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+        }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });

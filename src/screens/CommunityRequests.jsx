@@ -7,6 +7,7 @@ import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 import BrandGlow from "../components/BrandGlow"
 import AppHeader from "../components/AppHeader"
+import { API_BASE_URL } from '../lib/api';
 
 export default function CommunityRequests() {
   const { id } = useParams()
@@ -31,10 +32,13 @@ export default function CommunityRequests() {
     const ids = [...new Set((rows || []).map((r) => r.user_id))]
     let profMap = new Map(), phMap = new Map()
     if (ids.length > 0) {
-      const [profs, phs] = await Promise.all([
-        supabase.from("profiles").select("id, display_name, username, is_verified").in("id", ids),
-        supabase.from("profile_photos").select("user_id, storage_path, is_primary, display_order").in("user_id", ids).order("is_primary", { ascending: false }).order("display_order", { ascending: true }),
-      ])
+      const bulkRes = await fetch(`${API_BASE_URL}/api/profiles-photos/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids })
+      }).then(r => r.json()).catch(() => ({ success: false }))
+      const profs = { data: bulkRes.success ? (bulkRes.data?.profiles || []) : [] }
+      const phs = { data: bulkRes.success ? (bulkRes.data?.photos || []) : [] }
       ;(profs.data || []).forEach((p) => profMap.set(p.id, p))
       ;(phs.data || []).forEach((x) => { if (!phMap.has(x.user_id)) phMap.set(x.user_id, x.storage_path) })
     }
@@ -53,19 +57,12 @@ export default function CommunityRequests() {
     if (busyId) return
     setBusyId(req.id); tap("light")
     try {
-      if (action === "approve") {
-        const { error: insErr } = await supabase.from("community_memberships").insert({
-          community_id: Number(id),
-          user_id: req.user_id,
-          role: "member",
-        })
-        if (insErr && !insErr.message.includes("duplicate")) throw insErr
-      }
-      await supabase.from("community_join_requests").update({
-        status: action === "approve" ? "approved" : "rejected",
-        reviewed_by: myId,
-        reviewed_at: new Date().toISOString(),
-      }).eq("id", req.id)
+      const reviewRes = await fetch(`${API_BASE_URL}/api/communities/${id}/join-requests/${req.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, reviewer_id: myId, user_id: req.user_id })
+      }).then(r => r.json()).catch(e => ({ success: false, error: e.message }))
+      if (!reviewRes.success) throw new Error(reviewRes.error || 'Review failed')
       setRequests((cur) => cur.filter((r) => r.id !== req.id))
     } catch (e) {
       console.warn(e)

@@ -11,6 +11,7 @@ import { Suspense } from 'react'
 import CommunityFeed from '../components/CommunityFeed'
 import CommunityChat from '../components/CommunityChat'
 import CommunityEvents from '../components/CommunityEvents'
+import { API_BASE_URL } from '../lib/api';
 
 export default function CommunityView() {
   const nav = useNavigate()
@@ -40,7 +41,7 @@ export default function CommunityView() {
     if (!confirm("Remove this member from the community?")) return
     setBusyMember(true)
     try {
-      await supabase.from('community_memberships').delete().eq('community_id', id).eq('user_id', userId)
+      await fetch(`${API_BASE_URL}/api/communities/${id}/members/${userId}`, { method: 'DELETE' }).catch(() => {})
       setMembers((cur) => cur.filter((m) => m.id !== userId))
       setMemberActionFor(null)
     } catch (e) { console.warn(e) }
@@ -52,13 +53,11 @@ export default function CommunityView() {
     if (!confirm("Ban this member? They won't be able to rejoin.")) return
     setBusyMember(true)
     try {
-      await supabase.from('community_bans').insert({
-        community_id: id,
-        user_id: userId,
-        banned_by: session.user.id,
-        reason: null,
-      })
-      await supabase.from('community_memberships').delete().eq('community_id', id).eq('user_id', userId)
+      await fetch(`${API_BASE_URL}/api/communities/${id}/bans`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, banned_by: session.user.id, reason: null })
+      }).catch(() => {})
       setMembers((cur) => cur.filter((m) => m.id !== userId))
       setMemberActionFor(null)
     } catch (e) { console.warn(e) }
@@ -69,7 +68,11 @@ export default function CommunityView() {
     if (!canManage || busyMember) return
     setBusyMember(true)
     try {
-      await supabase.from('community_memberships').update({ role }).eq('community_id', id).eq('user_id', userId)
+      await fetch(`${API_BASE_URL}/api/communities/${id}/members/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role })
+      }).catch(() => {})
       setMembers((cur) => cur.map((m) => m.id === userId ? { ...m, role } : m))
       setMemberActionFor(null)
     } catch (e) { console.warn(e) }
@@ -204,7 +207,8 @@ export default function CommunityView() {
     if (!community) return
     if (!confirm("Delete this community permanently? Posts and chat will be removed.")) return
     tap("medium")
-    const { error: err } = await supabase.from("communities").delete().eq("id", community.id)
+    const delRes = await fetch(`${API_BASE_URL}/api/communities/${community.id}`, { method: 'DELETE' }).then(r => r.json()).catch(e => ({ success: false, error: e.message }))
+    const err = delRes.success ? null : { message: delRes.error || 'Delete failed' }
     if (err) { alert(err.message); return }
     setMenuOpen(false)
     nav("/communities", { replace: true })
