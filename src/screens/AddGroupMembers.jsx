@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft, Search, X, Check } from "lucide-react"
-import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
 import { loadBlockedIds } from "../lib/blocks"
@@ -39,11 +38,8 @@ export default function AddGroupMembers() {
     if (q.length < 2) { setResults([]); return }
     let cancelled = false
     const t = setTimeout(async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("id, display_name, username")
-        .or("display_name.ilike.%" + q + "%,username.ilike.%" + q + "%")
-        .limit(20)
+      const searchRes = await fetch(`${API_BASE_URL}/api/users/search?q=${encodeURIComponent(q)}&limit=20`).then(r => r.json()).catch(() => ({ success: false }))
+      const data = searchRes.success ? (searchRes.data || []) : []
       if (cancelled) return
       setResults((data || []).filter((u) => !existingIds.has(u.id) && !blockedIds.has(u.id)))
     }, 250)
@@ -64,7 +60,8 @@ export default function AddGroupMembers() {
     const denied = []
     for (const u of selected) {
       try {
-        const { data: ok } = await supabase.rpc("can_add_to_group", { sender: myId, recipient: u.id })
+        const okRes = await fetch(`${API_BASE_URL}/api/profile/can-add-to-group?target=${u.id}`).then(r => r.json()).catch(() => ({ success: false }))
+        const ok = okRes.success ? !!okRes.allowed : true
         if (ok === true) allowed.push(u)
         else denied.push(u)
       } catch (e) {
@@ -89,24 +86,18 @@ export default function AddGroupMembers() {
     }).then(r => r.json()).catch(e => ({ success: false, error: e.message }))
     const insErr = bulkRes.success ? null : { message: bulkRes.error || 'Bulk add failed' }
     if (!insErr) {
-      const { data: me } = await supabase.from("profiles").select("display_name, username").eq("id", myId).maybeSingle()
-      const myName = me?.display_name || me?.username || "Someone"
+      const meRes = await fetch(`${API_BASE_URL}/api/profile/me/name`).then(r => r.json()).catch(() => ({ success: false }))
+      const myName = meRes.success ? (meRes.data?.display_name || meRes.data?.username || "Someone") : "Someone"
       const names = allowed.map((u) => u.display_name || u.username || "Someone").join(", ")
-      await supabase.from("group_messages").insert({
-        group_id: groupId,
-        sender_id: myId,
-        content: myName + " added " + names,
-        is_system: true,
-      })
-      if (denied.length > 0) {
-        const skippedNames = denied.map((u) => u.display_name || u.username || "Someone").join(", ")
-        await supabase.from("group_messages").insert({
-          group_id: groupId,
-          sender_id: myId,
-          content: "Couldn't add " + skippedNames + " — they don't allow being added to groups",
-          is_system: true,
+      const skippedNames = denied.map((u) => u.display_name || u.username || "Someone").join(", ")
+      await fetch(`${API_BASE_URL}/api/groups/${groupId}/notify-members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          added_text: myName + " added " + names,
+          denied_text: denied.length > 0 ? "Couldn't add " + skippedNames + " — they don't allow being added to groups" : null
         })
-      }
+      }).catch(() => {})
     }
     setBusy(false)
     if (insErr) { setError(insErr.message); return }

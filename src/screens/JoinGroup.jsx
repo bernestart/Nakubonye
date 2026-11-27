@@ -51,12 +51,8 @@ export default function JoinGroup() {
     setState("joining"); tap("light")
 
     // Get my name for system message
-    const { data: prof } = await supabase
-      .from("profiles")
-      .select("display_name, username")
-      .eq("id", myId)
-      .maybeSingle()
-    const myName = prof?.display_name || prof?.username || "Someone"
+    const profRes = await fetch(`${API_BASE_URL}/api/profile/me/name`).then(r => r.json()).catch(() => ({ success: false }))
+    const myName = profRes.success ? (profRes.data?.display_name || profRes.data?.username || "Someone") : "Someone"
 
     const joinRes = await fetch(`${API_BASE_URL}/api/groups/${group.id}/join`, {
       method: 'POST',

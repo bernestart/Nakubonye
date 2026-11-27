@@ -4301,6 +4301,57 @@ export default {
         }
       }
 
+
+      // 69. GET /api/profile/me/name — current user's display name
+      {
+        if (path === "/api/profile/me/name" && request.method === "GET") {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+          try {
+            const r = await queryDatabase(`SELECT display_name, username FROM profiles WHERE id = $1::uuid`, [me.id]);
+            return new Response(JSON.stringify({ success: true, data: r.rows[0] || null }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+        }
+      }
+
+      // 70. GET /api/profile/can-add-to-group?target=X — permission check (fail-open)
+      {
+        if (path === "/api/profile/can-add-to-group" && request.method === "GET") {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+          try {
+            const target = url.searchParams.get('target') || '';
+            if (!target) return new Response(JSON.stringify({ success: false, error: "MISSING_TARGET" }), { status: 400, headers: cors });
+            let allowed = true;
+            try {
+              const r = await queryDatabase(`SELECT can_add_to_group($1::uuid, $2::uuid) AS allowed`, [me.id, target]);
+              allowed = r.rows[0]?.allowed === true;
+            } catch (e) { allowed = true; /* fail-open — mirrors client */ }
+            return new Response(JSON.stringify({ success: true, allowed }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+        }
+      }
+
+      // 71. POST /api/groups/:id/notify-members — insert system messages for added/denied
+      {
+        const m = path.match(/^\/api\/groups\/(\d{1,18})\/notify-members$/);
+        if (m && request.method === "POST") {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+          try {
+            const groupId = m[1];
+            const memb = await queryDatabase(`SELECT 1 FROM group_members WHERE group_id = $1::bigint AND user_id = $2::uuid LIMIT 1`, [groupId, me.id]);
+            if (!memb.rows.length) return new Response(JSON.stringify({ success: false, error: "NOT_A_MEMBER" }), { status: 403, headers: cors });
+            const b = await request.json().catch(() => ({}));
+            const added = typeof b.added_text === 'string' ? b.added_text.trim().slice(0, 2000) : '';
+            const denied = typeof b.denied_text === 'string' ? b.denied_text.trim().slice(0, 2000) : '';
+            if (added) await queryDatabase(`INSERT INTO group_messages (group_id, sender_id, content, is_system) VALUES ($1::bigint, $2::uuid, $3, TRUE)`, [groupId, me.id, added]);
+            if (denied) await queryDatabase(`INSERT INTO group_messages (group_id, sender_id, content, is_system) VALUES ($1::bigint, $2::uuid, $3, TRUE)`, [groupId, me.id, denied]);
+            return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+        }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
