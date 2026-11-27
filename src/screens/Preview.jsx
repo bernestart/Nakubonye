@@ -22,6 +22,7 @@ import ProfilePersonalDetails from '../components/ProfilePersonalDetails'
 import PhotoViewer from '../components/PhotoViewer'
 import ReelViewer from '../components/ReelViewer'
 import ProfileAbout from '../components/ProfileAbout'
+import { API_BASE_URL } from '../lib/api';
 
 export default function Preview() {
   const { unreadCount } = useNotifications()
@@ -52,7 +53,12 @@ export default function Preview() {
     if (!myId) return;
     const isCurrentlyCreator = profile?.account_type === 'creator';
     const newState = !isCurrentlyCreator;
-    const { error } = await supabase.rpc('toggle_creator_mode', { p_enable: newState });
+    const toggleRes = await fetch(`${API_BASE_URL}/api/profile/me`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account_type: newState ? 'creator' : 'personal' })
+    }).then(r => r.json()).catch(e => ({ success: false, error: e.message }))
+    const error = toggleRes.success ? null : { message: toggleRes.error || 'Toggle failed' }
     if (error) {
       alert("Failed to toggle Creator Mode: " + error.message);
       return;
@@ -67,23 +73,18 @@ export default function Preview() {
   const load = useCallback(async () => {
     if (!myId) return
 
-    const [photoRes, promptRes, linksRes, reelRes, saveRes, personalRes, communityRes, f1, f2, f3] = await Promise.all([
-      supabase.from('profile_photos').select('storage_path, is_primary, display_order').eq('user_id', myId)
-        .order('is_primary', { ascending: false }).order('display_order', { ascending: true }),
-      supabase.from('profile_prompts').select('prompt_key, answer, display_order').eq('profile_id', myId)
-        .order('display_order', { ascending: true }),
-      supabase.from('profile_interests').select('interest_id').eq('profile_id', myId),
-      supabase.from('reels').select('id, user_id, video_url, thumbnail_url, caption, created_at, allow_comments, clips, trim_start, trim_end, mirrored, filter_id, text_overlays, sticker_overlays, view_count, location')
-        .eq('user_id', myId).eq('is_active', true).order('created_at', { ascending: false }).limit(30),
-      supabase.from('reel_saves').select('reel_id').eq('user_id', myId),
-      supabase.from('user_posts').select('id, content, image_path, created_at')
-        .eq('user_id', myId).eq('is_active', true).lte('publish_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(30),
-      supabase.from('community_posts').select('id, content, image_path, community_id, created_at')
-        .eq('author_id', myId).order('created_at', { ascending: false }).limit(30),
-      supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', myId),
-      supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', myId),
-      supabase.from('matches').select('*', { count: 'exact', head: true }).or(`user_one_id.eq.${myId},user_two_id.eq.${myId}`),
-    ])
+    const previewRes = await fetch(`${API_BASE_URL}/api/profile/me/preview`).then(r => r.json()).catch(() => ({ success: false, data: {} }))
+    const pv = previewRes.success ? (previewRes.data || {}) : {}
+    const photoRes = { data: pv.photos || [] }
+    const promptRes = { data: pv.prompts || [] }
+    const linksRes = { data: pv.interests || [] }
+    const reelRes = { data: pv.reels || [] }
+    const saveRes = { data: pv.savedReelIds || [] }
+    const personalRes = { data: pv.personalPosts || [] }
+    const communityRes = { data: pv.communityPosts || [] }
+    const f1 = { count: pv.followersCount || 0 }
+    const f2 = { count: pv.followingCount || 0 }
+    const f3 = { count: pv.matchesCount || 0 }
 
     setPhotos((photoRes.data || []).map((p) => publicPhotoUrl(p.storage_path)).filter(Boolean))
     setPrompts(promptRes.data || [])
@@ -94,7 +95,12 @@ export default function Preview() {
 
     if (linksRes.data?.length) {
       const ids = linksRes.data.map((l) => l.interest_id)
-      const { data: rows } = await supabase.from('interests').select('id, name').in('id', ids)
+      const intRes = await fetch(`${API_BASE_URL}/api/interests/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids })
+      }).then(r => r.json()).catch(() => ({ success: false }))
+      const rows = intRes.success ? (intRes.data || []) : []
       setInterests((rows || []).map((r) => r.name))
     } else setInterests([])
 
@@ -110,9 +116,12 @@ export default function Preview() {
 
     const savedIds = (saveRes.data || []).map((r) => r.reel_id)
     if (savedIds.length > 0) {
-      const { data: saved } = await supabase.from('reels')
-        .select('id, video_url, thumbnail_url, caption, created_at')
-        .in('id', savedIds).eq('is_active', true).order('created_at', { ascending: false }).limit(30)
+      const savedRes = await fetch(`${API_BASE_URL}/api/reels/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: savedIds })
+      }).then(r => r.json()).catch(() => ({ success: false }))
+      const saved = savedRes.success ? (savedRes.data || []) : []
       setSavedReels(saved || [])
     } else setSavedReels([])
 

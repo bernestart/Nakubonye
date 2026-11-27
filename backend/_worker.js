@@ -3506,12 +3506,74 @@ export default {
         if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
         try {
           const b = await request.json().catch(() => ({}));
-          const allowed = ["music_genres", "profession", "education", "city", "country", "bio", "display_name", "username", "website"];
+          const allowed = ["music_genres", "profession", "education", "city", "country", "bio", "display_name", "username", "website", "account_type"];
           const sets = []; const params = [me.id];
           for (const k of allowed) if (k in b) { params.push(b[k]); sets.push(`${k} = ${params.length}`); }
           if (!sets.length) return new Response(JSON.stringify({ success: false, error: "NO_FIELDS" }), { status: 400, headers: cors });
           await queryDatabase(`UPDATE profiles SET ${sets.join(", ")} WHERE id = $1::uuid`, params);
           return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+
+      // 37. GET /api/profile/me/preview — 10-query mega-bundle
+      if (path === "/api/profile/me/preview" && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const [photos, prompts, interests, reels, saves, personalPosts, communityPosts, followersCount, followingCount, matchesCount] = await Promise.all([
+            queryDatabase(`SELECT storage_path, is_primary, display_order FROM profile_photos WHERE user_id = $1::uuid ORDER BY is_primary DESC, display_order ASC`, [me.id]),
+            queryDatabase(`SELECT prompt_key, answer, display_order FROM profile_prompts WHERE profile_id = $1::uuid ORDER BY display_order ASC`, [me.id]),
+            queryDatabase(`SELECT interest_id FROM profile_interests WHERE profile_id = $1::uuid`, [me.id]),
+            queryDatabase(`SELECT id, user_id, video_url, thumbnail_url, caption, created_at, allow_comments, clips, trim_start, trim_end, mirrored, filter_id, text_overlays, sticker_overlays, view_count, location FROM reels WHERE user_id = $1::uuid AND is_active = true ORDER BY created_at DESC LIMIT 30`, [me.id]),
+            queryDatabase(`SELECT reel_id FROM reel_saves WHERE user_id = $1::uuid`, [me.id]),
+            queryDatabase(`SELECT id, content, image_path, created_at FROM user_posts WHERE user_id = $1::uuid AND is_active = true AND publish_at <= NOW() ORDER BY created_at DESC LIMIT 30`, [me.id]),
+            queryDatabase(`SELECT id, content, image_path, community_id, created_at FROM community_posts WHERE author_id = $1::uuid ORDER BY created_at DESC LIMIT 30`, [me.id]),
+            queryDatabase(`SELECT COUNT(*)::int AS count FROM follows WHERE following_id = $1::uuid`, [me.id]),
+            queryDatabase(`SELECT COUNT(*)::int AS count FROM follows WHERE follower_id = $1::uuid`, [me.id]),
+            queryDatabase(`SELECT COUNT(*)::int AS count FROM matches WHERE user_one_id = $1::uuid OR user_two_id = $1::uuid`, [me.id])
+          ]);
+          return new Response(JSON.stringify({
+            success: true,
+            data: {
+              photos: photos.rows,
+              prompts: prompts.rows,
+              interests: interests.rows,
+              reels: reels.rows,
+              savedReelIds: saves.rows,
+              personalPosts: personalPosts.rows,
+              communityPosts: communityPosts.rows,
+              followersCount: followersCount.rows[0]?.count || 0,
+              followingCount: followingCount.rows[0]?.count || 0,
+              matchesCount: matchesCount.rows[0]?.count || 0
+            }
+          }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 38. POST /api/interests/bulk — resolve interest ids → names
+      if (path === "/api/interests/bulk" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const b = await request.json().catch(() => ({}));
+          const ids = Array.isArray(b.ids) ? b.ids.slice(0, 200).map(String) : [];
+          if (!ids.length) return new Response(JSON.stringify({ success: true, data: [] }), { headers: { ...cors, "Content-Type": "application/json" } });
+          const r = await queryDatabase(`SELECT id, name FROM interests WHERE id::text = ANY($1::text[])`, [ids]);
+          return new Response(JSON.stringify({ success: true, data: r.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 39. POST /api/reels/bulk — resolve reel ids → reel rows
+      if (path === "/api/reels/bulk" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const b = await request.json().catch(() => ({}));
+          const ids = Array.isArray(b.ids) ? b.ids.slice(0, 100).map(String) : [];
+          if (!ids.length) return new Response(JSON.stringify({ success: true, data: [] }), { headers: { ...cors, "Content-Type": "application/json" } });
+          const r = await queryDatabase(`SELECT id, video_url, thumbnail_url, caption, created_at FROM reels WHERE id::text = ANY($1::text[]) AND is_active = true ORDER BY created_at DESC LIMIT 30`, [ids]);
+          return new Response(JSON.stringify({ success: true, data: r.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
         } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
       }
 
