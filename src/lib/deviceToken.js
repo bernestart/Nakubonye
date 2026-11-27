@@ -1,4 +1,3 @@
-import { supabase } from './supabase'
 import { API_BASE_URL } from './api';
 
 const KEY_FCM_TOKEN = 'nk-fcm-token'
@@ -23,12 +22,12 @@ export async function bindDeviceToken() {
   const whoamiRes = await fetch(`${API_BASE_URL}/api/whoami`).then(r => r.json()).catch(() => ({ success: false }))
   const user = whoamiRes.success ? whoamiRes.user : null
   if (!user) return false
-  const { error } = await supabase
-    .from('device_tokens')
-    .upsert(
-      { user_id: user.id, token, platform: 'android' },
-      { onConflict: 'token' }
-    )
+  const bindRes = await fetch(`${API_BASE_URL}/api/device-tokens/bind`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, platform: 'android' })
+      }).then(r => r.json()).catch(e => ({ success: false, error: e.message }))
+      const error = bindRes.success ? null : { message: bindRes.error || 'Bind failed' }
   if (error) { console.warn('[token] bind failed', error); return false }
   console.log('[token] bound to', user.id)
   return true

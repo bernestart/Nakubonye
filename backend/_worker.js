@@ -3783,6 +3783,24 @@ export default {
         } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
       }
 
+
+      // 47. POST /api/device-tokens/bind — upsert FCM token for current user
+      if (path === "/api/device-tokens/bind" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const b = await request.json().catch(() => ({}));
+          const token = String(b.token || "");
+          const platform = String(b.platform || "android");
+          if (!token) return new Response(JSON.stringify({ success: false, error: "MISSING_TOKEN" }), { status: 400, headers: cors });
+          await queryDatabase(
+            `INSERT INTO device_tokens (user_id, token, platform) VALUES ($1::uuid, $2, $3) ON CONFLICT (token) DO UPDATE SET user_id = EXCLUDED.user_id, platform = EXCLUDED.platform`,
+            [me.id, token, platform]
+          );
+          return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
