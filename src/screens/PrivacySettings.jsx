@@ -10,6 +10,7 @@ import {
 } from '../lib/settings.jsx'
 import BrandGlow from '../components/BrandGlow'
 import BottomNav from '../components/BottomNav'
+import { API_BASE_URL } from '../lib/api';
 
 export default function PrivacySettings() {
   const nav = useNavigate()
@@ -26,7 +27,8 @@ export default function PrivacySettings() {
     let cancelled = false
     ;(async () => {
       try {
-        const { data } = await supabase.from("profiles").select("is_private").eq("id", myId).maybeSingle()
+        const privReadRes = await fetch(`${API_BASE_URL}/api/profile/privacy`).then(r => r.json()).catch(() => ({ success: false }))
+            const data = privReadRes.success ? privReadRes.data : null
         if (!cancelled) setIsPrivate(!!data?.is_private)
       } catch (e) { console.warn("load is_private failed", e) }
       finally { if (!cancelled) setPrivacyLoading(false) }
@@ -40,7 +42,8 @@ export default function PrivacySettings() {
     tap("light")
     const prev = isPrivate
     setIsPrivate(next)
-    const { error } = await supabase.from("profiles").update({ is_private: next }).eq("id", myId)
+    const privWriteRes = await fetch(`${API_BASE_URL}/api/profile/privacy`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ is_private: next }) }).then(r => r.json()).catch(e => ({ success: false, error: e.message }))
+      const error = privWriteRes.success ? null : { message: privWriteRes.error || "Save failed" }
     if (error) { setIsPrivate(prev); console.warn("toggle failed", error) }
     setPrivacyBusy(false)
   }

@@ -3218,6 +3218,86 @@ export default {
         } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
       }
 
+
+      // 20. POST /api/user-settings/init — ensure row exists
+      if (path === "/api/user-settings/init" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          await queryDatabase(`INSERT INTO user_settings (user_id) VALUES ($1::uuid) ON CONFLICT (user_id) DO NOTHING`, [me.id]);
+          return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 21. PATCH /api/user-settings — update user_settings (whitelist fields)
+      if (path === "/api/user-settings" && request.method === "PATCH") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const b = await request.json().catch(() => ({}));
+          const allowed = ["show_activity_status", "show_read_receipts"];
+          const sets = []; const params = [me.id];
+          for (const k of allowed) if (k in b) { params.push(!!b[k]); sets.push(`${k} = ${params.length}`); }
+          if (!sets.length) return new Response(JSON.stringify({ success: false, error: "NO_FIELDS" }), { status: 400, headers: cors });
+          await queryDatabase(`INSERT INTO user_settings (user_id) VALUES ($1::uuid) ON CONFLICT (user_id) DO NOTHING`, [me.id]);
+          await queryDatabase(`UPDATE user_settings SET ${sets.join(", ")} WHERE user_id = $1::uuid`, params);
+          return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 22. GET|PATCH /api/profile/privacy — is_private
+      if (path === "/api/profile/privacy") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          if (request.method === "GET") {
+            const r = await queryDatabase(`SELECT is_private FROM profiles WHERE id = $1::uuid`, [me.id]);
+            return new Response(JSON.stringify({ success: true, data: { is_private: !!r.rows[0]?.is_private } }), { headers: { ...cors, "Content-Type": "application/json" } });
+          }
+          if (request.method === "PATCH" || request.method === "POST") {
+            const b = await request.json().catch(() => ({}));
+            await queryDatabase(`UPDATE profiles SET is_private = $1 WHERE id = $2::uuid`, [!!b.is_private, me.id]);
+            return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+          }
+          return new Response(JSON.stringify({ success: false, error: "METHOD_NOT_ALLOWED" }), { status: 405, headers: cors });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 23. DELETE /api/muted-words/:id
+      if (path.startsWith("/api/muted-words/") && request.method === "DELETE") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const id = path.slice("/api/muted-words/".length);
+        if (!/^\d{1,18}$/.test(id)) return new Response(JSON.stringify({ success: false, error: "BAD_ID" }), { status: 400, headers: cors });
+        try {
+          await queryDatabase(`DELETE FROM muted_words WHERE id = $1::bigint AND user_id = $2::uuid`, [id, me.id]);
+          return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 24. DELETE /api/mutes/:id (muted user)
+      if (path.startsWith("/api/mutes/") && request.method === "DELETE") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const id = path.slice("/api/mutes/".length);
+        try {
+          await queryDatabase(`DELETE FROM user_mutes WHERE muter_id = $1::uuid AND muted_id = $2::uuid`, [me.id, id]);
+          return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 25. DELETE /api/blocks/:id
+      if (path.startsWith("/api/blocks/") && request.method === "DELETE") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        const id = path.slice("/api/blocks/".length);
+        if (!/^\d{1,18}$/.test(id)) return new Response(JSON.stringify({ success: false, error: "BAD_ID" }), { status: 400, headers: cors });
+        try {
+          await queryDatabase(`DELETE FROM blocks WHERE id = $1::bigint AND blocker_id = $2::uuid`, [id, me.id]);
+          return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });

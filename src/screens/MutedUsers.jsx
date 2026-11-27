@@ -7,6 +7,7 @@ import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 import BrandGlow from "../components/BrandGlow"
 import AppHeader from "../components/AppHeader"
+import { API_BASE_URL } from '../lib/api';
 
 export default function MutedUsers() {
   const nav = useNavigate()
@@ -48,7 +49,7 @@ export default function MutedUsers() {
   async function unmute(id) {
     tap("light")
     setUsers((cur) => cur.filter((u) => u.id !== id))
-    await supabase.from("user_mutes").delete().eq("muter_id", myId).eq("muted_id", id)
+    await fetch(`${API_BASE_URL}/api/mutes/${id}`, { method: "DELETE" }).catch(() => {})
   }
 
   return (

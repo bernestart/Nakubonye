@@ -5,6 +5,7 @@ import BrandGlow from '../components/BrandGlow'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl } from '../lib/photo'
+import { API_BASE_URL } from '../lib/api';
 
 export default function BlockedList() {
   const nav = useNavigate()
@@ -55,7 +56,7 @@ export default function BlockedList() {
   useEffect(() => { load() }, [load])
 
   async function unblock(item) {
-    await supabase.from('blocks').delete().eq('id', item.blockId)
+    await fetch(`${API_BASE_URL}/api/blocks/${item.blockId}`, { method: "DELETE" }).catch(() => {})
     setItems((cur) => cur.filter((x) => x.blockId !== item.blockId))
   }
 

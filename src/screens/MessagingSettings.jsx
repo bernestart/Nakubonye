@@ -9,6 +9,7 @@ import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
 import BrandGlow from "../components/BrandGlow"
 import NewMessageSheet from "../components/NewMessageSheet"
+import { API_BASE_URL } from '../lib/api';
 
 export default function MessagingSettings() {
   const nav = useNavigate()
@@ -71,7 +72,7 @@ export default function MessagingSettings() {
     tap("light")
     const next = !activeStatus
     setActiveStatus(next)
-    await supabase.from("user_settings").update({ show_activity_status: next }).eq("user_id", myId)
+    await fetch(`${API_BASE_URL}/api/user-settings`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ show_activity_status: next }) }).catch(() => {})
   }
 
   return (

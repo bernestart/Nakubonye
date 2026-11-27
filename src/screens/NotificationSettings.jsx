@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
 import BrandGlow from "../components/BrandGlow"
 import AppHeader from "../components/AppHeader"
+import { API_BASE_URL } from '../lib/api';
 
 const TOGGLES = [
   { key: "notif_likes",         label: "Likes",         sub: "When someone likes your post, reel or comment" },
@@ -51,7 +52,7 @@ export default function NotificationSettings() {
         .maybeSingle()
       if (data) setSettings(data)
       else {
-        await supabase.from("user_settings").insert({ user_id: myId })
+        await fetch(`${API_BASE_URL}/api/user-settings/init`, { method: "POST" }).catch(() => {})
         setSettings({})
       }
       setLoading(false)

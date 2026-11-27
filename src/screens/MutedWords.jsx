@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
 import BrandGlow from "../components/BrandGlow"
 import AppHeader from "../components/AppHeader"
+import { API_BASE_URL } from '../lib/api';
 
 export default function MutedWords() {
   const nav = useNavigate()
@@ -53,7 +54,7 @@ export default function MutedWords() {
   async function remove(id) {
     tap("light")
     setWords((cur) => cur.filter((x) => x.id !== id))
-    await supabase.from("muted_words").delete().eq("id", id).eq("user_id", myId)
+    await fetch(`${API_BASE_URL}/api/muted-words/${id}`, { method: "DELETE" }).catch(() => {})
   }
 
   return (
