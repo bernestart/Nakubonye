@@ -2,6 +2,7 @@ import { getMediaUrl } from '../lib/api';
 import { getRankedFeed, getCommunityPosts, toggleLikeAPI, API_BASE_URL } from '../lib/api';
 import { AnimatePresence } from "framer-motion";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react"
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from "react-router-dom"
 import { ImagePlus, Heart, Send, X, Users, Play, Camera, PenSquare, Video, Image as ImageIcon, MessageCircle, Share2 , MoreVertical , Volume2 , VolumeX } from "lucide-react"
 import VerifiedBadge from "../components/VerifiedBadge"
@@ -106,7 +107,7 @@ export default function Feed() {
       });
     }, { threshold: 0.5 });
     return () => observerRef.current?.disconnect();
-  }, [myId]);
+  }, [myId, queryClient]);
 
   const observePost = (el) => {
     if (el) observerRef.current?.observe(el);
@@ -163,7 +164,11 @@ export default function Feed() {
     if (!opts?.silent) setLoading(true)
     setError("")
     try {
-      const res = await fetch(`${API_BASE_URL}/api/feed/v2`).then(r => r.json()).catch(() => ({ success: false }))
+      const res = await queryClient.fetchQuery({
+        queryKey: ['feed', myId],
+        queryFn: () => fetch(`${API_BASE_URL}/api/feed/v2`).then(r => r.json()).catch(() => ({ success: false })),
+        staleTime: 1000 * 60 * 5 // Cache for 5 minutes
+      })
       if (!res || !res.success) { setError((res && res.error) || "Feed load failed"); setLoading(false); return }
       const d = res.data
       const matchIds = new Set(d.matchIds || [])
