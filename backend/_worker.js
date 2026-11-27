@@ -88,6 +88,25 @@ async function getSessionUser(request, env, url) {
   }
 }
 
+
+async function checkRateLimit(env, identifier, limit, windowSec) {
+  if (!env.UPSTASH_REDIS_URL || !env.UPSTASH_REDIS_TOKEN) return true; // Fail open if Redis not set
+  try {
+    const res = await fetch(`${env.UPSTASH_REDIS_URL}/pipeline`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.UPSTASH_REDIS_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify([
+        ["INCR", `ratelimit:${identifier}`],
+        ["EXPIRE", `ratelimit:${identifier}`, windowSec, "NX"]
+      ])
+    });
+    const data = await res.json();
+    return (data[0]?.result || 1) <= limit;
+  } catch (e) {
+    return true; // Fail open so the app doesn't break if Redis blips
+  }
+}
+
 export default {
   async fetch(request, env) {
     const cors = {
@@ -187,6 +206,23 @@ export default {
     // ===== PHASE 1: AUTH GATE. AUTH_ENFORCE="1" blocks; otherwise log-only. =====
     const ENFORCE = env.AUTH_ENFORCE === "1";
     const deny = (status, error) => new Response(JSON.stringify({ success: false, error }), { status, headers: { ...cors, "Content-Type": "application/json" } });
+
+    // ===== PHASE P1f: RATE LIMITING (DDoS SHIELD) =====
+    const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
+    if (path.startsWith("/api/") && !path.startsWith("/api/media/")) {
+      let limit = 100; // General API limit
+      let window = 60; // Per minute
+      
+      if (path.startsWith("/api/auth/")) { limit = 10; } // Strict for auth
+      else if (path.startsWith("/api/messages") || path.startsWith("/api/ws/")) { limit = 30; } // Spam protection
+
+      const allowed = await checkRateLimit(env, `${clientIp}:${path.split('/')[2] || 'api'}`, limit, window);
+      if (!allowed) {
+        return deny(429, "TOO_MANY_REQUESTS");
+      }
+    }
+    // ==================================================
+
     if (path.startsWith("/api/") && !path.startsWith("/api/media/")) {
       const authUser = await getSessionUser(request, env, url);
       // ===== S1: STRICT ROUTES (always need a session; ids must equal the session user) =====
