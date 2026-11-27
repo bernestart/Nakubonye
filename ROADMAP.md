@@ -181,3 +181,84 @@ P1.5, P1.6 independent, mostly done.
 **Not yet verified at runtime** — Chrome test still owed.
 **Enforcement flags still log-only:** AUTH_ENFORCE, MEMBER_ENFORCE, MESSAGES_ENFORCE all unset in Cloudflare. Flip only after Chrome test passes.
 **Next:** Chrome test (7-step sequence) → flip flags → rate limits → idempotency → Phase 5 observability → T2 supabase cleanup.
+
+<!-- T3.5-STATUS-START -->
+## 🚧 T3.5 — SUPABASE PURGE STATUS (auto-generated, do not hand-edit)
+
+**Last updated:** 2026-11-27
+**Purpose:** Handoff context for any AI or engineer continuing the migration. Read this BEFORE making changes.
+
+### Current state
+
+| Metric | Start T3.5 | Now |
+|---|---|---|
+| Supabase calls in `src/` | 635 | ~541 |
+| Worker endpoints in `backend/_worker.js` | 37 | 64 |
+| Files fully clean (0 supabase calls) | 4 | 12+ |
+| Batches shipped | 0 | 12 (01a–01k + 02/02b) |
+| Reverts needed | 0 | 0 |
+
+### Batches shipped (append-only history)
+
+| Batch | Scope | Result | Endpoints added |
+|---|---|---|---|
+| 01a | Settings (6 files: NotificationSettings, PrivacySettings, MutedWords, MutedUsers, BlockedList, MessagingSettings) | 7 calls killed | +6 |
+| 01b | Settings cont. (MessagingSettings Promise.all, BlockConfirm, usePresence, MutedUsers bulk) | 10 calls killed | +6 |
+| 01c | story_hides + connections aggregation + profiles-photos extend | 7 calls killed | +2 |
+| 01d | ProfileConnections RPCs (get_suggested_people, like_user) + ProfileEditSheet music_genres | 3 calls killed | +3 |
+| 01e | Preview.jsx 10-query Promise.all → 1 endpoint + toggle_creator + interests + reels bulk | 13 calls killed | +3 |
+| 01f | Preview.jsx post stats (personal + community reactions/comments) | 4 calls killed | +1 |
+| 01g | Preview.jsx dynamic table reaction toggle (fully clean) | 2 calls killed | +1 |
+| 01h | ProfileEditSheet details → /api/profile/me PATCH (fully clean) | 1 call killed | 0 (reuse) |
+| 01i | dataExport.js 18-call Promise.all → /api/user/data-export (fully clean) | 18 calls killed | +1 |
+| 01j | Admin.jsx 22 admin_* RPCs → /api/admin/rpc proxy | 22 calls killed | +1 |
+| 01k | Admin.jsx app_config + dynamic soft-delete | 2 calls killed (2 remain: storage signed URL + post_reports) | +2 |
+| 02/02b | notifSync + deviceToken + AppHeader cleanup + device_tokens endpoints | 6 calls killed | +2 |
+
+### Batches remaining (queue)
+
+| # | Scope | Files | Est. calls | Status |
+|---|---|---|---|---|
+| 03 | Communities + groups | ~18 | ~76 | ⏳ next |
+| 04 | Marketplace + services + events | ~15 | ~40 | ⏳ queued |
+| 05 | Stories + reels + drafts | ~12 | ~28 | ⏳ queued |
+| 06 | Verification + monetization + rewards | ~8 | ~30 | ⏳ queued (uses /api/admin/rpc pattern) |
+| 07 | Auth (passkeys + Brevo OTP) | ~8 | ~14 | ⏳ final — needs BREVO_API_KEY in .env |
+| 01l | EditProfile.jsx (storage + albums) | 1 | 13 | 🚫 deferred — file migration decision needed |
+| 01m | Admin.jsx (signed URL + post_reports tail) | 1 | 2 | 🚫 deferred — file migration + re-audit |
+
+### Auth decision (locked)
+
+- **Primary:** **Passkeys (WebAuthn)** — free forever, no SMS fees, scales to billions
+- **Fallback:** **Brevo** email OTP — 300/day free, ~9k/mo, **no custom domain required** (verify a single sender email like `you@gmail.com`)
+- **Scale flip:** Buy `nakubonye.com` (~$10/yr) once volume exceeds 300 signups/day → swap to Resend/SES ($0 at that volume) → keep Brevo code path as backup
+- **Rejected:** Resend without domain (owner-only), Phone/SMS (costs $5k–50k/mo at scale)
+
+### Workflow conventions (do not violate)
+
+1. **Every patch uses `fetch()`** — `src/lib/authFetch.js` monkey-patches `window.fetch` to inject Bearer token for `API_BASE_URL` calls. No per-callsite auth needed.
+2. **Never run `npm run build` locally** — GitHub Actions builds the APK on push. Flow: dry-run → apply → `npx vite build` (compile check) → commit → push.
+3. **Anchor-based patches only** — `node batch-XXX.cjs --dry-run` first. Abort on any `❌ anchor not found` or `❌ anchor ambiguous`. Never partially apply a file.
+4. **Endpoint insertion point** — always insert new routes in `backend/_worker.js` before the final tail:
+   `return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), ...)`
+5. **Endpoint numbering** — sequential in comments (currently at #47 in `_worker.js`).
+6. **URL pattern** — `fetch(`${API_BASE_URL}/api/...`)` — `API_BASE_URL` from `src/lib/api`. Never hardcode `nakubonye.bernestart.workers.dev`.
+7. **Never ask for `.env` contents** — use `import.meta.env.VITE_*` on frontend, `env.*` bindings on Worker.
+8. **One batch = one commit + push** — keeps builds reviewable, rollback trivial (`git revert HEAD`).
+
+### Known-good recent commits
+
+- `3f2d05c` feat: production release — WebRTC calls, rate limiting, OTP auth, BFF migrations
+- `b82bec0` feat(security): add Upstash Redis rate limiting for API, Auth, and Messages
+- `3630b05` fix(security): move rate limiter to the top of request lifecycle
+- `04879e8` feat(settings): batch-01a — 7 calls to endpoints
+
+### If you are a new AI picking this up
+
+1. Read this whole block first.
+2. Run `grep -rcE 'supabase\s*\.\s*(from|rpc)' src/ | awk -F: '{s+=$2} END {print s}'` — compare against **~541** above. If it doesn't match, work has happened since this was written — audit before patching.
+3. Continue from the **next uncompleted batch** in the queue table.
+4. If a batch's anchors fail 3× — do `sed -n 'L1,L2p' file | cat -A` dump of the region and rewrite the regex against real bytes (not what you remember).
+5. **Never assume a file is clean** based on prior audits — re-grep before patching.
+
+<!-- T3.5-STATUS-END -->
