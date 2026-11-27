@@ -4214,6 +4214,93 @@ export default {
         }
       }
 
+
+      // 66. GET /api/groups/:id/details — group + members w/ profile+photo (single call)
+      {
+        const m = path.match(/^\/api\/groups\/(\d{1,18})\/details$/);
+        if (m && request.method === "GET") {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+          try {
+            const groupId = m[1];
+            const myRoleQ = await queryDatabase(`SELECT role FROM group_members WHERE group_id = $1::bigint AND user_id = $2::uuid LIMIT 1`, [groupId, me.id]);
+            if (!myRoleQ.rows.length) return new Response(JSON.stringify({ success: false, error: "NOT_A_MEMBER" }), { status: 403, headers: cors });
+            const gQ = await queryDatabase(`SELECT id, name, avatar_url FROM groups WHERE id = $1::bigint`, [groupId]);
+            const memQ = await queryDatabase(
+              `SELECT gm.user_id, gm.role, gm.joined_at,
+                      p.display_name, p.username, p.is_verified,
+                      ph.storage_path AS photo_path
+               FROM group_members gm
+               LEFT JOIN profiles p ON p.id = gm.user_id
+               LEFT JOIN LATERAL (
+                 SELECT storage_path FROM profile_photos
+                 WHERE user_id = gm.user_id
+                 ORDER BY is_primary DESC, display_order ASC
+                 LIMIT 1
+               ) ph ON TRUE
+               WHERE gm.group_id = $1::bigint
+               ORDER BY gm.joined_at ASC`,
+              [groupId]
+            );
+            return new Response(JSON.stringify({
+              success: true,
+              data: { group: gQ.rows[0] || null, my_role: myRoleQ.rows[0].role, members: memQ.rows }
+            }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+        }
+      }
+
+      // 67. POST /api/groups/:id/kick — remove member + system msg (owner/admin only)
+      {
+        const m = path.match(/^\/api\/groups\/(\d{1,18})\/kick$/);
+        if (m && request.method === "POST") {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+          try {
+            const groupId = m[1];
+            const roleQ = await queryDatabase(`SELECT role FROM group_members WHERE group_id = $1::bigint AND user_id = $2::uuid`, [groupId, me.id]);
+            const role = roleQ.rows[0]?.role;
+            if (!role || (role !== 'owner' && role !== 'admin')) return new Response(JSON.stringify({ success: false, error: "NOT_AUTHORIZED" }), { status: 403, headers: cors });
+            const b = await request.json().catch(() => ({}));
+            const targetUser = String(b.user_id || '');
+            if (!targetUser) return new Response(JSON.stringify({ success: false, error: "MISSING_USER" }), { status: 400, headers: cors });
+            if (targetUser === me.id) return new Response(JSON.stringify({ success: false, error: "CANNOT_KICK_SELF" }), { status: 400, headers: cors });
+            const tgtQ = await queryDatabase(`SELECT role FROM group_members WHERE group_id = $1::bigint AND user_id = $2::uuid`, [groupId, targetUser]);
+            if (tgtQ.rows[0]?.role === 'owner') return new Response(JSON.stringify({ success: false, error: "CANNOT_KICK_OWNER" }), { status: 403, headers: cors });
+            await queryDatabase(`DELETE FROM group_members WHERE group_id = $1::bigint AND user_id = $2::uuid`, [groupId, targetUser]);
+            const content = typeof b.content === 'string' ? b.content.trim().slice(0, 2000) : '';
+            if (content) {
+              await queryDatabase(`INSERT INTO group_messages (group_id, sender_id, content, is_system) VALUES ($1::bigint, $2::uuid, $3, TRUE)`, [groupId, me.id, content]);
+            }
+            return new Response(JSON.stringify({ success: true, kicked: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+        }
+      }
+
+      // 68. POST /api/groups/:id/role — set member role (owner/admin only)
+      {
+        const m = path.match(/^\/api\/groups\/(\d{1,18})\/role$/);
+        if (m && request.method === "POST") {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+          try {
+            const groupId = m[1];
+            const myRoleQ = await queryDatabase(`SELECT role FROM group_members WHERE group_id = $1::bigint AND user_id = $2::uuid`, [groupId, me.id]);
+            const myRole = myRoleQ.rows[0]?.role;
+            if (!myRole || (myRole !== 'owner' && myRole !== 'admin')) return new Response(JSON.stringify({ success: false, error: "NOT_AUTHORIZED" }), { status: 403, headers: cors });
+            const b = await request.json().catch(() => ({}));
+            const targetUser = String(b.user_id || '');
+            const nextRole = String(b.role || '');
+            if (!targetUser || !['admin', 'member'].includes(nextRole)) return new Response(JSON.stringify({ success: false, error: "BAD_INPUT" }), { status: 400, headers: cors });
+            const tgtQ = await queryDatabase(`SELECT role FROM group_members WHERE group_id = $1::bigint AND user_id = $2::uuid`, [groupId, targetUser]);
+            if (!tgtQ.rows.length) return new Response(JSON.stringify({ success: false, error: "TARGET_NOT_MEMBER" }), { status: 404, headers: cors });
+            if (tgtQ.rows[0].role === 'owner') return new Response(JSON.stringify({ success: false, error: "CANNOT_CHANGE_OWNER" }), { status: 403, headers: cors });
+            await queryDatabase(`UPDATE group_members SET role = $1 WHERE group_id = $2::bigint AND user_id = $3::uuid`, [nextRole, groupId, targetUser]);
+            return new Response(JSON.stringify({ success: true, role: nextRole }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+        }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });

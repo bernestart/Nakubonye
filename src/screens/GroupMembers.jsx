@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { ArrowLeft, Crown, Shield, UserMinus, UserPlus, MoreVertical } from "lucide-react"
-import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 import BrandGlow from "../components/BrandGlow"
+import { API_BASE_URL } from '../lib/api';
 
 export default function GroupMembers() {
   const nav = useNavigate()
@@ -24,33 +24,23 @@ export default function GroupMembers() {
   const load = useCallback(async () => {
     if (!groupId || !myId) return
     setLoading(true)
-    const { data: g } = await supabase.from("groups").select("id, name, avatar_url").eq("id", groupId).maybeSingle()
-    setGroup(g)
-
-    const { data: mem } = await supabase
-      .from("group_members")
-      .select("user_id, role, joined_at")
-      .eq("group_id", groupId)
-      .order("joined_at", { ascending: true })
-    const list = mem || []
-    setMembers(list)
-    const mine = list.find((m) => m.user_id === myId)
-    setMyRole(mine?.role || null)
-
-    const ids = list.map((m) => m.user_id)
-    if (ids.length > 0) {
-      const { data: profs } = await supabase.from("profiles").select("id, display_name, username").in("id", ids)
-      setProfiles(new Map((profs || []).map((p) => [p.id, p])))
-      const { data: ph } = await supabase
-        .from("profile_photos")
-        .select("user_id, storage_path, is_primary, display_order")
-        .in("user_id", ids)
-        .order("is_primary", { ascending: false })
-        .order("display_order", { ascending: true })
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/groups/${groupId}/details`).then(r => r.json())
+      if (!res.success || !res.data) { setLoading(false); return }
+      const d = res.data
+      setGroup(d.group || null)
+      const list = Array.isArray(d.members) ? d.members : []
+      setMembers(list)
+      setMyRole(d.my_role || null)
+      setProfiles(new Map(list.map(m => [m.user_id, {
+        id: m.user_id,
+        display_name: m.display_name,
+        username: m.username,
+      }])))
       const pm = new Map()
-      ;(ph || []).forEach((p) => { if (!pm.has(p.user_id)) pm.set(p.user_id, p.storage_path) })
+      list.forEach(m => { if (m.photo_path) pm.set(m.user_id, m.photo_path) })
       setPhotos(pm)
-    }
+    } catch (e) { console.warn('load members failed', e) }
     setLoading(false)
   }, [groupId, myId])
 
@@ -63,20 +53,22 @@ export default function GroupMembers() {
     const them = profiles.get(userId)
     const myName = me?.display_name || me?.username || "Someone"
     const theirName = them?.display_name || them?.username || "Someone"
-    await supabase.from("group_messages").insert({
-      group_id: groupId,
-      sender_id: myId,
-      content: myName + " removed " + theirName,
-      is_system: true,
-    })
-    await supabase.from("group_members").delete().eq("group_id", groupId).eq("user_id", userId)
+    await fetch(`${API_BASE_URL}/api/groups/${groupId}/kick`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, content: myName + " removed " + theirName })
+    }).catch(() => {})
     setMenuFor(null); load()
   }
 
   async function makeAdmin(userId, currentRole) {
     tap("light")
     const next = currentRole === "admin" ? "member" : "admin"
-    await supabase.from("group_members").update({ role: next }).eq("group_id", groupId).eq("user_id", userId)
+    await fetch(`${API_BASE_URL}/api/groups/${groupId}/role`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, role: next })
+    }).catch(() => {})
     setMenuFor(null); load()
   }
 
