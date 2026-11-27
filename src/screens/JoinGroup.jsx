@@ -58,9 +58,11 @@ export default function JoinGroup() {
       .maybeSingle()
     const myName = prof?.display_name || prof?.username || "Someone"
 
-    const { error: insErr } = await supabase
-      .from("group_members")
-      .insert({ group_id: group.id, user_id: myId, role: "member" })
+    const joinRes = await fetch(`${API_BASE_URL}/api/groups/${group.id}/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    }).then(r => r.json()).catch(e => ({ success: false, error: e.message }))
+    const insErr = joinRes.success ? null : { code: joinRes.code === 'ALREADY_MEMBER' ? '23505' : 'JOIN_ERROR', message: joinRes.error || 'Join failed' }
 
     if (insErr) {
       // Race condition: already added

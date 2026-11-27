@@ -4151,6 +4151,69 @@ export default {
         }
       }
 
+
+      // 63. GET /api/groups/:id/pinned — fetch pinned message (single JOIN)
+      {
+        const m = path.match(/^\/api\/groups\/(\d{1,18})\/pinned$/);
+        if (m && request.method === "GET") {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+          try {
+            const groupId = m[1];
+            const memb = await queryDatabase(`SELECT 1 FROM group_members WHERE group_id = $1::bigint AND user_id = $2::uuid LIMIT 1`, [groupId, me.id]);
+            if (!memb.rows.length) return new Response(JSON.stringify({ success: false, error: "NOT_A_MEMBER" }), { status: 403, headers: cors });
+            const r = await queryDatabase(
+              `SELECT gm.id, gm.sender_id, gm.content, gm.media_url, gm.media_type,
+                      gm.deleted_at, gm.edited_at, gm.view_once, gm.viewed_by,
+                      gpm.pinned_by
+               FROM group_pinned_messages gpm
+               JOIN group_messages gm ON gm.id = gpm.message_id
+               WHERE gpm.group_id = $1::bigint
+               LIMIT 1`,
+              [groupId]
+            );
+            return new Response(JSON.stringify({ success: true, data: r.rows[0] || null }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+        }
+      }
+
+      // 64. POST /api/groups — create group (created_by = authed user)
+      {
+        if (path === "/api/groups" && request.method === "POST") {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+          try {
+            const b = await request.json().catch(() => ({}));
+            const name = typeof b.name === 'string' ? b.name.trim().slice(0, 120) : '';
+            if (!name) return new Response(JSON.stringify({ success: false, error: "EMPTY_NAME" }), { status: 400, headers: cors });
+            const avatar = typeof b.avatar_url === 'string' ? b.avatar_url : null;
+            const r = await queryDatabase(
+              `INSERT INTO groups (name, avatar_url, created_by) VALUES ($1, $2, $3::uuid) RETURNING id, name, avatar_url, created_by, created_at`,
+              [name, avatar, me.id]
+            );
+            return new Response(JSON.stringify({ success: true, data: r.rows[0] || null }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+        }
+      }
+
+      // 65. POST /api/groups/:id/join — self-join (idempotent)
+      {
+        const m = path.match(/^\/api\/groups\/(\d{1,18})\/join$/);
+        if (m && request.method === "POST") {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+          try {
+            const groupId = m[1];
+            const g = await queryDatabase(`SELECT id FROM groups WHERE id = $1::bigint`, [groupId]);
+            if (!g.rows.length) return new Response(JSON.stringify({ success: false, error: "GROUP_NOT_FOUND" }), { status: 404, headers: cors });
+            const existing = await queryDatabase(`SELECT 1 FROM group_members WHERE group_id = $1::bigint AND user_id = $2::uuid LIMIT 1`, [groupId, me.id]);
+            if (existing.rows.length) return new Response(JSON.stringify({ success: false, code: "ALREADY_MEMBER", error: "Already a member" }), { status: 409, headers: { ...cors, "Content-Type": "application/json" } });
+            await queryDatabase(`INSERT INTO group_members (group_id, user_id, role) VALUES ($1::bigint, $2::uuid, 'member') ON CONFLICT DO NOTHING`, [groupId, me.id]);
+            return new Response(JSON.stringify({ success: true, joined: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+        }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
