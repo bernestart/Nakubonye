@@ -3,25 +3,22 @@ name: Build Android APK
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch: # Allows you to run this manually from the GitHub UI
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    # 1. Get the latest code
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # 2. Setup Node.js
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '22'
         cache: 'npm'
 
-    # 3. Install dependencies and build React (Vite)
     - name: Install Dependencies
       run: npm install
 
@@ -32,29 +29,28 @@ jobs:
         VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
         VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
-    # 4. Setup Java (Capacitor 8 requires Java 21)
     - name: Setup Java
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
         java-version: '21'
 
-    # 5. Setup Android SDK
+    # ✅ THE FIX: Bypass the broken 'setup-android' action.
+    # Install the exact modern SDK packages Capacitor 8 needs.
     - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
+      run: |
+        echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
-    # 6. Sync Capacitor
     - name: Capacitor Sync
       run: npx cap sync android
 
-    # 7. Build the APK
     - name: Build APK (Debug)
       run: |
         cd android
         chmod +x gradlew
         ./gradlew assembleDebug
 
-    # 8. Upload the APK so you can download it
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
