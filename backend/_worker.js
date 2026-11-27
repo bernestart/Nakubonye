@@ -119,6 +119,29 @@ export default {
 
     const url = new URL(request.url);
     const path = url.pathname;
+    // ===== PHASE P1f: RATE LIMITING (DDoS SHIELD) =====
+    const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
+    if (path.startsWith("/api/") && !path.startsWith("/api/media/")) {
+      let limit = 100; // General API
+      let window = 60; // Per minute
+      
+      if (path.startsWith("/api/auth/")) { limit = 10; } // Strict for auth
+      else if (path.startsWith("/api/messages") || path.startsWith("/api/ws/")) { limit = 30; } // Spam protection
+
+      const allowed = await checkRateLimit(env, `${clientIp}:${path.split('/')[2] || 'api'}`, limit, window);
+      if (!allowed) {
+        return new Response(JSON.stringify({ success: false, error: "TOO_MANY_REQUESTS" }), { 
+          status: 429, 
+          headers: { 
+            ...cors, 
+            "Content-Type": "application/json",
+            "Retry-After": "60"
+          } 
+        });
+      }
+    }
+    // ==================================================
+
     // 0. PING ROUTE (Verification)
     if (path === "/api/ping") {
       return new Response(JSON.stringify({ ping: "pong", time: new Date().toISOString() }), { headers: cors });
@@ -207,21 +230,7 @@ export default {
     const ENFORCE = env.AUTH_ENFORCE === "1";
     const deny = (status, error) => new Response(JSON.stringify({ success: false, error }), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
-    // ===== PHASE P1f: RATE LIMITING (DDoS SHIELD) =====
-    const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
-    if (path.startsWith("/api/") && !path.startsWith("/api/media/")) {
-      let limit = 100; // General API limit
-      let window = 60; // Per minute
-      
-      if (path.startsWith("/api/auth/")) { limit = 10; } // Strict for auth
-      else if (path.startsWith("/api/messages") || path.startsWith("/api/ws/")) { limit = 30; } // Spam protection
 
-      const allowed = await checkRateLimit(env, `${clientIp}:${path.split('/')[2] || 'api'}`, limit, window);
-      if (!allowed) {
-        return deny(429, "TOO_MANY_REQUESTS");
-      }
-    }
-    // ==================================================
 
     if (path.startsWith("/api/") && !path.startsWith("/api/media/")) {
       const authUser = await getSessionUser(request, env, url);
