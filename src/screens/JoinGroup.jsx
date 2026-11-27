@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
 import BrandGlow from "../components/BrandGlow"
+import { API_BASE_URL } from '../lib/api';
 
 export default function JoinGroup() {
   const nav = useNavigate()
@@ -68,12 +69,11 @@ export default function JoinGroup() {
     }
 
     // System message
-    await supabase.from("group_messages").insert({
-      group_id: group.id,
-      sender_id: myId,
-      content: myName + " joined via invite link",
-      is_system: true,
-    })
+    await fetch(`${API_BASE_URL}/api/groups/${group.id}/system-message`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: myName + " joined via invite link" })
+    }).catch(() => {})
 
     setState("joined")
     setTimeout(() => nav("/groups/" + group.id, { replace: true }), 800)

@@ -204,11 +204,8 @@ export default function GroupChat() {
     setMentionQuery(q)
     const timer = setTimeout(async () => {
       try {
-        let query = supabase.from("profiles").select("id, display_name, username, is_verified").limit(8)
-        if (q.length >= 1) query = query.or(`username.ilike.${q}%,display_name.ilike.${q}%`)
-        if (myId) query = query.neq("id", myId)
-        query = query.limit(16)
-        const { data } = await query
+        const searchRes = await fetch(`${API_BASE_URL}/api/users/search?q=${encodeURIComponent(q)}&exclude=${myId || ''}&limit=16`).then(r => r.json()).catch(() => ({ success: false }))
+        const data = searchRes.success ? (searchRes.data || []) : []
         const blocked = await loadBlockedIds(myId)
         setMentionResults((data || []).filter((u) => !blocked.has(u.id)).slice(0, 8))
       } catch (e) { console.warn("mention lookup failed", e) }
@@ -665,12 +662,11 @@ export default function GroupChat() {
     tap("light")
     const me = profiles.get(myId)
     const myName = me?.display_name || me?.username || "Someone"
-    await supabase.from("group_messages").insert({
-      group_id: groupId,
-      sender_id: myId,
-      content: myName + " left the group",
-      is_system: true,
-    })
+    await fetch(`${API_BASE_URL}/api/groups/${groupId}/system-message`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: myName + " left the group" })
+    }).catch(() => {})
     await fetch(`${API_BASE_URL}/api/group/action`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "leave", groupId, userId: myId }) });
     nav("/messages", { replace: true })
   }
@@ -1305,16 +1301,17 @@ export default function GroupChat() {
                     tap("light")
                     const savedBefore = disappearingTimer
                     setTimerSheetOpen(false)
-                    const { data: saveData, error: saveErr } = await supabase.from("groups")
-      .update({ disappearing_timer_seconds: o.value })
-      .eq("id", groupId)
-      .select('id, disappearing_timer_seconds')
-    if (saveErr || !saveData || saveData.length === 0) {
-      console.error('[timer-save] FAILED', { saveErr, saveData, groupId, value: o.value })
-      if (typeof setError === 'function') setError('Timer save failed: ' + (saveErr?.message || 'no rows updated - groupId=' + groupId))
+                    const saveRes = await fetch(`${API_BASE_URL}/api/groups/${groupId}/timer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seconds: o.value })
+    }).then(r => r.json()).catch(e => ({ success: false, error: e.message }))
+    if (!saveRes.success || !saveRes.data) {
+      console.error('[timer-save] FAILED', { saveRes, groupId, value: o.value })
+      if (typeof setError === 'function') setError('Timer save failed: ' + (saveRes?.error || 'no rows updated - groupId=' + groupId))
       setDisappearingTimer(savedBefore)
     } else {
-      setDisappearingTimer(saveData[0].disappearing_timer_seconds)
+      setDisappearingTimer(saveRes.data.disappearing_timer_seconds)
     }
                   }}
                   className="w-full flex items-center gap-4 px-4 py-3.5 border-b border-white/6 text-left active:bg-white/[0.03] last:border-b-0"

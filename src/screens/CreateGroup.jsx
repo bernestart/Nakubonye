@@ -9,6 +9,7 @@ import { Capacitor } from "@capacitor/core"
 import { Camera as NativeCamera, CameraResultType, CameraSource } from "@capacitor/camera"
 import { tap } from "../lib/haptic"
 import BrandGlow from "../components/BrandGlow"
+import { API_BASE_URL } from '../lib/api';
 
 export default function CreateGroup() {
   const nav = useNavigate()
@@ -100,15 +101,18 @@ export default function CreateGroup() {
         { group_id: group.id, user_id: myId, role: "owner" },
         ...selected.map((u) => ({ group_id: group.id, user_id: u.id, role: "member" })),
       ]
-      const { error: mErr } = await supabase.from("group_members").insert(rows)
-      if (mErr) throw new Error(mErr.message)
+      const memRes = await fetch(`${API_BASE_URL}/api/groups/${group.id}/members/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows })
+      }).then(r => r.json()).catch(e => ({ success: false, error: e.message }))
+      if (!memRes.success) throw new Error(memRes.error || 'Member add failed')
 
-      await supabase.from("group_messages").insert({
-        group_id: group.id,
-        sender_id: myId,
-        content: "Group created",
-        is_system: true,
-      })
+      await fetch(`${API_BASE_URL}/api/groups/${group.id}/system-message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: "Group created" })
+      }).catch(() => {})
 
       nav(`/groups/${group.id}`, { replace: true })
     } catch (e) {

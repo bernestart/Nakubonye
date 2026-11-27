@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
 import BrandGlow from "../components/BrandGlow"
+import { API_BASE_URL } from '../lib/api';
 
 export default function EditGroup() {
   const nav = useNavigate()
@@ -72,15 +73,15 @@ export default function EditGroup() {
         path = await uploadMedia(avatarFile);
         const upErr = null; // Telegram handles errors internally
         if (upErr) throw new Error(upErr.message)
-        const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
-        nextUrl = pub?.publicUrl || nextUrl
+        nextUrl = path.startsWith('http') ? path : `${API_BASE_URL}/api/media/chat-media/${path}`
       }
 
-      const { error: upErr } = await supabase
-        .from("groups")
-        .update({ name: name.trim(), avatar_url: nextUrl, updated_at: new Date().toISOString() })
-        .eq("id", groupId)
-      if (upErr) throw new Error(upErr.message)
+      const updRes = await fetch(`${API_BASE_URL}/api/groups/${groupId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), avatar_url: nextUrl })
+      }).then(r => r.json()).catch(e => ({ success: false, error: e.message }))
+      if (!updRes.success) throw new Error(updRes.error || 'Update failed')
 
       nav(-1)
     } catch (e) {

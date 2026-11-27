@@ -4019,6 +4019,138 @@ export default {
         } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
       }
 
+
+      // 57. POST /api/groups/:id/timer — update disappearing_timer_seconds
+      {
+        const m = path.match(/^\/api\/groups\/(\d{1,18})\/timer$/);
+        if (m && request.method === "POST") {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+          try {
+            const groupId = m[1];
+            const memb = await queryDatabase(`SELECT 1 FROM group_members WHERE group_id = $1::bigint AND user_id = $2::uuid LIMIT 1`, [groupId, me.id]);
+            if (!memb.rows.length) return new Response(JSON.stringify({ success: false, error: "NOT_A_MEMBER" }), { status: 403, headers: cors });
+            const b = await request.json().catch(() => ({}));
+            const seconds = (b.seconds === null || b.seconds === undefined) ? null : parseInt(b.seconds, 10);
+            const r = await queryDatabase(`UPDATE groups SET disappearing_timer_seconds = $1 WHERE id = $2::bigint RETURNING id, disappearing_timer_seconds`, [seconds, groupId]);
+            return new Response(JSON.stringify({ success: true, data: r.rows[0] || null }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+        }
+      }
+
+      // 58. GET /api/groups/:id/members — list members (id + role)
+      {
+        const m = path.match(/^\/api\/groups\/(\d{1,18})\/members$/);
+        if (m && request.method === "GET") {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+          try {
+            const groupId = m[1];
+            const memb = await queryDatabase(`SELECT 1 FROM group_members WHERE group_id = $1::bigint AND user_id = $2::uuid LIMIT 1`, [groupId, me.id]);
+            if (!memb.rows.length) return new Response(JSON.stringify({ success: false, error: "NOT_A_MEMBER" }), { status: 403, headers: cors });
+            const r = await queryDatabase(`SELECT user_id, role, joined_at FROM group_members WHERE group_id = $1::bigint`, [groupId]);
+            return new Response(JSON.stringify({ success: true, data: r.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+        }
+      }
+
+      // 59. POST /api/groups/:id/members/bulk — insert multiple members (idempotent)
+      {
+        const m = path.match(/^\/api\/groups\/(\d{1,18})\/members\/bulk$/);
+        if (m && request.method === "POST") {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+          try {
+            const groupId = m[1];
+            const myRole = await queryDatabase(`SELECT role FROM group_members WHERE group_id = $1::bigint AND user_id = $2::uuid`, [groupId, me.id]);
+            if (!myRole.rows.length) return new Response(JSON.stringify({ success: false, error: "NOT_A_MEMBER" }), { status: 403, headers: cors });
+            const b = await request.json().catch(() => ({}));
+            const rowsIn = Array.isArray(b.rows) ? b.rows.slice(0, 50) : (Array.isArray(b.user_ids) ? b.user_ids.map(uid => ({ user_id: uid, role: 'member' })) : []);
+            if (!rowsIn.length) return new Response(JSON.stringify({ success: true, added: 0 }), { headers: { ...cors, "Content-Type": "application/json" } });
+            let added = 0;
+            for (const row of rowsIn) {
+              const uid = String(row.user_id || '');
+              if (!uid) continue;
+              let role = String(row.role || 'member');
+              if (!['owner', 'admin', 'member'].includes(role)) role = 'member';
+              if (role === 'owner' && uid !== me.id) role = 'member';
+              try {
+                await queryDatabase(`INSERT INTO group_members (group_id, user_id, role) VALUES ($1::bigint, $2::uuid, $3) ON CONFLICT DO NOTHING`, [groupId, uid, role]);
+                added++;
+              } catch (e) { /* skip dupes/errors */ }
+            }
+            return new Response(JSON.stringify({ success: true, added: userIds.length }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+        }
+      }
+
+
+      // 60. GET /api/users/search — user search for @mentions
+      {
+        const m = path.match(/^\/api\/users\/search$/);
+        if (m && request.method === "GET") {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+          try {
+            const q = (url.searchParams.get('q') || '').trim().slice(0, 40);
+            const exclude = url.searchParams.get('exclude') || '';
+            const lim = Math.min(parseInt(url.searchParams.get('limit') || '16', 10) || 16, 30);
+            let sql = 'SELECT id, display_name, username, is_verified FROM profiles WHERE 1=1';
+            const params = [];
+            if (q) { params.push('%' + q + '%'); sql += ` AND (username ILIKE ${params.length} OR display_name ILIKE ${params.length})`; }
+            if (exclude) { params.push(exclude); sql += ` AND id <> ${params.length}::uuid`; }
+            params.push(lim);
+            sql += ` ORDER BY display_name NULLS LAST LIMIT ${params.length}`;
+            const r = await queryDatabase(sql, params);
+            return new Response(JSON.stringify({ success: true, data: r.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+        }
+      }
+
+      // 61. PATCH /api/groups/:id — update group (name, avatar_url)
+      {
+        const m = path.match(/^\/api\/groups\/(\d{1,18})$/);
+        if (m && request.method === "PATCH") {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+          try {
+            const groupId = m[1];
+            const roleQ = await queryDatabase(`SELECT role FROM group_members WHERE group_id = $1::bigint AND user_id = $2::uuid`, [groupId, me.id]);
+            if (!roleQ.rows.length) return new Response(JSON.stringify({ success: false, error: "NOT_A_MEMBER" }), { status: 403, headers: cors });
+            const role = roleQ.rows[0].role;
+            if (role !== 'owner' && role !== 'admin') return new Response(JSON.stringify({ success: false, error: "NOT_AUTHORIZED" }), { status: 403, headers: cors });
+            const b = await request.json().catch(() => ({}));
+            const updates = []; const params = [];
+            if (typeof b.name === 'string' && b.name.trim()) { params.push(b.name.trim()); updates.push(`name = ${params.length}`); }
+            if (typeof b.avatar_url === 'string') { params.push(b.avatar_url); updates.push(`avatar_url = ${params.length}`); }
+            if (!updates.length) return new Response(JSON.stringify({ success: false, error: "NO_FIELDS" }), { status: 400, headers: cors });
+            updates.push('updated_at = NOW()');
+            params.push(groupId);
+            const r = await queryDatabase(`UPDATE groups SET ${updates.join(', ')} WHERE id = ${params.length}::bigint RETURNING id, name, avatar_url, updated_at`, params);
+            return new Response(JSON.stringify({ success: true, data: r.rows[0] || null }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+        }
+      }
+
+      // 62. POST /api/groups/:id/system-message — insert a system message
+      {
+        const m = path.match(/^\/api\/groups\/(\d{1,18})\/system-message$/);
+        if (m && request.method === "POST") {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+          try {
+            const groupId = m[1];
+            const memb = await queryDatabase(`SELECT 1 FROM group_members WHERE group_id = $1::bigint AND user_id = $2::uuid LIMIT 1`, [groupId, me.id]);
+            if (!memb.rows.length) return new Response(JSON.stringify({ success: false, error: "NOT_A_MEMBER" }), { status: 403, headers: cors });
+            const b = await request.json().catch(() => ({}));
+            const content = typeof b.content === 'string' ? b.content.trim().slice(0, 2000) : '';
+            if (!content) return new Response(JSON.stringify({ success: false, error: "EMPTY" }), { status: 400, headers: cors });
+            const r = await queryDatabase(`INSERT INTO group_messages (group_id, sender_id, content, is_system) VALUES ($1::bigint, $2::uuid, $3, TRUE) RETURNING id, created_at`, [groupId, me.id, content]);
+            return new Response(JSON.stringify({ success: true, data: r.rows[0] || null }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+        }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });

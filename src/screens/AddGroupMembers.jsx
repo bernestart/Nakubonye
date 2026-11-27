@@ -6,6 +6,7 @@ import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
 import { loadBlockedIds } from "../lib/blocks"
 import BrandGlow from "../components/BrandGlow"
+import { API_BASE_URL } from '../lib/api';
 
 export default function AddGroupMembers() {
   const nav = useNavigate()
@@ -23,7 +24,8 @@ export default function AddGroupMembers() {
 
   useEffect(() => {
     ;(async () => {
-      const { data } = await supabase.from("group_members").select("user_id").eq("group_id", groupId)
+      const gmRes = await fetch(`${API_BASE_URL}/api/groups/${groupId}/members`).then(r => r.json()).catch(() => ({ success: false }))
+      const data = gmRes.success ? (gmRes.data || []) : []
       setExistingIds(new Set((data || []).map((m) => m.user_id)))
     })()
     ;(async () => {
@@ -80,7 +82,12 @@ export default function AddGroupMembers() {
     }
 
     const rows = allowed.map((u) => ({ group_id: groupId, user_id: u.id, role: "member" }))
-    const { error: insErr } = await supabase.from("group_members").insert(rows)
+    const bulkRes = await fetch(`${API_BASE_URL}/api/groups/${groupId}/members/bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_ids: allowed.map(u => u.id) })
+    }).then(r => r.json()).catch(e => ({ success: false, error: e.message }))
+    const insErr = bulkRes.success ? null : { message: bulkRes.error || 'Bulk add failed' }
     if (!insErr) {
       const { data: me } = await supabase.from("profiles").select("display_name, username").eq("id", myId).maybeSingle()
       const myName = me?.display_name || me?.username || "Someone"
