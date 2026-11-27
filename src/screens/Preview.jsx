@@ -446,12 +446,12 @@ export default function Preview() {
                             nextMine.delete(key); nextTypes.delete(key)
                             nextCounts.set(key, Math.max(0, (nextCounts.get(key) || 1) - 1))
                             setMyReactions(nextMine); setMyReactionTypes(nextTypes); setReactionCounts(nextCounts)
-                            await supabase.from(table).delete().eq("post_id", p.id).eq("user_id", myId)
+                            await fetch(`${API_BASE_URL}/api/post-reactions`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: (table === 'community_post_reactions' ? 'community' : 'personal'), postId: p.id }) })
                           } else {
                             nextMine.add(key); nextTypes.set(key, "❤️")
                             nextCounts.set(key, (nextCounts.get(key) || 0) + 1)
                             setMyReactions(nextMine); setMyReactionTypes(nextTypes); setReactionCounts(nextCounts)
-                            await supabase.from(table).insert({ post_id: p.id, user_id: myId, reaction: "❤️" })
+                            await fetch(`${API_BASE_URL}/api/post-reactions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: (table === 'community_post_reactions' ? 'community' : 'personal'), postId: p.id, reaction: "❤️" }) })
                           }
                         }}
                       />

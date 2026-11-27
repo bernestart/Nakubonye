@@ -3600,6 +3600,41 @@ export default {
         } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
       }
 
+
+      // 41. POST|DELETE /api/post-reactions — toggle reaction on personal/community post
+      if (path === "/api/post-reactions" && (request.method === "POST" || request.method === "DELETE")) {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const b = await request.json().catch(() => ({}));
+          const type = String(b.type || "");
+          const postId = String(b.postId || "");
+          if (!postId) return new Response(JSON.stringify({ success: false, error: "MISSING_POST_ID" }), { status: 400, headers: cors });
+          // Table whitelist — NEVER interpolate raw user input
+          let table;
+          if (type === "personal") table = "user_post_likes";
+          else if (type === "community") table = "community_post_reactions";
+          else return new Response(JSON.stringify({ success: false, error: "BAD_TYPE" }), { status: 400, headers: cors });
+
+          if (request.method === "DELETE") {
+            await queryDatabase(`DELETE FROM ${table} WHERE post_id = $1::bigint AND user_id = $2::uuid`, [postId, me.id]);
+            return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+          }
+          // POST — insert with reaction
+          const reaction = String(b.reaction || "❤️");
+          try {
+            await queryDatabase(
+              `INSERT INTO ${table} (post_id, user_id, reaction) VALUES ($1::bigint, $2::uuid, $3) ON CONFLICT (post_id, user_id) DO UPDATE SET reaction = EXCLUDED.reaction`,
+              [postId, me.id, reaction]
+            );
+          } catch (insertErr) {
+            // Fallback: if no unique constraint, plain insert
+            await queryDatabase(`INSERT INTO ${table} (post_id, user_id, reaction) VALUES ($1::bigint, $2::uuid, $3)`, [postId, me.id, reaction]);
+          }
+          return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
