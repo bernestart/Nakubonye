@@ -3100,6 +3100,41 @@ export default {
         }
       }
 
+      
+      // 31. PHASE T3: Reel Detail BFF
+      if (path === "/api/reels/detail" && request.method === "GET") {
+        try {
+          const reelId = url.searchParams.get("reelId");
+          const myId = url.searchParams.get("myId");
+          const userId = url.searchParams.get("userId"); // authorId
+
+          const [profile, photo, myLike, mySave, likeCount, commentCount, saveCount] = await Promise.all([
+            queryDatabase(`SELECT id, display_name, username, is_verified FROM profiles WHERE id = $1`, [userId]),
+            queryDatabase(`SELECT storage_path FROM profile_photos WHERE user_id = $1 ORDER BY is_primary DESC LIMIT 1`, [userId]),
+            queryDatabase(`SELECT reel_id FROM reel_likes WHERE reel_id = $1 AND user_id = $2`, [reelId, myId]),
+            queryDatabase(`SELECT reel_id FROM reel_saves WHERE reel_id = $1 AND user_id = $2`, [reelId, myId]),
+            queryDatabase(`SELECT COUNT(*)::int as count FROM reel_likes WHERE reel_id = $1`, [reelId]),
+            queryDatabase(`SELECT COUNT(*)::int as count FROM reel_comments WHERE reel_id = $1`, [reelId]),
+            queryDatabase(`SELECT COUNT(*)::int as count FROM reel_saves WHERE reel_id = $1`, [reelId])
+          ]);
+
+          return new Response(JSON.stringify({ 
+            success: true, 
+            data: {
+              author: profile.rows[0] || null,
+              authorPhoto: photo.rows[0]?.storage_path || null,
+              isLiked: myLike.rows.length > 0,
+              isSaved: mySave.rows.length > 0,
+              likeCount: likeCount.rows[0]?.count || 0,
+              commentCount: commentCount.rows[0]?.count || 0,
+              saveCount: saveCount.rows[0]?.count || 0
+            }
+          }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });

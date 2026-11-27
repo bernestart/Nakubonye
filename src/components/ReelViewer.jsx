@@ -7,7 +7,6 @@ import FollowButton from "./FollowButton"
 import ReelComments from "./ReelComments"
 import ShareSheet from "./ShareSheet"
 import ReelActionsSheet from "./ReelActionsSheet"
-import { supabase } from "../lib/supabase"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
 
@@ -57,15 +56,15 @@ export default function ReelViewer({ reel, currentUserId, onClose }) {
     if (!reel?.id || !myId) return
     let cancelled = false
     ;(async () => {
-      const [profRes, photoRes, myLikeRes, mySaveRes, likeCntRes, cmtCntRes, saveCntRes] = await Promise.all([
-        supabase.from("profiles").select("id, display_name, username, is_verified").eq("id", reel.user_id).maybeSingle(),
-        supabase.from("profile_photos").select("storage_path").eq("user_id", reel.user_id).order("is_primary", { ascending: false }).limit(1).maybeSingle(),
-        supabase.from("reel_likes").select("reel_id").eq("reel_id", reel.id).eq("user_id", myId).maybeSingle(),
-        supabase.from("reel_saves").select("reel_id").eq("reel_id", reel.id).eq("user_id", myId).maybeSingle(),
-        supabase.from("reel_likes").select("reel_id", { count: "exact", head: true }).eq("reel_id", reel.id),
-        supabase.from("reel_comments").select("id", { count: "exact", head: true }).eq("reel_id", reel.id),
-        supabase.from("reel_saves").select("reel_id", { count: "exact", head: true }).eq("reel_id", reel.id),
-      ])
+      const detailRes = await fetch(`${API_BASE_URL}/api/reels/detail?reelId=${reel.id}&myId=${myId}&userId=${reel.user_id}`).then(r => r.json());
+        const detail = detailRes.success ? detailRes.data : {};
+        const profRes = { data: detail.author };
+        const photoRes = { data: { storage_path: detail.authorPhoto } };
+        const likedRes = { data: detail.isLiked ? { reel_id: reel.id } : null };
+        const savedRes = { data: detail.isSaved ? { reel_id: reel.id } : null };
+        const likeCntRes = { count: detail.likeCount };
+        const cmtCntRes = { count: detail.commentCount };
+        const saveCntRes = { count: detail.saveCount };
       if (cancelled) return
       setAuthor(profRes.data || null)
       setAuthorPhoto(photoRes.data?.storage_path ? publicPhotoUrl(photoRes.data.storage_path) : "")
@@ -84,7 +83,7 @@ export default function ReelViewer({ reel, currentUserId, onClose }) {
     if (!reel?.id || !myId) return
     const t = setTimeout(async () => {
       try {
-        await supabase.from("reel_views").insert({ reel_id: reel.id, user_id: myId, watch_seconds: 3 })
+        await fetch(`${API_BASE_URL}/api/reels/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'view', reelId: reel.id, userId: myId }) })
         // Re-fetch the column — DB trigger only bumps on this user's first-ever view
         const { data: fresh } = await supabase
           .from("reels")
@@ -147,8 +146,8 @@ export default function ReelViewer({ reel, currentUserId, onClose }) {
     const next = !liked
     setLiked(next)
     setLikeCount((c) => Math.max(0, c + (next ? 1 : -1)))
-    if (next) await supabase.from("reel_likes").insert({ reel_id: reel.id, user_id: myId })
-    else      await supabase.from("reel_likes").delete().eq("reel_id", reel.id).eq("user_id", myId)
+    if (next) await fetch(`${API_BASE_URL}/api/reels/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'like', reelId: reel.id, userId: myId }) })
+    else await fetch(`${API_BASE_URL}/api/reels/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'unlike', reelId: reel.id, userId: myId }) })
     setBusy(false)
   }
   async function toggleSave() {
@@ -158,15 +157,15 @@ export default function ReelViewer({ reel, currentUserId, onClose }) {
     const next = !saved
     setSaved(next)
     setSaveCount((c) => Math.max(0, c + (next ? 1 : -1)))
-    if (next) await supabase.from("reel_saves").insert({ reel_id: reel.id, user_id: myId })
-    else      await supabase.from("reel_saves").delete().eq("reel_id", reel.id).eq("user_id", myId)
+    if (next) await fetch(`${API_BASE_URL}/api/reels/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'save', reelId: reel.id, userId: myId }) })
+    else await fetch(`${API_BASE_URL}/api/reels/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'unsave', reelId: reel.id, userId: myId }) })
     setBusy(false)
   }
   async function likeAuthor() {
     if (!myId || reel.user_id === myId || likedAuthor) return
     tap("medium")
     setLikedAuthor(true)
-    await supabase.rpc("like_user", { target_user_id: reel.user_id })
+    await fetch(`${API_BASE_URL}/api/reels/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'like_user', targetUserId: reel.user_id }) })
   }
   async function share() {
     tap("light")
