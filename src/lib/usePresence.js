@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { supabase } from './supabase'
 import { useAuth } from './auth'
+import { API_BASE_URL } from './api';
 
 export function usePresence() {
   const { session } = useAuth()
@@ -10,7 +11,7 @@ export function usePresence() {
     if (!myId) return
 
     const ping = () => {
-      supabase.rpc('touch_last_seen').then(() => {}, () => {})
+      fetch(`${API_BASE_URL}/api/presence/touch`, { method: 'POST' }).then(() => {}, () => {})
     }
 
     ping()

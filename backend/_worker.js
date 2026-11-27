@@ -3298,6 +3298,100 @@ export default {
         } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
       }
 
+
+      // 26. GET /api/messaging-settings/summary
+      if (path === "/api/messaging-settings/summary" && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const [pending, dmArch, grpArch, settings] = await Promise.all([
+            queryDatabase(`SELECT COUNT(*)::int as count FROM message_requests WHERE recipient_id = $1::uuid AND status = 'pending'`, [me.id]),
+            queryDatabase(`SELECT COUNT(*)::int as count FROM conversation_archives WHERE user_id = $1::uuid`, [me.id]),
+            queryDatabase(`SELECT COUNT(*)::int as count FROM group_archives WHERE user_id = $1::uuid`, [me.id]),
+            queryDatabase(`SELECT show_activity_status FROM user_settings WHERE user_id = $1::uuid`, [me.id])
+          ]);
+          return new Response(JSON.stringify({
+            success: true,
+            data: {
+              pendingRequests: pending.rows[0]?.count || 0,
+              archivedDMs: dmArch.rows[0]?.count || 0,
+              archivedGroups: grpArch.rows[0]?.count || 0,
+              showActivity: settings.rows[0]?.show_activity_status !== false
+            }
+          }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 27. POST /api/blocks — insert block + cleanup photo_tags
+      if (path === "/api/blocks" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const b = await request.json().catch(() => ({}));
+          const blockedId = String(b.blocked_id || "").toLowerCase();
+          if (!blockedId) return new Response(JSON.stringify({ success: false, error: "MISSING_FIELDS" }), { status: 400, headers: cors });
+          await queryDatabase(
+            `INSERT INTO blocks (blocker_id, blocked_id) SELECT $1::uuid, $2::uuid WHERE NOT EXISTS (SELECT 1 FROM blocks WHERE blocker_id = $1::uuid AND blocked_id = $2::uuid)`,
+            [me.id, blockedId]
+          );
+          await queryDatabase(
+            `DELETE FROM photo_tags WHERE (tagger_id = $1::uuid AND tagged_user_id = $2::uuid) OR (tagger_id = $2::uuid AND tagged_user_id = $1::uuid)`,
+            [me.id, blockedId]
+          );
+          return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 28. DELETE /api/photo-tags?taggerId=X&taggedId=Y
+      if (path === "/api/photo-tags" && request.method === "DELETE") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const taggerId = String(url.searchParams.get("taggerId") || "").toLowerCase();
+          const taggedId = String(url.searchParams.get("taggedId") || "").toLowerCase();
+          if (!taggerId || !taggedId) return new Response(JSON.stringify({ success: false, error: "MISSING_PARAMS" }), { status: 400, headers: cors });
+          if (![taggerId, taggedId].includes(me.id.toLowerCase())) return new Response(JSON.stringify({ success: false, error: "FORBIDDEN" }), { status: 403, headers: cors });
+          await queryDatabase(`DELETE FROM photo_tags WHERE tagger_id = $1::uuid AND tagged_user_id = $2::uuid`, [taggerId, taggedId]);
+          return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 29. POST /api/presence/touch
+      if (path === "/api/presence/touch" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          await queryDatabase(`UPDATE profiles SET last_seen_at = NOW() WHERE id = $1::uuid`, [me.id]);
+          return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 30. GET /api/groups/my-memberships
+      if (path === "/api/groups/my-memberships" && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const r = await queryDatabase(`SELECT group_id FROM group_members WHERE user_id = $1::uuid`, [me.id]);
+          return new Response(JSON.stringify({ success: true, data: r.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 31. POST /api/profiles-photos/bulk
+      if (path === "/api/profiles-photos/bulk" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const b = await request.json().catch(() => ({}));
+          const ids = Array.isArray(b.ids) ? b.ids.slice(0, 100).map(String) : [];
+          if (!ids.length) return new Response(JSON.stringify({ success: true, data: { profiles: [], photos: [] } }), { headers: { ...cors, "Content-Type": "application/json" } });
+          const [profs, phs] = await Promise.all([
+            queryDatabase(`SELECT id, display_name, username, is_verified FROM profiles WHERE id::text = ANY($1::text[])`, [ids]),
+            queryDatabase(`SELECT user_id, storage_path, is_primary, display_order FROM profile_photos WHERE user_id::text = ANY($1::text[]) ORDER BY is_primary DESC, display_order ASC`, [ids])
+          ]);
+          return new Response(JSON.stringify({ success: true, data: { profiles: profs.rows, photos: phs.rows } }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
+import { API_BASE_URL } from '../lib/api';
 
 export default function BlockConfirm({ open, onClose, target, onBlocked }) {
   const { session } = useAuth()
@@ -15,10 +16,12 @@ export default function BlockConfirm({ open, onClose, target, onBlocked }) {
     const me = session.user.id
     const them = target.id
 
-    const { error: err } = await supabase.from('blocks').insert({
-      blocker_id: me,
-      blocked_id: them,
-    })
+    const blockRes = await fetch(`${API_BASE_URL}/api/blocks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ blocker_id: me, blocked_id: them })
+    }).then(r => r.json()).catch(e => ({ success: false, error: e.message }))
+    const err = blockRes.success ? null : { message: blockRes.error || 'Block failed' }
     setBusy(false)
     if (err) { setError(err.message); return }
 
@@ -26,8 +29,8 @@ export default function BlockConfirm({ open, onClose, target, onBlocked }) {
     // Fire-and-forget — block already succeeded, cleanup shouldn't block the UX.
     try {
       Promise.all([
-        supabase.from('photo_tags').delete().eq('tagger_id', me).eq('tagged_user_id', them),
-        supabase.from('photo_tags').delete().eq('tagger_id', them).eq('tagged_user_id', me),
+        fetch(`${API_BASE_URL}/api/photo-tags?taggerId=${me}&taggedId=${them}`, { method: 'DELETE' }).catch(() => {}),
+        fetch(`${API_BASE_URL}/api/photo-tags?taggerId=${them}&taggedId=${me}`, { method: 'DELETE' }).catch(() => {}),
       ]).catch(() => {})
     } catch (e) { console.warn("tag cleanup failed", e) }
 

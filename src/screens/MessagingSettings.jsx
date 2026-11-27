@@ -25,12 +25,12 @@ export default function MessagingSettings() {
     if (!myId) { setLoading(false); return }
     setLoading(true)
     try {
-    const [reqRes, convArch, grpArch, settingsRes] = await Promise.all([
-      supabase.from("message_requests").select("id", { count: "exact", head: true }).eq("recipient_id", myId).eq("status", "pending"),
-      supabase.from("conversation_archives").select("conversation_id", { count: "exact" }).eq("user_id", myId),
-      supabase.from("group_archives").select("group_id", { count: "exact" }).eq("user_id", myId),
-      supabase.from("user_settings").select("show_activity_status").eq("user_id", myId).maybeSingle(),
-    ])
+    const summaryRes = await fetch(`${API_BASE_URL}/api/messaging-settings/summary`).then(r => r.json()).catch(() => ({ success: false, data: {} }))
+    const summary = summaryRes.success ? summaryRes.data : {}
+    const reqRes = { count: summary.pendingRequests || 0 }
+    const convArch = { data: { length: summary.archivedDMs || 0 } }
+    const grpArch = { data: { length: summary.archivedGroups || 0 } }
+    const settingsRes = { data: { show_activity_status: summary.showActivity !== false } }
     setPendingRequests(reqRes.count || 0)
     setArchiveCount((convArch.data?.length || 0) + (grpArch.data?.length || 0))
     setActiveStatus(settingsRes.data?.show_activity_status !== false)
@@ -52,17 +52,20 @@ export default function MessagingSettings() {
       .select("id")
       .or("initiator_id.eq." + myId + ",recipient_id.eq." + myId)
     if (convs?.length) {
-      await supabase.from("conversation_reads").upsert(
-        convs.map((c) => ({ conversation_id: c.id, user_id: myId, last_read_at: now })),
-        { onConflict: "conversation_id,user_id" }
-      )
+      await fetch(`${API_BASE_URL}/api/inbox/read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'dm', rows: convs.map((c) => ({ conversation_id: c.id, user_id: myId })) })
+      }).catch(() => {})
     }
-    const { data: groups } = await supabase.from("group_members").select("group_id").eq("user_id", myId)
+    const groupsRes = await fetch(`${API_BASE_URL}/api/groups/my-memberships`).then(r => r.json()).catch(() => ({ success: false }))
+    const groups = groupsRes.success ? (groupsRes.data || []).map(g => ({ group_id: g.group_id })) : []
     if (groups?.length) {
-      await supabase.from("group_reads").upsert(
-        groups.map((g) => ({ group_id: g.group_id, user_id: myId, last_read_at: now })),
-        { onConflict: "group_id,user_id" }
-      )
+      await fetch(`${API_BASE_URL}/api/inbox/read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'group', rows: groups.map((g) => ({ group_id: g.group_id, user_id: myId })) })
+      }).catch(() => {})
     }
     tap("success")
   }

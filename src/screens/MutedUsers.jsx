@@ -28,10 +28,13 @@ export default function MutedUsers() {
     const ids = (rows || []).map((r) => r.muted_id)
     let profMap = new Map(), photoMap = new Map()
     if (ids.length > 0) {
-      const [profs, phs] = await Promise.all([
-        supabase.from("profiles").select("id, display_name, username, is_verified").in("id", ids),
-        supabase.from("profile_photos").select("user_id, storage_path, is_primary, display_order").in("user_id", ids).order("is_primary", { ascending: false }).order("display_order", { ascending: true }),
-      ])
+      const bulkRes = await fetch(`${API_BASE_URL}/api/profiles-photos/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids })
+      }).then(r => r.json()).catch(() => ({ success: false }))
+      const profs = { data: bulkRes.success ? (bulkRes.data?.profiles || []) : [] }
+      const phs = { data: bulkRes.success ? (bulkRes.data?.photos || []) : [] }
       ;(profs.data || []).forEach((p) => profMap.set(p.id, p))
       ;(phs.data || []).forEach((x) => { if (!photoMap.has(x.user_id)) photoMap.set(x.user_id, x.storage_path) })
     }
