@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { ArrowLeft, Heart, MessageCircle, Share2, MoreVertical } from "lucide-react"
-import { supabase } from "../lib/supabase"
+import { API_BASE_URL } from '../lib/api';
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
@@ -25,7 +25,7 @@ export default function PostDetail() {
   const [post, setPost] = useState(null)
   useEffect(() => {
     if (post && myId) {
-      supabase.from("post_views").upsert({ post_id: String(post.id), post_source: post._source, viewer_id: myId }, { onConflict: "post_id, post_source, viewer_id" }).then(() => {})
+      fetch(`${API_BASE_URL}/api/posts/view`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ postId: post.id, postSource: post._source, viewerId: myId }) }).catch(() => {})
     }
   }, [post?.id, myId])
   const [author, setAuthor] = useState(null)
@@ -151,7 +151,7 @@ export default function PostDetail() {
     // Changing reaction on an already-liked post
     if (emoji && liked && emoji !== myEmoji) {
       setMyEmoji(emoji)
-      await supabase.from(likeTable).update({ reaction: emoji }).eq("post_id", post.id).eq("user_id", myId)
+      await fetch(`${API_BASE_URL}/api/likes/post`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'update', postId: post.id, userId: myId, reaction: emoji }) })
       setBusy(false)
       return
     }
@@ -165,7 +165,7 @@ export default function PostDetail() {
       const row = source === "personal"
         ? { post_id: post.id, user_id: myId, reaction: useEmoji }
         : { post_id: post.id, user_id: myId, reaction: useEmoji }
-      await supabase.from(likeTable).insert(row)
+      await fetch(`${API_BASE_URL}/api/likes/post`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'like', postId: post.id, userId: myId, reaction: useEmoji }) })
 
       const targetId = post.author_id || post.user_id
       if (targetId && targetId !== myId) {
@@ -181,7 +181,7 @@ export default function PostDetail() {
         } catch (e) { console.warn("notify failed", e) }
       }
     } else {
-      await supabase.from(likeTable).delete().eq("post_id", post.id).eq("user_id", myId)
+      await fetch(`${API_BASE_URL}/api/likes/post`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'unlike', postId: post.id, userId: myId }) })
     }
     setBusy(false)
   }
