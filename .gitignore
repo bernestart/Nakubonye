@@ -46,3 +46,4 @@ android/capacitor-cordova-android-plugins/
 .env.*
 *.bak
 *.tmp
+.tmpcheck/

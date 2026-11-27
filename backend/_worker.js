@@ -3019,6 +3019,87 @@ export default {
         } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
       }
 
+      
+      // 27. PHASE T3: Profile Edit Load
+      if (path === "/api/profile/edit/load" && request.method === "GET") {
+        try {
+          const myId = url.searchParams.get("myId");
+          const [profile, photos, prompts, interests, prefs, allInterests] = await Promise.all([
+            queryDatabase(`SELECT display_name, username, gender, date_of_birth, bio, city, country, profession, education, religion, relationship_status, body_height_cm, languages, body_type, personality, relationship_preference, music_genres, smoker, drinking, partying, exercise, tattoos, diet, pets, children, hide_online_status, hide_age, incognito_mode, only_matches_can_message, cover_photo_path FROM profiles WHERE id = $1`, [myId]),
+            queryDatabase(`SELECT id, storage_path, is_primary, display_order FROM profile_photos WHERE user_id = $1 ORDER BY display_order`, [myId]),
+            queryDatabase(`SELECT id, prompt_key, answer, display_order FROM profile_prompts WHERE profile_id = $1`, [myId]),
+            queryDatabase(`SELECT interest_id FROM profile_interests WHERE profile_id = $1`, [myId]),
+            queryDatabase(`SELECT * FROM discovery_preferences WHERE user_id = $1`, [myId]),
+            queryDatabase(`SELECT id, name FROM interests ORDER BY id`)
+          ]);
+          return new Response(JSON.stringify({ success: true, data: {
+            profile: profile.rows[0], photos: photos.rows, prompts: prompts.rows,
+            interests: interests.rows.map(r => r.interest_id), prefs: prefs.rows[0] || {},
+            allInterests: allInterests.rows
+          }}), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 28. PHASE T3: Profile Edit Save
+      if (path === "/api/profile/edit/save" && request.method === "POST") {
+        try {
+          const b = await request.json();
+          await queryDatabase(`UPDATE profiles SET display_name=$1, bio=$2, city=$3, country=$4, profession=$5, education=$6, religion=$7, relationship_status=$8, body_height_cm=$9, languages=$10, body_type=$11, personality=$12, relationship_preference=$13, music_genres=$14, smoker=$15, drinking=$16, partying=$17, exercise=$18, tattoos=$19, diet=$20, pets=$21, children=$22, hide_online_status=$23, hide_age=$24, incognito_mode=$25, only_matches_can_message=$26 WHERE id=$27`, 
+            [b.display_name, b.bio, b.city, b.country, b.profession, b.education, b.religion, b.relationship_status, b.body_height_cm, b.languages, b.body_type, b.personality, b.relationship_preference, b.music_genres, b.smoker, b.drinking, b.partying, b.exercise, b.tattoos, b.diet, b.pets, b.children, b.hide_online_status, b.hide_age, b.incognito_mode, b.only_matches_can_message, b.myId]);
+          
+          // Clear and re-insert prompts/interests
+          await queryDatabase(`DELETE FROM profile_prompts WHERE profile_id = $1`, [b.myId]);
+          if (b.prompts?.length) {
+            for (const p of b.prompts) await queryDatabase(`INSERT INTO profile_prompts (profile_id, prompt_key, answer, display_order) VALUES ($1, $2, $3, $4)`, [b.myId, p.prompt_key, p.answer, p.display_order]);
+          }
+          await queryDatabase(`DELETE FROM profile_interests WHERE profile_id = $1`, [b.myId]);
+          if (b.interests?.length) {
+            for (const i of b.interests) await queryDatabase(`INSERT INTO profile_interests (profile_id, interest_id) VALUES ($1, $2)`, [b.myId, i]);
+          }
+          return new Response(JSON.stringify({ success: true }), { headers: cors });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 29. PHASE T3: Profile Photo Actions
+      if (path === "/api/profile/photos" && request.method === "POST") {
+        try {
+          const { action, myId, photoId, storagePath, isPrimary } = await request.json();
+          if (action === 'delete') {
+            await queryDatabase(`DELETE FROM profile_photos WHERE id = $1 AND user_id = $2`, [photoId, myId]);
+            await queryDatabase(`DELETE FROM photos WHERE storage_path = $1`, [storagePath]);
+          } else if (action === 'set_primary') {
+            await queryDatabase(`UPDATE profile_photos SET is_primary = false WHERE user_id = $1`, [myId]);
+            await queryDatabase(`UPDATE profile_photos SET is_primary = true WHERE id = $1 AND user_id = $2`, [photoId, myId]);
+          } else if (action === 'buy_slot') {
+            // RPC replacement
+            await queryDatabase(`UPDATE profiles SET photo_slots = photo_slots + 1 WHERE id = $1`, [myId]);
+          } else if (action === 'claim_bonus') {
+            await queryDatabase(`UPDATE profiles SET profile_complete_bonus = true WHERE id = $1`, [myId]);
+          }
+          return new Response(JSON.stringify({ success: true }), { headers: cors });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      
+      // 30. PHASE T3: Reels Actions
+      if (path === "/api/reels/action" && request.method === "POST") {
+        try {
+          const { action, reelId, userId, targetUserId } = await request.json();
+
+          if (action === 'view') await queryDatabase(`INSERT INTO reel_views (reel_id, user_id) VALUES ($1, $2)`, [reelId, userId]);
+          else if (action === 'save') await queryDatabase(`INSERT INTO reel_saves (reel_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [reelId, userId]);
+          else if (action === 'unsave') await queryDatabase(`DELETE FROM reel_saves WHERE reel_id = $1 AND user_id = $2`, [reelId, userId]);
+          else if (action === 'like') await queryDatabase(`INSERT INTO reel_likes (reel_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [reelId, userId]);
+          else if (action === 'unlike') await queryDatabase(`DELETE FROM reel_likes WHERE reel_id = $1 AND user_id = $2`, [reelId, userId]);
+          else if (action === 'like_user') await queryDatabase(`UPDATE profiles SET likes_count = COALESCE(likes_count, 0) + 1 WHERE id = $1`, [targetUserId]);
+          else if (action === 'notify') await queryDatabase(`INSERT INTO notifications (user_id, actor_id, type, reel_id) VALUES ($1, $2, $3, $4)`, [targetUserId, userId, 'reel_like', reelId]);
+
+          return new Response(JSON.stringify({ success: true }), { headers: cors });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });

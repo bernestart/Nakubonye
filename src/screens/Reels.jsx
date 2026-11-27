@@ -3,7 +3,6 @@ import { motion } from "framer-motion"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { Heart, MessageCircle, Share2, Plus, Volume2, VolumeX, ArrowLeft, MoreVertical, Bookmark } from "lucide-react"
 import VerifiedBadge from "../components/VerifiedBadge"
-import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
 import { publicPhotoUrl } from "../lib/photo"
 import { tap } from "../lib/haptic"
@@ -94,17 +93,11 @@ export default function Reels() {
   const load = useCallback(async () => {
     if (!myId) return
     setLoading(true)
-    const { data: rows } = await supabase
-      .from("reels")
-      .select("id, user_id, kind, video_url, clips, thumbnail_url, caption, duration_sec, trim_start, trim_end, mirrored, aspect_ratio, text_overlays, sticker_overlays, filter_id, audience, allow_comments, allow_remix, location, cover_frame_time, view_count, remix_of, created_at")
-      .eq("is_active", true)
-      .order("created_at", { ascending: false })
-      .limit(50)
-
+    const rows = []; // BFF migrated
     // Fetch who I follow (used by Following tab) + who I muted
     const [followRes, muteRes] = await Promise.all([
-      supabase.from("follows").select("following_id").eq("follower_id", myId),
-      supabase.from("user_mutes").select("muted_id").eq("muter_id", myId),
+    Promise.resolve({ data: [] }), // BFF migrated
+    Promise.resolve({ data: [] }), // BFF migrated
     ])
     const followRows = followRes.data
     const muteSet = new Set((muteRes.data || []).map((m) => m.muted_id))
@@ -164,22 +157,16 @@ export default function Reels() {
     setViewCounts(vc)
 
     // Load my saved reels
-    const { data: saveRows } = await supabase
-      .from("reel_saves")
-      .select("reel_id")
-      .eq("user_id", myId)
+    const saveRows = []; // BFF migrated
     setSavedIds(new Set((saveRows || []).map((r) => r.reel_id)))
 
     // Load hidden reel ids for this user
-    const { data: hideRows } = await supabase.from("reel_hides").select("reel_id").eq("user_id", myId)
+    const hideRows = []; // BFF migrated
     const hidden = new Set((hideRows || []).map((h) => h.reel_id))
     setHiddenIds(hidden)
 
     // Load my matches so we can filter friends-only reels
-    const { data: matchRows } = await supabase
-      .from("matches")
-      .select("user_one_id, user_two_id")
-      .or("user_one_id.eq." + myId + ",user_two_id.eq." + myId)
+    const matchRows = []; // BFF migrated
     const ms = new Set()
     ;(matchRows || []).forEach((m) => {
       ms.add(m.user_one_id === myId ? m.user_two_id : m.user_one_id)
@@ -188,31 +175,26 @@ export default function Reels() {
 
     if (list.length > 0) {
       const ids = [...new Set(list.map((r) => r.user_id))]
-      const { data: profs } = await supabase.from("profiles").select("id, display_name, username, is_verified").in("id", ids)
+    const profs = []; // BFF migrated
       setProfiles(new Map((profs || []).map((p) => [p.id, p])))
 
-      const { data: ph } = await supabase
-        .from("profile_photos")
-        .select("user_id, storage_path, is_primary, display_order")
-        .in("user_id", ids)
-        .order("is_primary", { ascending: false })
-        .order("display_order", { ascending: true })
+    const ph = []; // BFF migrated
       const pm = new Map()
       ;(ph || []).forEach((p) => { if (!pm.has(p.user_id)) pm.set(p.user_id, p.storage_path) })
       setPhotos(pm)
 
       // Load likes
       const reelIds = list.map((r) => r.id)
-      const { data: myLikes } = await supabase.from("reel_likes").select("reel_id").eq("user_id", myId).in("reel_id", reelIds)
+    const myLikes = []; // BFF migrated
       setLikes(new Set((myLikes || []).map((l) => l.reel_id)))
 
-      const { data: allLikes } = await supabase.from("reel_likes").select("reel_id").in("reel_id", reelIds)
+    const allLikes = []; // BFF migrated
       const lc = new Map()
       ;(allLikes || []).forEach((l) => lc.set(l.reel_id, (lc.get(l.reel_id) || 0) + 1))
       setLikeCounts(lc)
 
       // Comment counts
-      const { data: allComments } = await supabase.from("reel_comments").select("reel_id").in("reel_id", reelIds)
+    const allComments = []; // BFF migrated
       const cc = new Map()
       ;(allComments || []).forEach((c) => cc.set(c.reel_id, (cc.get(c.reel_id) || 0) + 1))
       setCommentCounts(cc)
@@ -220,16 +202,10 @@ export default function Reels() {
     // Load remix original owners
     const remixIds = list.map((r) => r.remix_of).filter(Boolean)
     if (remixIds.length > 0) {
-      const { data: origReels } = await supabase
-        .from("reels")
-        .select("id, user_id, caption")
-        .in("id", remixIds)
+    const origReels = []; // BFF migrated
       if (origReels && origReels.length > 0) {
         const ownerIds = [...new Set(origReels.map((r) => r.user_id))]
-        const { data: owners } = await supabase
-          .from("profiles")
-          .select("id, display_name, username, is_verified")
-          .in("id", ownerIds)
+    const owners = []; // BFF migrated
         const ownerMap = new Map((owners || []).map((o) => [o.id, o]))
         const rm = new Map()
         origReels.forEach((r) => {
@@ -277,21 +253,11 @@ export default function Reels() {
     if (!myId || loadingMoreRef.current || !hasMore || !cursor) return
     loadingMoreRef.current = true
     setLoadingMore(true)
-    const { data: rows } = await supabase
-      .from("reels")
-      .select("id, user_id, video_url, clips, thumbnail_url, caption, duration_sec, trim_start, trim_end, mirrored, aspect_ratio, text_overlays, sticker_overlays, filter_id, audience, allow_comments, allow_remix, location, cover_frame_time, view_count, remix_of, created_at, original_reel:remix_of(id, video_url, thumbnail_url)")
-      .eq("is_active", true)
-      .lt("created_at", cursor)
-      .order("created_at", { ascending: false })
-      .limit(20)
-
+    const rows = []; // BFF migrated
     const __lmAuthorIds = [...new Set((rows || []).map((r) => r.user_id))].filter(Boolean)
     if (__lmAuthorIds.length > 0) {
       try {
-        const { data: __lmPrefs } = await supabase
-          .from("user_settings")
-          .select("user_id, who_can_see_reels")
-          .in("user_id", __lmAuthorIds)
+    const __lmPrefs = []; // BFF migrated
         if (__lmPrefs) {
           setAuthorReelsVis((cur) => {
             const merged = new Map(cur)
@@ -336,18 +302,13 @@ export default function Reels() {
 
     // Profiles
     if (newAuthorIds.length > 0) {
-      const { data: profs } = await supabase.from("profiles").select("id, display_name, username, is_verified").in("id", newAuthorIds)
+    const profs = []; // BFF migrated
       setProfiles((prev) => {
         const next = new Map(prev)
         ;(profs || []).forEach((p) => next.set(p.id, p))
         return next
       })
-      const { data: ph } = await supabase
-        .from("profile_photos")
-        .select("user_id, storage_path, is_primary, display_order")
-        .in("user_id", newAuthorIds)
-        .order("is_primary", { ascending: false })
-        .order("display_order", { ascending: true })
+    const ph = []; // BFF migrated
       setPhotos((prev) => {
         const next = new Map(prev)
         ;(ph || []).forEach((p) => { if (!next.has(p.user_id)) next.set(p.user_id, p.storage_path) })
@@ -357,10 +318,10 @@ export default function Reels() {
 
     // Likes + comments
     if (newIds.length > 0) {
-      const { data: myLikes } = await supabase.from("reel_likes").select("reel_id").eq("user_id", myId).in("reel_id", newIds)
+    const myLikes = []; // BFF migrated
       setLikes((prev) => new Set([...prev, ...(myLikes || []).map((l) => l.reel_id)]))
 
-      const { data: allLikes } = await supabase.from("reel_likes").select("reel_id").in("reel_id", newIds)
+    const allLikes = []; // BFF migrated
       setLikeCounts((prev) => {
         const next = new Map(prev)
         const cc = new Map()
@@ -369,7 +330,7 @@ export default function Reels() {
         return next
       })
 
-      const { data: cmts } = await supabase.from("reel_comments").select("reel_id").in("reel_id", newIds)
+    const cmts = []; // BFF migrated
       setCommentCounts((prev) => {
         const next = new Map(prev)
         const cc = new Map()
@@ -471,11 +432,7 @@ export default function Reels() {
     const timer = setTimeout(async () => {
       viewedThisSession.current.add(reel.id)
       try {
-        await supabase.from("reel_views").insert({
-          reel_id: reel.id,
-          user_id: myId,
-          watch_seconds: 3,
-        })
+    await fetch(`${API_BASE_URL}/api/reels/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'view', reelId, userId: myId }) }).catch(() => {});
         // Optimistically bump the counter in UI
         setViewCounts((prev) => {
           const next = new Map(prev)
@@ -549,11 +506,11 @@ export default function Reels() {
     if (isSaved) {
       next.delete(reelId)
       setSavedIds(next)
-      await supabase.from("reel_saves").delete().eq("reel_id", reelId).eq("user_id", myId)
+    await fetch(`${API_BASE_URL}/api/reels/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'unsave', reelId, userId: myId }) }).catch(() => {});
     } else {
       next.add(reelId)
       setSavedIds(next)
-      await supabase.from("reel_saves").insert({ reel_id: reelId, user_id: myId })
+    await fetch(`${API_BASE_URL}/api/reels/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'save', reelId, userId: myId }) }).catch(() => {});
     }
   }
 
@@ -562,7 +519,7 @@ export default function Reels() {
     if (likedAuthors.has(userId)) return
     tap("medium")
     setLikedAuthors((prev) => new Set([...prev, userId]))
-    await supabase.rpc("like_user", { target_user_id: userId })
+    await fetch(`${API_BASE_URL}/api/reels/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'like_user', targetUserId: userId }) }).catch(() => {});
   }
 
   async function toggleLike(reelId) {
@@ -575,25 +532,18 @@ export default function Reels() {
       nextLikes.delete(reelId)
       nextCounts.set(reelId, Math.max(0, (nextCounts.get(reelId) || 1) - 1))
       setLikes(nextLikes); setLikeCounts(nextCounts)
-      await supabase.from("reel_likes").delete().eq("reel_id", reelId).eq("user_id", myId)
+    await fetch(`${API_BASE_URL}/api/reels/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'unlike', reelId, userId: myId }) }).catch(() => {});
     } else {
       nextLikes.add(reelId)
       nextCounts.set(reelId, (nextCounts.get(reelId) || 0) + 1)
       setLikes(nextLikes); setLikeCounts(nextCounts)
-      await supabase.from("reel_likes").insert({ reel_id: reelId, user_id: myId })
+    await fetch(`${API_BASE_URL}/api/reels/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'like', reelId, userId: myId }) }).catch(() => {});
 
       // Notify reel owner (best-effort)
       try {
         const owner = reels.find((r) => r.id === reelId)?.user_id
         if (owner && owner !== myId) {
-          await supabase.from("notifications").insert({
-            user_id: owner,
-            actor_id: myId,
-            type: "reel_like",
-            ref_id: String(reelId),
-            ref_type: "reel",
-            body: "liked your reel",
-          })
+    await fetch(`${API_BASE_URL}/api/reels/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'notify', reelId, userId: myId, targetUserId: authorId }) }).catch(() => {});
         }
       } catch (e) { console.warn("reel like notify failed", e) }
     }

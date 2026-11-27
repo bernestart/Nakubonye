@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 // P2: Search migration. Inline UNION replaces missing search_content RPC.
-// Basic migration. No cache (P2.5 later). No phase-jumping.
-// Usage: --dry-run | apply | --revert
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -22,21 +20,21 @@ if (REVERT) {
   process.exit(0);
 }
 
-// Pre-flight: both files must match HEAD
 try {
   const st = execSync(`git status --porcelain ${W_PATH} ${S_PATH}`, { cwd: ROOT, encoding: 'utf8' }).trim();
-  if (st) { console.error('❌ Uncommitted diffs — aborting.\n' + st + '\nRun: git checkout ' + W_PATH + ' ' + S_PATH); process.exit(1); }
+  if (st) { console.error('❌ Uncommitted diffs — aborting.\n' + st); process.exit(1); }
 } catch {}
 
 let w = fs.readFileSync(fp(W_PATH), 'utf8');
 let s = fs.readFileSync(fp(S_PATH), 'utf8');
 
 // ============ WORKER ROUTES ============
-const W_ANCHOR = '      if (/^\\/api\\/stories\\/[0-9a-f-]{36}$/.test(path) && request.method === "DELETE") {';
-if (!w.includes(W_ANCHOR)) { console.error('❌ worker anchor missing'); process.exit(1); }
+const W_ANCHOR = '      if (path === "/api/search" && request.method === "GET") {';
+const W_CATCH_ALL = '      return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });';
+
 if (w.includes('/api/search/suggestions')) { console.error('❌ worker already patched'); process.exit(1); }
 
-const ROUTES = String.raw`      // P2: Search suggestions (idle state) — trending tags + people + communities
+const ROUTES = String.raw`      // P2: Search suggestions (idle state)
       if (path === "/api/search/suggestions" && request.method === "GET") {
         const me = await getSessionUser(request, env, url);
         if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
@@ -65,7 +63,7 @@ const ROUTES = String.raw`      // P2: Search suggestions (idle state) — trend
           return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
         }
       }
-      // P2: Search — inline UNION across 6 entity types (search_content RPC missing on Neon)
+      // P2: Search
       if (path === "/api/search" && request.method === "GET") {
         const me = await getSessionUser(request, env, url);
         if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
@@ -90,16 +88,13 @@ const ROUTES = String.raw`      // P2: Search suggestions (idle state) — trend
           ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 20);
           return new Response(JSON.stringify({ success: true, data: { people: peopleRes.rows || [], posts: mergedPosts, reels: reelsRes.rows || [], communities: commRes.rows || [], listings: listRes.rows || [], services: servRes.rows || [] } }), { headers: { ...cors, "Content-Type": "application/json" } });
         } catch (err) {
-          console.error("[SEARCH]", err.message);
           return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
         }
       }
 `;
-w = w.replace(W_ANCHOR, ROUTES + W_ANCHOR);
+w = w.replace(W_CATCH_ALL, ROUTES + '\n' + W_CATCH_ALL);
 
 // ============ FRONTEND TRANSFORMATIONS ============
-
-// Literal string replace for runSearch useCallback body
 const RUN_SEARCH_OLD = s.match(/const runSearch = useCallback\(async \(q\) => \{[\s\S]*?\n  \}, \[\]\)/);
 if (!RUN_SEARCH_OLD) { console.error('❌ runSearch block not found'); process.exit(1); }
 const RUN_SEARCH_NEW = `const runSearch = useCallback(async (q) => {
@@ -112,7 +107,7 @@ const RUN_SEARCH_NEW = `const runSearch = useCallback(async (q) => {
     }
     setLoading(true)
     try {
-      const res = await fetch('/api/search?q=' + encodeURIComponent(term) + '&limit=60')
+      const res = await fetch(\`\${API_BASE_URL}/api/search?q=\` + encodeURIComponent(term) + '&limit=60')
       const j = await res.json()
       if (!j.success) {
         setPeople([]); setPosts([]); setReels([])
@@ -134,13 +129,12 @@ const RUN_SEARCH_NEW = `const runSearch = useCallback(async (q) => {
   }, [])`;
 s = s.replace(RUN_SEARCH_OLD[0], RUN_SEARCH_NEW);
 
-// Literal string replace for loadSuggestions useCallback body
 const SUGGESTIONS_OLD = s.match(/const loadSuggestions = useCallback\(async \(\) => \{[\s\S]*?\n  \}, \[myId, suggestionsLoaded\]\)/);
 if (!SUGGESTIONS_OLD) { console.error('❌ loadSuggestions block not found'); process.exit(1); }
 const SUGGESTIONS_NEW = `const loadSuggestions = useCallback(async () => {
     if (!myId || suggestionsLoaded) return
     try {
-      const res = await fetch('/api/search/suggestions')
+      const res = await fetch(\`\${API_BASE_URL}/api/search/suggestions\`)
       const j = await res.json()
       if (!j.success) return
       const d = j.data || {}
@@ -156,10 +150,14 @@ const SUGGESTIONS_NEW = `const loadSuggestions = useCallback(async () => {
   }, [myId, suggestionsLoaded])`;
 s = s.replace(SUGGESTIONS_OLD[0], SUGGESTIONS_NEW);
 
-// Drop supabase import
 s = s.replace(/^import \{ supabase \} from "\.\.\/lib\/supabase"\s*\n/m, '');
 
-// Verify no supabase left
+if (!s.includes('API_BASE_URL')) {
+  const importEnd = s.lastIndexOf('import ');
+  const insertAt = s.indexOf('\n', importEnd) + 1;
+  s = s.slice(0, insertAt) + `import { API_BASE_URL } from '../lib/api';\n` + s.slice(insertAt);
+}
+
 if (/supabase\./.test(s)) {
   console.error('❌ Search.jsx still has supabase refs:', s.match(/supabase\.[a-z]+/g));
   process.exit(1);
@@ -174,7 +172,6 @@ try {
   console.log('✅ JSX parse check passed');
 } catch (e) {
   console.error('❌ JSX parse check FAILED — not writing.');
-  console.error((e.stderr && e.stderr.toString()) || e.message);
   try { fs.unlinkSync(tmpPath); } catch {}
   try { fs.unlinkSync('.tmpcheck/_search_out.js'); } catch {}
   process.exit(1);
@@ -184,9 +181,6 @@ try { fs.unlinkSync('.tmpcheck/_search_out.js'); } catch {}
 
 if (DRY) {
   console.log('[dry-run] all anchors OK + parse OK — nothing written.');
-  console.log('  ✓ worker: 2 routes (GET /api/search; GET /api/search/suggestions)');
-  console.log('  ✓ Search.jsx: runSearch + loadSuggestions → fetch; supabase import removed');
-  console.log('  ⚠ Basic migration. No cache (P2.5 later).');
   process.exit(0);
 }
 
@@ -197,6 +191,3 @@ for (const [p, content] of [[W_PATH, w], [S_PATH, s]]) {
   fs.renameSync(full + '.tmp', full);
   console.log('✅ wrote', p);
 }
-console.log('\n🎉 Search patched + parse-verified.');
-console.log('   next: npm run build && git add -A && git commit -m "P2: search to Neon (2 routes, inline UNION, no cache)" && git push');
-console.log('   revert: node scripts/patch-search.cjs --revert');
