@@ -5,6 +5,7 @@
 import { Capacitor } from "@capacitor/core"
 import { LocalNotifications } from "@capacitor/local-notifications"
 import { supabase } from "./supabase"
+import { API_BASE_URL } from './api';
 
 const KEY_LAST_PUSH = (uid) => `nk-notif-last-push-${uid}`
 const KEY_LAST_SYNC = (uid) => `nk-notif-last-sync-${uid}`
@@ -51,7 +52,8 @@ export async function syncMissedNotifications() {
   if (!Capacitor.isNativePlatform()) return
   if (typeof navigator !== "undefined" && !navigator.onLine) return
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const whoamiRes = await fetch(`${API_BASE_URL}/api/whoami`).then(r => r.json()).catch(() => ({ success: false }))
+  const user = whoamiRes.success ? whoamiRes.user : null
   if (!user) return
 
   let lastPush = localStorage.getItem(KEY_LAST_PUSH(user.id))

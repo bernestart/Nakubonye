@@ -42,7 +42,7 @@ export default function AppHeader({ onScrollTop }) {
     return () => {
       cancelled = true
       clearInterval(interval)
-      supabase.removeChannel(ch)
+      try { if (ch && typeof ch.close === "function") ch.close(); } catch (_e) { /* noop */ }
     }
   }, [myId])
 

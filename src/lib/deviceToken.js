@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { API_BASE_URL } from './api';
 
 const KEY_FCM_TOKEN = 'nk-fcm-token'
 
@@ -19,7 +20,8 @@ export function getCachedFcmToken() {
 export async function bindDeviceToken() {
   const token = getCachedFcmToken()
   if (!token) return false
-  const { data: { user } } = await supabase.auth.getUser()
+  const whoamiRes = await fetch(`${API_BASE_URL}/api/whoami`).then(r => r.json()).catch(() => ({ success: false }))
+  const user = whoamiRes.success ? whoamiRes.user : null
   if (!user) return false
   const { error } = await supabase
     .from('device_tokens')
@@ -34,14 +36,16 @@ export async function bindDeviceToken() {
 
 /**
  * Detach this device from the currently signed-in user.
- * MUST be called BEFORE supabase.auth.signOut(), otherwise auth.uid()
+ * MUST be called BEFORE signOut(), otherwise auth.uid()
  * is null inside the RPC and the delete silently no-ops.
  */
 export async function detachDeviceToken() {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const whoamiRes = await fetch(`${API_BASE_URL}/api/whoami`).then(r => r.json()).catch(() => ({ success: false }))
+    const user = whoamiRes.success ? whoamiRes.user : null
     if (!user) return
-    const { error } = await supabase.rpc('deactivate_my_device_token')
+    const dtRes = await fetch(`${API_BASE_URL}/api/device-tokens/deactivate`, { method: 'POST' }).then(r => r.json()).catch(e => ({ success: false, error: e.message }))
+    const error = dtRes.success ? null : { message: dtRes.error || 'Deactivate failed' }
     if (error) console.warn('[token] detach RPC failed', error)
     else console.log('[token] detached for', user.id)
   } catch (e) { console.warn('[token] detach failed', e) }
