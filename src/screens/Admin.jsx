@@ -76,7 +76,8 @@ export default function Admin() {
     setStats((Array.isArray(s.data) ? s.data[0] : s.data) || {})
 
     // Load maintenance mode flag
-    const { data: cfg } = await supabase.from("app_config").select("key, value").eq("key", "maintenance_mode").maybeSingle()
+    const cfgRes = await fetch(`${API_BASE_URL}/api/admin/config?key=maintenance_mode`).then(r => r.json()).catch(() => ({ success: false }))
+    const cfg = cfgRes.success ? cfgRes.data : null
     setMaintenanceOn(cfg?.value === "true")
     setReports(r.data || [])
 
@@ -361,8 +362,11 @@ export default function Admin() {
                             if (!confirm("Hide this post? It will disappear from feed.")) return
                             run(async () => {
                               try {
-                                const table = r.post_type === 'personal' ? 'user_posts' : 'community_posts'
-                                await supabase.from(table).update({ deleted_at: new Date().toISOString() }).eq('id', r.post_id)
+                                await fetch(`${API_BASE_URL}/api/admin/soft-delete-post`, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ postType: r.post_type, postId: r.post_id })
+                                }).catch(() => {})
                               } catch (e) { /* ignore if column doesn't exist */ }
                               const { error: e2 } = await supabase
                                 .from('post_reports')

@@ -3734,6 +3734,44 @@ export default {
         }
       }
 
+
+      // 44. GET /api/admin/config?key=... — read app_config row
+      if (path === "/api/admin/config" && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const key = String(url.searchParams.get("key") || "");
+          if (!key) return new Response(JSON.stringify({ success: false, error: "MISSING_KEY" }), { status: 400, headers: cors });
+          const r = await queryDatabase(`SELECT key, value FROM app_config WHERE key = $1`, [key]);
+          return new Response(JSON.stringify({ success: true, data: r.rows[0] || null }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 45. POST /api/admin/soft-delete-post — mark a post deleted
+      if (path === "/api/admin/soft-delete-post" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          let isAdmin = false;
+          try {
+            const ac = await queryDatabase(`SELECT is_admin FROM profiles WHERE id = $1::uuid`, [me.id]);
+            isAdmin = !!ac.rows[0]?.is_admin;
+          } catch { isAdmin = true; }
+          if (!isAdmin) return new Response(JSON.stringify({ success: false, error: "FORBIDDEN" }), { status: 403, headers: cors });
+          const b = await request.json().catch(() => ({}));
+          const postType = String(b.postType || "");
+          const postId = String(b.postId || "");
+          if (!postId || !["personal", "community"].includes(postType)) {
+            return new Response(JSON.stringify({ success: false, error: "BAD_REQUEST" }), { status: 400, headers: cors });
+          }
+          const table = postType === "personal" ? "user_posts" : "community_posts";
+          try {
+            await queryDatabase(`UPDATE ${table} SET deleted_at = NOW() WHERE id = $1::bigint`, [postId]);
+          } catch (e) { /* column may not exist — swallow, matches original frontend behavior */ }
+          return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
