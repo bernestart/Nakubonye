@@ -9,6 +9,22 @@ import { useAuth } from '../lib/auth'
 import { publicPhotoUrl } from '../lib/photo'
 import { tap } from '../lib/haptic'
 import BrandGlow from '../components/BrandGlow'
+import { API_BASE_URL } from '../lib/api';
+
+const adminRpc = async (fn, args = {}) => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/rpc`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fn, args })
+    }).then(r => r.json());
+    if (res.success) return { data: res.data, error: null };
+    return { data: null, error: { message: res.error || 'RPC failed' } };
+  } catch (e) {
+    return { data: null, error: { message: e.message } };
+  }
+};
+
 
 export default function Admin() {
   const nav = useNavigate()
@@ -39,7 +55,7 @@ export default function Admin() {
 
   const loadUserTx = useCallback(async (userId) => {
     setUserTx([])
-    const { data, error: err } = await supabase.rpc('admin_get_user_transactions', { p_user_id: userId, p_limit: 20 })
+    const { data, error: err } = await adminRpc('admin_get_user_transactions', { p_user_id: userId, p_limit: 20 })
     if (err) { setUserTx([]); return }
     setUserTx(data || [])
   }, [])
@@ -49,9 +65,9 @@ export default function Admin() {
     setLoading(true); setError('')
 
     const [s, u, r] = await Promise.all([
-      supabase.rpc('admin_get_stats'),
-      supabase.rpc('admin_list_users', { p_search: search || null, p_limit: 100 }),
-      supabase.rpc('admin_list_reports', { p_status: 'pending' }),
+      adminRpc('admin_get_stats'),
+      adminRpc('admin_list_users', { p_search: search || null, p_limit: 100 }),
+      adminRpc('admin_list_reports', { p_status: 'pending' }),
     ])
 
     if (s.error) { setError(s.error.message); setLoading(false); return }
@@ -64,18 +80,18 @@ export default function Admin() {
     setMaintenanceOn(cfg?.value === "true")
     setReports(r.data || [])
 
-    const { data: rr } = await supabase.rpc("admin_list_reel_reports", { p_status: "pending" })
+    const { data: rr } = await adminRpc("admin_list_reel_reports", { p_status: "pending" })
     setReelReports(rr || [])
 
     // Badge requests (pending) — via RPC so admin bypasses RLS
-    const { data: br } = await supabase.rpc('admin_list_badge_requests', { p_status: 'pending' })
+    const { data: br } = await adminRpc('admin_list_badge_requests', { p_status: 'pending' })
     setBadgeRequests((br || []).map((x) => ({
       ...x,
       photo_url: publicPhotoUrl(x.primary_photo),
     })))
 
     // Verification requests (pending) + signed selfie URLs
-    const { data: vr } = await supabase.rpc('admin_list_verification_requests', { p_status: 'pending' })
+    const { data: vr } = await adminRpc('admin_list_verification_requests', { p_status: 'pending' })
     if (vr && vr.length > 0) {
       const enriched = await Promise.all(vr.map(async (row) => {
         let selfieSignedUrl = null
@@ -97,7 +113,7 @@ export default function Admin() {
     }
 
     // Monetization config
-    const { data: mc } = await supabase.rpc('admin_get_monetization_config')
+    const { data: mc } = await adminRpc('admin_get_monetization_config')
     if (mc) setMConfig(mc)
 
     setUsers((u.data || []).map((x) => ({ ...x, photo_url: publicPhotoUrl(x.primary_photo) })))
@@ -109,20 +125,20 @@ export default function Admin() {
   async function saveMonetizationConfig(patch) {
     if (configBusy) return
     setConfigBusy(true); tap('medium')
-    const { data, error: err } = await supabase.rpc('admin_set_monetization_config', { p_patch: patch })
+    const { data, error: err } = await adminRpc('admin_set_monetization_config', { p_patch: patch })
     setConfigBusy(false)
     if (err) { setError(err.message); return }
     if (!data?.ok) { setError(data?.error || 'Failed'); return }
     tap('match')
     // Reload config
-    const { data: mc } = await supabase.rpc('admin_get_monetization_config')
+    const { data: mc } = await adminRpc('admin_get_monetization_config')
     if (mc) setMConfig(mc)
   }
 
   async function reviewVerification(requestId, decision, note) {
     if (verifBusy) return
     setVerifBusy(requestId)
-    const { data, error: err } = await supabase.rpc('admin_review_verification_request', {
+    const { data, error: err } = await adminRpc('admin_review_verification_request', {
       p_request_id: requestId,
       p_decision: decision,
       p_note: note || null,
@@ -137,7 +153,7 @@ export default function Admin() {
   async function reviewBadge(requestId, decision, note) {
     if (badgeBusy) return
     setBadgeBusy(requestId)
-    const { data, error: err } = await supabase.rpc('admin_review_badge_request', {
+    const { data, error: err } = await adminRpc('admin_review_badge_request', {
       p_request_id: requestId,
       p_decision: decision,
       p_note: note || null,
@@ -276,7 +292,7 @@ export default function Admin() {
                       <p className="text-muted mb-2.5">{r.reason}{r.details ? ' · ' + r.details : ''}</p>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => run(() => supabase.rpc('admin_resolve_report', { p_report_id: r.id, p_action: 'dismissed' }))}
+                          onClick={() => run(() => adminRpc('admin_resolve_report', { p_report_id: r.id, p_action: 'dismissed' }))}
                           disabled={busy}
                           className="flex-1 h-9 rounded-full bg-white/[0.06] border border-white/12 text-muted font-bold text-[12px] disabled:opacity-40"
                         >
@@ -287,10 +303,10 @@ export default function Admin() {
                             const reason = prompt('Reason for banning this user?')
                             if (reason === null) return
                             run(async () => {
-                              const { error: e1 } = await supabase.rpc('admin_resolve_report', { p_report_id: r.id, p_action: 'actioned' })
+                              const { error: e1 } = await adminRpc('admin_resolve_report', { p_report_id: r.id, p_action: 'actioned' })
                               if (e1) return { error: e1 }
                               if (r.reported_user_id) {
-                                return supabase.rpc('admin_ban_user', { p_user_id: r.reported_user_id, p_reason: reason || 'Reported content' })
+                                return adminRpc('admin_ban_user', { p_user_id: r.reported_user_id, p_reason: reason || 'Reported content' })
                               }
                               return { error: null }
                             })
@@ -426,7 +442,7 @@ export default function Admin() {
                       </div>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => run(() => supabase.rpc("admin_resolve_reel_report", { p_report_id: r.id, p_action: "dismissed", p_delete_reel: false }))}
+                          onClick={() => run(() => adminRpc("admin_resolve_reel_report", { p_report_id: r.id, p_action: "dismissed", p_delete_reel: false }))}
                           disabled={busy}
                           className="flex-1 h-9 rounded-full bg-white/[0.06] border border-white/12 text-muted font-bold text-[12px] disabled:opacity-40"
                         >
@@ -435,7 +451,7 @@ export default function Admin() {
                         <button
                           onClick={() => {
                             if (!confirm("Hide this reel permanently? It will disappear from everyone's feed.")) return
-                            run(() => supabase.rpc("admin_resolve_reel_report", { p_report_id: r.id, p_action: "actioned", p_delete_reel: true }))
+                            run(() => adminRpc("admin_resolve_reel_report", { p_report_id: r.id, p_action: "actioned", p_delete_reel: true }))
                           }}
                           disabled={busy}
                           className="flex-1 h-9 rounded-full bg-red-500/20 border border-red-500/50 text-red-300 font-bold text-[12px] disabled:opacity-40"
@@ -806,7 +822,7 @@ export default function Admin() {
                   onClick={() => {
                     const reason = prompt('Reason for banning this user?')
                     if (reason === null) return
-                    run(() => supabase.rpc('admin_ban_user', { p_user_id: selected.id, p_reason: reason }))
+                    run(() => adminRpc('admin_ban_user', { p_user_id: selected.id, p_reason: reason }))
                   }}
                   disabled={busy || selected.is_admin}
                   className="w-full h-11 rounded-full bg-red-500/15 border border-red-500/40 text-red-300 font-bold text-[13.5px] flex items-center justify-center gap-2 disabled:opacity-40"
@@ -815,7 +831,7 @@ export default function Admin() {
                 </button>
               ) : (
                 <button
-                  onClick={() => run(() => supabase.rpc('admin_unban_user', { p_user_id: selected.id }))}
+                  onClick={() => run(() => adminRpc('admin_unban_user', { p_user_id: selected.id }))}
                   disabled={busy}
                   className="w-full h-11 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 font-bold text-[13.5px] flex items-center justify-center gap-2 disabled:opacity-40"
                 >
@@ -829,7 +845,7 @@ export default function Admin() {
                   if (!amount) return
                   const n = parseInt(amount, 10)
                   if (!n) return
-                  run(() => supabase.rpc('admin_grant_coins', {
+                  run(() => adminRpc('admin_grant_coins', {
                     p_user_id: selected.id, p_amount: n, p_reason: 'Admin action'
                   }))
                 }}
@@ -840,7 +856,7 @@ export default function Admin() {
               </button>
 
               <button
-                onClick={() => run(() => supabase.rpc('admin_set_verified', { p_user_id: selected.id, p_verified: !selected.is_verified }))}
+                onClick={() => run(() => adminRpc('admin_set_verified', { p_user_id: selected.id, p_verified: !selected.is_verified }))}
                 disabled={busy}
                 className={`w-full h-11 rounded-full font-bold text-[13.5px] flex items-center justify-center gap-2 disabled:opacity-40 ${
                   selected.is_verified
@@ -858,7 +874,7 @@ export default function Admin() {
                 onClick={() => {
                   if (!confirm('Delete this account permanently? This removes their profile, matches, messages, and coins. Cannot be undone.')) return
                   if (!confirm('Are you absolutely sure?')) return
-                  run(() => supabase.rpc('admin_delete_user', { p_user_id: selected.id }))
+                  run(() => adminRpc('admin_delete_user', { p_user_id: selected.id }))
                 }}
                 disabled={busy || selected.is_admin}
                 className="w-full h-11 rounded-full bg-red-500/20 border border-red-500/50 text-red-300 font-bold text-[13.5px] flex items-center justify-center gap-2 disabled:opacity-40"

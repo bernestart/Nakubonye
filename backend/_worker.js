@@ -3688,6 +3688,52 @@ export default {
         } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
       }
 
+
+      // 43. POST /api/admin/rpc — invoke whitelisted admin_* PostgreSQL function
+      if (path === "/api/admin/rpc" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          // Admin gate — fall back to trusting RPC's internal check if is_admin column missing
+          let isAdmin = false;
+          try {
+            const ac = await queryDatabase(`SELECT is_admin FROM profiles WHERE id = $1::uuid`, [me.id]);
+            isAdmin = !!ac.rows[0]?.is_admin;
+          } catch { isAdmin = true; }
+          if (!isAdmin) return new Response(JSON.stringify({ success: false, error: "FORBIDDEN" }), { status: 403, headers: cors });
+
+          const b = await request.json().catch(() => ({}));
+          const fn = String(b.fn || "");
+          if (!/^admin_[a-z_]+$/.test(fn)) {
+            return new Response(JSON.stringify({ success: false, error: "BAD_FN" }), { status: 400, headers: cors });
+          }
+          const args = (b.args && typeof b.args === 'object') ? b.args : {};
+          const argKeys = Object.keys(args);
+          const argValues = argKeys.map(k => args[k]);
+          const namedPlaceholders = argKeys.map((k, i) => `${k} := ${i + 3}`).join(', ');
+          const jwtClaims = JSON.stringify({ sub: me.id, role: 'authenticated' });
+
+          // Force set_config BEFORE the RPC evaluates via CROSS JOIN LATERAL
+          const sql = `WITH _cfg AS (
+            SELECT set_config('request.jwt.claim.sub', $1::text, true) AS _a,
+                   set_config('request.jwt.claims', $2::text, true) AS _b
+          )
+          SELECT r.* FROM _cfg CROSS JOIN LATERAL (SELECT * FROM ${fn}(${namedPlaceholders})) r`;
+          const r = await queryDatabase(sql, [me.id, jwtClaims, ...argValues]);
+
+          const SINGLE_ROW_FNS = new Set([
+            'admin_get_stats', 'admin_get_monetization_config', 'admin_set_monetization_config',
+            'admin_review_verification_request', 'admin_review_badge_request', 'admin_resolve_report',
+            'admin_ban_user', 'admin_unban_user', 'admin_resolve_reel_report', 'admin_grant_coins',
+            'admin_set_verified', 'admin_delete_user'
+          ]);
+          const data = SINGLE_ROW_FNS.has(fn) ? (r.rows[0] || null) : r.rows;
+          return new Response(JSON.stringify({ success: true, data }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) {
+          return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors });
+        }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
