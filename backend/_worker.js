@@ -3385,10 +3385,58 @@ export default {
           const ids = Array.isArray(b.ids) ? b.ids.slice(0, 100).map(String) : [];
           if (!ids.length) return new Response(JSON.stringify({ success: true, data: { profiles: [], photos: [] } }), { headers: { ...cors, "Content-Type": "application/json" } });
           const [profs, phs] = await Promise.all([
-            queryDatabase(`SELECT id, display_name, username, is_verified FROM profiles WHERE id::text = ANY($1::text[])`, [ids]),
+            queryDatabase(`SELECT id, display_name, username, is_verified, city FROM profiles WHERE id::text = ANY($1::text[])`, [ids]),
             queryDatabase(`SELECT user_id, storage_path, is_primary, display_order FROM profile_photos WHERE user_id::text = ANY($1::text[]) ORDER BY is_primary DESC, display_order ASC`, [ids])
           ]);
           return new Response(JSON.stringify({ success: true, data: { profiles: profs.rows, photos: phs.rows } }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+
+      // 32. POST|DELETE /api/story-hides — hide/show someone's stories
+      if (path === "/api/story-hides") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          if (request.method === "POST") {
+            const b = await request.json().catch(() => ({}));
+            const ownerId = String(b.owner_id || "").toLowerCase();
+            const hiddenId = String(b.hidden_user_id || "").toLowerCase();
+            if (!ownerId || !hiddenId) return new Response(JSON.stringify({ success: false, error: "MISSING_FIELDS" }), { status: 400, headers: cors });
+            if (ownerId !== me.id.toLowerCase()) return new Response(JSON.stringify({ success: false, error: "FORBIDDEN" }), { status: 403, headers: cors });
+            await queryDatabase(`INSERT INTO story_hides (owner_id, hidden_user_id) VALUES ($1::uuid, $2::uuid) ON CONFLICT DO NOTHING`, [ownerId, hiddenId]);
+            return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+          }
+          if (request.method === "DELETE") {
+            const ownerId = String(url.searchParams.get("owner_id") || "").toLowerCase();
+            const hiddenId = String(url.searchParams.get("hidden_user_id") || "").toLowerCase();
+            if (!ownerId || !hiddenId) return new Response(JSON.stringify({ success: false, error: "MISSING_PARAMS" }), { status: 400, headers: cors });
+            if (ownerId !== me.id.toLowerCase()) return new Response(JSON.stringify({ success: false, error: "FORBIDDEN" }), { status: 403, headers: cors });
+            await queryDatabase(`DELETE FROM story_hides WHERE owner_id = $1::uuid AND hidden_user_id = $2::uuid`, [ownerId, hiddenId]);
+            return new Response(JSON.stringify({ success: true }), { headers: { ...cors, "Content-Type": "application/json" } });
+          }
+          return new Response(JSON.stringify({ success: false, error: "METHOD_NOT_ALLOWED" }), { status: 405, headers: cors });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 33. GET /api/profile/:id/connections — followers + following + matches
+      if (/^\/api\/profile\/[^/]+\/connections$/.test(path) && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const profileId = String(path.split("/")[3] || "").toLowerCase();
+          if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(profileId)) {
+            return new Response(JSON.stringify({ success: false, error: "BAD_ID" }), { status: 400, headers: cors });
+          }
+          const [followers, following, matches] = await Promise.all([
+            queryDatabase(`SELECT follower_id, created_at FROM follows WHERE following_id = $1::uuid ORDER BY created_at DESC LIMIT 200`, [profileId]),
+            queryDatabase(`SELECT following_id, created_at FROM follows WHERE follower_id = $1::uuid ORDER BY created_at DESC LIMIT 200`, [profileId]),
+            queryDatabase(`SELECT user_one_id, user_two_id, created_at FROM matches WHERE user_one_id = $1::uuid OR user_two_id = $1::uuid ORDER BY created_at DESC LIMIT 200`, [profileId])
+          ]);
+          return new Response(JSON.stringify({
+            success: true,
+            data: { followers: followers.rows, following: following.rows, matches: matches.rows }
+          }), { headers: { ...cors, "Content-Type": "application/json" } });
         } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
       }
 

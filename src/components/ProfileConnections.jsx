@@ -6,6 +6,7 @@ import { publicPhotoUrl } from "../lib/photo"
 import { useAuth } from "../lib/auth"
 import { tap } from "../lib/haptic"
 import FollowButton from "./FollowButton"
+import { API_BASE_URL } from '../lib/api';
 
 export default function ProfileConnections({ userId, visibility, fullPage = false, initialTab = "followers" }) {
   const nav = useNavigate()
@@ -25,11 +26,10 @@ export default function ProfileConnections({ userId, visibility, fullPage = fals
     let cancelled = false
     ;(async () => {
       setLoading(true)
-      const [followerRows, followingRows, matchRows] = await Promise.all([
-        supabase.from('follows').select('follower_id, created_at').eq('following_id', userId).order('created_at', { ascending: false }).limit(200),
-        supabase.from('follows').select('following_id, created_at').eq('follower_id', userId).order('created_at', { ascending: false }).limit(200),
-        supabase.from('matches').select('user_one_id, user_two_id, created_at').or('user_one_id.eq.' + userId + ',user_two_id.eq.' + userId).order('created_at', { ascending: false }).limit(200),
-      ])
+      const connRes = await fetch(`${API_BASE_URL}/api/profile/${userId}/connections`).then(r => r.json()).catch(() => ({ success: false }))
+      const followerRows = { data: connRes.success ? (connRes.data?.followers || []) : [] }
+      const followingRows = { data: connRes.success ? (connRes.data?.following || []) : [] }
+      const matchRows = { data: connRes.success ? (connRes.data?.matches || []) : [] }
 
       const followerIds = (followerRows.data || []).map((r) => r.follower_id)
       const followingIds = (followingRows.data || []).map((r) => r.following_id)
@@ -39,12 +39,8 @@ export default function ProfileConnections({ userId, visibility, fullPage = fals
       let profMap = new Map(), photoMap = new Map()
       if (allIds.length > 0) {
         const [profs, ph] = await Promise.all([
-          supabase.from('profiles').select('id, display_name, username, is_verified, city').in('id', allIds),
-          supabase.from('profile_photos')
-            .select('user_id, storage_path, is_primary, display_order')
-            .in('user_id', allIds)
-            .order('is_primary', { ascending: false })
-            .order('display_order', { ascending: true }),
+          fetch(`${API_BASE_URL}/api/profiles-photos/bulk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: allIds }) }).then(r => r.json()).then(d => ({ data: d.success ? (d.data?.profiles || []) : [] })).catch(() => ({ data: [] })),
+          fetch(`${API_BASE_URL}/api/profiles-photos/bulk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: allIds }) }).then(r => r.json()).then(d => ({ data: d.success ? (d.data?.photos || []) : [] })).catch(() => ({ data: [] })),
         ])
         ;(profs.data || []).forEach((pr) => profMap.set(pr.id, pr))
         ;(ph.data || []).forEach((x) => { if (!photoMap.has(x.user_id)) photoMap.set(x.user_id, x.storage_path) })

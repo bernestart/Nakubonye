@@ -8,6 +8,7 @@ import {
 import { tap } from "../lib/haptic"
 import { supabase } from "../lib/supabase"
 import { useAuth } from "../lib/auth"
+import { API_BASE_URL } from '../lib/api';
 
 function Row({ icon: Icon, label, onClick, danger = false }) {
   return (
@@ -52,9 +53,9 @@ export default function ProfileMenuSheet({ open, onClose, isMe, userId, person, 
     setStoryHidden(next)
     try {
       if (next) {
-        await supabase.from("story_hides").insert({ owner_id: myId, hidden_user_id: userId })
+        await fetch(`${API_BASE_URL}/api/story-hides`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ owner_id: myId, hidden_user_id: userId }) }).catch(() => {})
       } else {
-        await supabase.from("story_hides").delete().eq("owner_id", myId).eq("hidden_user_id", userId)
+        await fetch(`${API_BASE_URL}/api/story-hides?owner_id=${myId}&hidden_user_id=${userId}`, { method: 'DELETE' }).catch(() => {})
       }
     } catch (e) {
       setStoryHidden(!next)
