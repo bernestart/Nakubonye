@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { Timer, Search, ArrowLeft, Send, Paperclip, X, MoreVertical, Users, Camera, Trash2, Flag, LogOut, UserPlus , Pencil , Link2 , Bell , Mic, Square , Pin , Eraser} from "lucide-react"
 import { motion } from "framer-motion"
-import { supabase } from "../lib/supabase"
 import { loadBlockedIds } from "../lib/blocks"
 import { useAuth } from "../lib/auth"
 import { Capacitor } from "@capacitor/core"
@@ -220,10 +219,7 @@ export default function GroupChat() {
   // Mark this group as read for me
   useEffect(() => {
     if (!groupId || !myId) return
-    supabase.from("group_reads").upsert(
-      { group_id: groupId, user_id: myId, last_read_at: new Date().toISOString() },
-      { onConflict: "group_id,user_id" }
-    ).then(() => {})
+    fetch(`${API_BASE_URL}/api/group/read`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ groupId, userId: myId }) }).catch(() => {});
   }, [groupId, myId, messages.length])
 
   // Realtime
@@ -298,19 +294,10 @@ export default function GroupChat() {
   // Typing broadcast channel
   useEffect(() => {
     if (!groupId || !myId) return
-    const ch = supabase.channel("gtyping-" + groupId)
-    ch.on("broadcast", { event: "typing" }, (payload) => {
-      const data = payload?.payload
-      if (!data || data.user_id === myId) return
-      setTypers((prev) => {
-        const next = { ...prev }
-        if (data.typing) next[data.user_id] = Date.now()
-        else delete next[data.user_id]
-        return next
-      })
-    }).subscribe()
-    typingChannelRef.current = ch
-    return () => { supabase.removeChannel(ch); typingChannelRef.current = null }
+    const typingInterval = setInterval(async () => {
+      try { const res = await fetch(`${API_BASE_URL}/api/typing/check?roomId=group-${groupId}&userId=${myId}`); const d = await res.json(); setOtherTyping(d.isTyping || false); } catch (e) {}
+    }, 2000);
+    return () => { clearInterval(typingInterval); typingChannelRef.current = null }
   }, [groupId, myId])
 
   // Auto-expire typers after 3s of silence
@@ -543,7 +530,7 @@ export default function GroupChat() {
     if (already) return
     const nextViewedBy = Array.isArray(m.viewed_by) ? [...m.viewed_by, myId] : [myId]
     setMessages((cur) => cur.map((x) => x.id === m.id ? { ...x, viewed_by: nextViewedBy, media_url: null } : x))
-    try { await supabase.from("group_messages").update({ viewed_by: nextViewedBy }).eq("id", m.id) } catch (e) {}
+    await fetch(`${API_BASE_URL}/api/group/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'view_once', messageId: m.id, viewedBy: nextViewedBy }) });
   }
 
   async function deleteMessage(id) {
@@ -554,17 +541,17 @@ export default function GroupChat() {
     }
     if (!confirm("Unsend this message for everyone? This cannot be undone.")) return
     tap("light")
-    await supabase.from("group_messages").update({ deleted_at: new Date().toISOString(), content: "", media_url: null }).eq("id", id).eq("sender_id", myId)
+    await fetch(`${API_BASE_URL}/api/group/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'unsend', groupId, userId: myId, messageId: id }) });
   }
 
   async function toggleMute() {
     if (!groupId || !myId) return
     tap("light")
     if (isMuted) {
-      await supabase.from("group_mutes").delete().eq("group_id", groupId).eq("user_id", myId)
+    await fetch(`${API_BASE_URL}/api/group/action`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "unmute", groupId, userId: myId }) });
       setIsMuted(false)
     } else {
-      await supabase.from("group_mutes").insert({ group_id: groupId, user_id: myId })
+    await fetch(`${API_BASE_URL}/api/group/action`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "mute", groupId, userId: myId }) });
       setIsMuted(true)
     }
   }
@@ -574,14 +561,14 @@ export default function GroupChat() {
     tap("light")
     const current = (reactions[messageId] || []).find((r) => r.user_id === myId)
     if (current?.reaction === emoji) {
-      await supabase.from("group_message_reactions").delete().eq("message_id", messageId).eq("user_id", myId)
+    await fetch(`${API_BASE_URL}/api/group/reactions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "remove", messageId, userId: myId }) });
     } else if (current) {
-      await supabase.from("group_message_reactions").update({ reaction: emoji }).eq("message_id", messageId).eq("user_id", myId)
+    await fetch(`${API_BASE_URL}/api/group/reactions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "update", messageId, userId: myId, reaction: emoji }) });
     } else {
-      await supabase.from("group_message_reactions").insert({ message_id: messageId, user_id: myId, reaction: emoji })
+    await fetch(`${API_BASE_URL}/api/group/reactions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "insert", messageId, userId: myId, reaction: emoji }) });
     }
     setReactionPickerFor(null)
-    const { data } = await supabase.from("group_message_reactions").select("message_id, user_id, reaction").eq("message_id", messageId)
+    const { data } = await fetch(`${API_BASE_URL}/api/group/reactions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "get", messageId }) }).then(r => r.json());
     setReactions((prev) => {
       const next = { ...prev }
       next[messageId] = (data || []).map((r) => ({ user_id: r.user_id, reaction: r.reaction }))
@@ -656,14 +643,10 @@ export default function GroupChat() {
     if (!groupId || !myId) return
     tap("light")
     if (pinnedMsg?.id === message.id) {
-      await supabase.from("group_pinned_messages").delete().eq("group_id", groupId)
+    await fetch(`${API_BASE_URL}/api/group/action`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "unpin", groupId }) });
       setPinnedMsg(null)
     } else {
-      await supabase.from("group_pinned_messages").upsert({
-        group_id: groupId,
-        message_id: message.id,
-        pinned_by: myId,
-      }, { onConflict: "group_id" })
+    await fetch(`${API_BASE_URL}/api/group/action`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "pin", groupId, userId: myId, pinData: { messageId } }) });
       setPinnedMsg({ ...message, pinned_by: myId })
     }
   }
@@ -673,10 +656,7 @@ export default function GroupChat() {
     if (!confirm("Clear this chat? Messages will be hidden for you only.")) return
     tap("light")
     const now = new Date().toISOString()
-    await supabase.from("group_clears").upsert(
-      { group_id: groupId, user_id: myId, cleared_at: now },
-      { onConflict: "group_id,user_id" }
-    )
+    await fetch(`${API_BASE_URL}/api/group/action`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "clear", groupId, userId: myId }) });
     setClearedAt(now)
   }
 
@@ -691,7 +671,7 @@ export default function GroupChat() {
       content: myName + " left the group",
       is_system: true,
     })
-    await supabase.from("group_members").delete().eq("group_id", groupId).eq("user_id", myId)
+    await fetch(`${API_BASE_URL}/api/group/action`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "leave", groupId, userId: myId }) });
     nav("/messages", { replace: true })
   }
 

@@ -2905,6 +2905,67 @@ export default {
       // (existing POST stays for personal; add community support via source param)
 
 
+      
+      // 21. PHASE T2: Group State & Read
+      if (path === "/api/group/state" && request.method === "GET") {
+        try {
+          const groupId = url.searchParams.get("groupId");
+          const myId = url.searchParams.get("myId");
+          const [read, mute, clear] = await Promise.all([
+            queryDatabase(`SELECT last_read_at FROM group_reads WHERE group_id = $1 AND user_id = $2`, [groupId, myId]),
+            queryDatabase(`SELECT group_id FROM group_mutes WHERE group_id = $1 AND user_id = $2`, [groupId, myId]),
+            queryDatabase(`SELECT cleared_at FROM group_clears WHERE group_id = $1 AND user_id = $2`, [groupId, myId])
+          ]);
+          return new Response(JSON.stringify({ success: true, data: {
+            prevReadAt: read.rows[0]?.last_read_at || null,
+            isMuted: mute.rows.length > 0,
+            clearedAt: clear.rows[0]?.cleared_at || null
+          }}), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      if (path === "/api/group/read" && request.method === "POST") {
+        try {
+          const { groupId, userId } = await request.json();
+          await queryDatabase(`INSERT INTO group_reads (group_id, user_id, last_read_at) VALUES ($1, $2, NOW()) ON CONFLICT (group_id, user_id) DO UPDATE SET last_read_at = NOW()`, [groupId, userId]);
+          return new Response(JSON.stringify({ success: true }), { headers: cors });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 22. PHASE T2: Group Actions
+      if (path === "/api/group/action" && request.method === "POST") {
+        try {
+          const body = await request.json();
+          const { action, groupId, userId, messageId, viewedBy, pinData } = body;
+
+          if (action === 'view_once') await queryDatabase(`UPDATE group_messages SET viewed_by = $1 WHERE id = $2`, [JSON.stringify(viewedBy), messageId]);
+          if (action === 'unsend') await queryDatabase(`UPDATE group_messages SET deleted_at = NOW(), content = '', media_url = null WHERE id = $1 AND sender_id = $2`, [messageId, userId]);
+          if (action === 'mute') await queryDatabase(`INSERT INTO group_mutes (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [groupId, userId]);
+          if (action === 'unmute') await queryDatabase(`DELETE FROM group_mutes WHERE group_id = $1 AND user_id = $2`, [groupId, userId]);
+          if (action === 'clear') await queryDatabase(`INSERT INTO group_clears (group_id, user_id, cleared_at) VALUES ($1, $2, NOW()) ON CONFLICT (group_id, user_id) DO UPDATE SET cleared_at = NOW()`, [groupId, userId]);
+          if (action === 'leave') await queryDatabase(`DELETE FROM group_members WHERE group_id = $1 AND user_id = $2`, [groupId, userId]);
+          if (action === 'unpin') await queryDatabase(`DELETE FROM group_pinned_messages WHERE group_id = $1`, [groupId]);
+          if (action === 'pin' && pinData) await queryDatabase(`INSERT INTO group_pinned_messages (group_id, message_id, pinned_by) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, [groupId, pinData.messageId, userId]);
+
+          return new Response(JSON.stringify({ success: true }), { headers: cors });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 23. PHASE T2: Group Reactions
+      if (path === "/api/group/reactions" && request.method === "POST") {
+        try {
+          const { action, messageId, userId, reaction } = await request.json();
+          if (action === 'remove') await queryDatabase(`DELETE FROM group_message_reactions WHERE message_id = $1 AND user_id = $2`, [messageId, userId]);
+          if (action === 'update') await queryDatabase(`UPDATE group_message_reactions SET reaction = $1 WHERE message_id = $2 AND user_id = $3`, [reaction, messageId, userId]);
+          if (action === 'insert') await queryDatabase(`INSERT INTO group_message_reactions (message_id, user_id, reaction) VALUES ($1, $2, $3)`, [messageId, userId, reaction]);
+          if (action === 'get') {
+            const res = await queryDatabase(`SELECT message_id, user_id, reaction FROM group_message_reactions WHERE message_id = $1`, [messageId]);
+            return new Response(JSON.stringify({ success: true, data: res.rows }), { headers: cors });
+          }
+          return new Response(JSON.stringify({ success: true }), { headers: cors });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
