@@ -189,10 +189,10 @@ function RatePromptGate({ children }) {
   }, [])
 
   return (
-    <>
+    <VoiceCallProvider>
       {children}
       {show && <RatePrompt onClose={() => setShow(false)} />}
-    </>
+    </VoiceCallProvider>
   )
 }
 
@@ -235,7 +235,7 @@ export default function App() {
         <InAppNotificationBanner />
       <GlobalMatchCelebration />
       <GlobalEventPopup />
-      <>
+      <VoiceCallProvider>
       <RatePromptGate>
       <MaintenanceGate>
       <Routes>
@@ -334,8 +334,8 @@ export default function App() {
       </Routes>
       </MaintenanceGate>
       </RatePromptGate>
-      {/* <CallOverlay /> disabled for now */}
-      </>
+      <CallOverlay />
+      </VoiceCallProvider>
       </NotificationsProvider>
       </WalletProvider>
       </SettingsProvider>

@@ -107,10 +107,11 @@ export function getAuth(env) {
         generateId: () => crypto.randomUUID()
       }
     },
-    emailAndPassword: { enabled: true },
+    emailAndPassword: { enabled: true, requireEmailVerification: true },
     plugins: [
       bearer(),
       emailOTP({
+        sendVerificationOnSignUp: true,
         async sendVerificationOTP({ email, otp, type }) {
           if (!env.RESEND_API_KEY) { console.error("RESEND_API_KEY not set"); return; }
           const r = await fetch("https://api.resend.com/emails", {

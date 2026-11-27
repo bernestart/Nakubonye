@@ -259,6 +259,56 @@ export default function SignUp() {
           <button type="submit" disabled={!valid || loading} className="mt-2 w-full text-white font-bold text-[16px] rounded-full py-[16px] disabled:opacity-40 active:scale-[0.98] transition-transform" style={GRAD}>
             {loading ? 'Please wait...' : step === 'username' ? 'Create account' : step === 'otp' ? 'Confirm' : 'Next'}
           </button>
+
+      {step === 'otp' && (
+        <div className="space-y-4 mt-6">
+          <p className="text-white/70 text-[14px] text-center">
+            We sent a 6-digit code to <b>{form.email}</b>
+          </p>
+          <input 
+            className={INPUT} 
+            type="text" 
+            maxLength={6} 
+            placeholder="000000" 
+            value={otp} 
+            onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))} 
+            style={{ fontSize: 24, textAlign: 'center', letterSpacing: 8 }}
+          />
+          <button 
+            type="button"
+            onClick={async () => {
+              if (otp.length < 6) return;
+              setLoading(true);
+              try {
+                const authData = await verifyOtp(form.email, otp);
+                // Save profile to Neon
+                const dobStr = `${form.year}-${String(form.month).padStart(2,'0')}-${String(form.day).padStart(2,'0')}`;
+                await fetch(`${API_BASE_URL}/api/profile`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authData.token}` },
+                  body: JSON.stringify({
+                    id: authData.user.id,
+                    display_name: `${form.firstName} ${form.surname}`.trim(),
+                    username: form.username || form.email.split('@')[0],
+                    date_of_birth: dobStr,
+                    gender: form.gender
+                  })
+                });
+                navigate('/feed', { replace: true });
+              } catch (err) {
+                setError(err.message || 'Invalid code');
+                setLoading(false);
+              }
+            }}
+            disabled={loading || otp.length < 6}
+            className="w-full text-white font-bold text-[16px] rounded-full py-[16px] transition-transform active:scale-[0.98] disabled:opacity-60 shadow-lg shadow-purple-900/30"
+            style={GRAD}
+          >
+            {loading ? 'Verifying...' : 'Confirm Email'}
+          </button>
+        </div>
+      )}
+
         </form>
 
         {step === 'name' && (

@@ -100,6 +100,7 @@ export default function Chat() {
   const { userId: otherId } = useParams()
   const location = useLocation()
   const { session } = useAuth()
+  const { startCall } = useVoiceCall();
   const voiceCall = useVoiceCall()
 
   const [loading, setLoading] = useState(true)
@@ -923,30 +924,14 @@ export default function Chat() {
           </button>
         </div>
         <button
-          onClick={() => {
-            if (!other) return
-            tap('light')
-            voiceCall.startCall(other.id, {
-              display_name: other.display_name,
-              photo_url: other.photo_url,
-            }, { mode: 'video' })
-          }}
-          className="w-9 h-9 rounded-full grid place-items-center text-muted"
+          onClick={() => { if (other?.id) startCall(other.id, true, myId); }}
           aria-label="Video call"
         >
           <Video size={19} strokeWidth={2.3} />
         </button>
 
         <button
-          onClick={() => {
-            if (!other) return
-            tap('light')
-            voiceCall.startCall(other.id, {
-              display_name: other.display_name,
-              photo_url: other.photo_url,
-            })
-          }}
-          className="w-9 h-9 rounded-full grid place-items-center text-muted"
+          onClick={() => { if (other?.id) startCall(other.id, false, myId); }}
           aria-label="Voice call"
         >
           <Phone size={19} strokeWidth={2.3} />
