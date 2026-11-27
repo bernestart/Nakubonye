@@ -139,10 +139,13 @@ export default function Preview() {
       const cmtCounts = new Map()
 
       if (personalIds.length > 0) {
-        const [likesRes, cmtsRes] = await Promise.all([
-          supabase.from("user_post_likes").select("post_id, user_id, reaction").in("post_id", personalIds),
-          supabase.from("user_post_comments").select("post_id").in("post_id", personalIds).filter("deleted_at", 'is', null),
-        ])
+        const pStatsRes = await fetch(`${API_BASE_URL}/api/post-stats/bulk`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'personal', ids: personalIds })
+        }).then(r => r.json()).catch(() => ({ success: false }))
+        const likesRes = { data: pStatsRes.success ? (pStatsRes.data?.reactions || []) : [] }
+        const cmtsRes = { data: pStatsRes.success ? (pStatsRes.data?.comments || []) : [] }
         ;(likesRes.data || []).forEach((r) => {
           const k = "personal:" + r.post_id
           counts.set(k, (counts.get(k) || 0) + 1)
@@ -154,10 +157,13 @@ export default function Preview() {
         })
       }
       if (communityIds.length > 0) {
-        const [likesRes, cmtsRes] = await Promise.all([
-          supabase.from("community_post_reactions").select("post_id, user_id, reaction").in("post_id", communityIds),
-          supabase.from("community_post_comments").select("post_id").in("post_id", communityIds).filter("deleted_at", 'is', null),
-        ])
+        const cStatsRes = await fetch(`${API_BASE_URL}/api/post-stats/bulk`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'community', ids: communityIds })
+        }).then(r => r.json()).catch(() => ({ success: false }))
+        const likesRes = { data: cStatsRes.success ? (cStatsRes.data?.reactions || []) : [] }
+        const cmtsRes = { data: cStatsRes.success ? (cStatsRes.data?.comments || []) : [] }
         ;(likesRes.data || []).forEach((r) => {
           const k = "community:" + r.post_id
           counts.set(k, (counts.get(k) || 0) + 1)

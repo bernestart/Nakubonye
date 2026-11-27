@@ -3577,6 +3577,29 @@ export default {
         } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
       }
 
+
+      // 40. POST /api/post-stats/bulk — reaction/comment counts for personal OR community posts
+      if (path === "/api/post-stats/bulk" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const b = await request.json().catch(() => ({}));
+          const type = String(b.type || "");
+          const ids = Array.isArray(b.ids) ? b.ids.slice(0, 200).map(String) : [];
+          if (!ids.length) return new Response(JSON.stringify({ success: true, data: { reactions: [], comments: [] } }), { headers: { ...cors, "Content-Type": "application/json" } });
+          const reactionsTable = type === "community" ? "community_post_reactions" : "user_post_likes";
+          const commentsTable = type === "community" ? "community_post_comments" : "user_post_comments";
+          const [reactions, comments] = await Promise.all([
+            queryDatabase(`SELECT post_id, user_id, reaction FROM ${reactionsTable} WHERE post_id::text = ANY($1::text[])`, [ids]),
+            queryDatabase(`SELECT post_id FROM ${commentsTable} WHERE post_id::text = ANY($1::text[]) AND deleted_at IS NULL`, [ids])
+          ]);
+          return new Response(JSON.stringify({
+            success: true,
+            data: { reactions: reactions.rows, comments: comments.rows }
+          }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
