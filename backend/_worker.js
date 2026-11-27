@@ -3635,6 +3635,59 @@ export default {
         } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
       }
 
+
+      // 42. GET /api/user/data-export — full account data dump (self only)
+      if (path === "/api/user/data-export" && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const uid = me.id;
+          const [profile, photos, posts, communityPosts, reels, stories, comments, likes, following, followers, matches, communities, listingSaves, reelSaves, settings, discoveryPreferences, notifications, loginEvents] = await Promise.all([
+            queryDatabase(`SELECT * FROM profiles WHERE id = $1::uuid`, [uid]),
+            queryDatabase(`SELECT id, storage_path, is_primary, display_order, created_at FROM profile_photos WHERE user_id = $1::uuid`, [uid]),
+            queryDatabase(`SELECT id, content, image_path, image_paths, audience, created_at FROM user_posts WHERE user_id = $1::uuid`, [uid]),
+            queryDatabase(`SELECT id, community_id, content, image_path, image_paths, created_at FROM community_posts WHERE author_id = $1::uuid`, [uid]),
+            queryDatabase(`SELECT id, video_url, thumbnail_url, caption, created_at, view_count FROM reels WHERE user_id = $1::uuid`, [uid]),
+            queryDatabase(`SELECT id, media_url, media_type, caption, created_at, expires_at, audience FROM stories WHERE user_id = $1::uuid`, [uid]),
+            queryDatabase(`SELECT id, post_id, content, created_at FROM user_post_comments WHERE user_id = $1::uuid`, [uid]),
+            queryDatabase(`SELECT post_id, reaction, created_at FROM user_post_likes WHERE user_id = $1::uuid`, [uid]),
+            queryDatabase(`SELECT following_id, created_at FROM follows WHERE follower_id = $1::uuid`, [uid]),
+            queryDatabase(`SELECT follower_id, created_at FROM follows WHERE following_id = $1::uuid`, [uid]),
+            queryDatabase(`SELECT user_one_id, user_two_id, created_at FROM matches WHERE user_one_id = $1::uuid OR user_two_id = $1::uuid`, [uid]),
+            queryDatabase(`SELECT community_id, role, joined_at FROM community_memberships WHERE user_id = $1::uuid`, [uid]),
+            queryDatabase(`SELECT listing_id, created_at FROM listing_saves WHERE user_id = $1::uuid`, [uid]),
+            queryDatabase(`SELECT reel_id, created_at FROM reel_saves WHERE user_id = $1::uuid`, [uid]),
+            queryDatabase(`SELECT * FROM user_settings WHERE user_id = $1::uuid`, [uid]),
+            queryDatabase(`SELECT * FROM discovery_preferences WHERE user_id = $1::uuid`, [uid]),
+            queryDatabase(`SELECT id, type, body, created_at, read_at FROM notifications WHERE user_id = $1::uuid ORDER BY created_at DESC LIMIT 500`, [uid]),
+            queryDatabase(`SELECT device_hint, method, created_at FROM login_events WHERE user_id = $1::uuid ORDER BY created_at DESC LIMIT 200`, [uid])
+          ]);
+          return new Response(JSON.stringify({
+            success: true,
+            data: {
+              profile: profile.rows[0] || null,
+              photos: photos.rows,
+              posts: posts.rows,
+              communityPosts: communityPosts.rows,
+              reels: reels.rows,
+              stories: stories.rows,
+              comments: comments.rows,
+              likes: likes.rows,
+              following: following.rows,
+              followers: followers.rows,
+              matches: matches.rows,
+              communities: communities.rows,
+              listingSaves: listingSaves.rows,
+              reelSaves: reelSaves.rows,
+              settings: settings.rows[0] || null,
+              discoveryPreferences: discoveryPreferences.rows[0] || null,
+              notifications: notifications.rows,
+              loginEvents: loginEvents.rows
+            }
+          }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
