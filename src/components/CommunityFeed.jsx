@@ -11,6 +11,7 @@ import { tap } from '../lib/haptic'
 import ResharedPost from './ResharedPost'
 import ProfilePostCard from './ProfilePostCard'
 import PostComposer from './PostComposer'
+import { API_BASE_URL } from '../lib/api';
 
 export default function CommunityFeed({ communityId, isMember }) {
 
@@ -46,7 +47,8 @@ export default function CommunityFeed({ communityId, isMember }) {
 
     // META-SCALE: Fetch posts from Cloudflare API
     const postData = await getCommunityPosts([communityId], session.user.id);
-    const muteRes = await supabase.from('user_mutes').select('muted_id').eq('muter_id', session.user.id);
+    const mutesRes = await fetch(`${API_BASE_URL}/api/mutes/ids`).then(r => r.json()).catch(() => ({ success: false }));
+    const muteRes = { data: mutesRes.success ? (mutesRes.data || []) : [] };
     
     // Mock the Supabase response structure so the rest of the code doesn't break
     const postRes = { data: postData, error: null };
@@ -100,8 +102,7 @@ export default function CommunityFeed({ communityId, isMember }) {
       const pp = profMap.get(r.author_id) || {}
       let imageUrl = ''
       if (r.image_path) {
-        const { data } = supabase.storage.from('community-media').getPublicUrl(r.image_path)
-        imageUrl = data?.publicUrl || ''
+        imageUrl = r.image_path.startsWith('http') ? r.image_path : `${API_BASE_URL}/api/media/community-media/${r.image_path}`
       }
       return {
         id: r.id,
@@ -212,10 +213,11 @@ export default function CommunityFeed({ communityId, isMember }) {
     const current = (reactions[postId] || []).find((r) => r.user_id === session.user.id)
 
     if (current?.reaction === emoji) {
-      await supabase.from('community_post_reactions')
-        .delete()
-        .eq('post_id', postId)
-        .eq('user_id', session.user.id)
+      await fetch(`${API_BASE_URL}/api/post-reactions`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'community', postId })
+      })
       setReactions((cur) => {
         const next = { ...cur }
         next[postId] = (next[postId] || []).filter((r) => r.user_id !== session.user.id)
@@ -223,10 +225,11 @@ export default function CommunityFeed({ communityId, isMember }) {
         return next
       })
     } else if (current) {
-      await supabase.from('community_post_reactions')
-        .update({ reaction: emoji })
-        .eq('post_id', postId)
-        .eq('user_id', session.user.id)
+      await fetch(`${API_BASE_URL}/api/post-reactions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'community', postId, reaction: emoji })
+      })
       setReactions((cur) => ({
         ...cur,
         [postId]: (cur[postId] || []).map((r) =>
@@ -234,8 +237,11 @@ export default function CommunityFeed({ communityId, isMember }) {
         ),
       }))
     } else {
-      await supabase.from('community_post_reactions')
-        .insert({ post_id: postId, user_id: session.user.id, reaction: emoji })
+      await fetch(`${API_BASE_URL}/api/post-reactions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'community', postId, reaction: emoji })
+      })
       setReactions((cur) => ({
         ...cur,
         [postId]: [...(cur[postId] || []), { user_id: session.user.id, reaction: emoji }],
@@ -248,7 +254,9 @@ export default function CommunityFeed({ communityId, isMember }) {
     if (!confirm('Pin this post to the top for 7 days?')) return
     tap('medium')
     setError('')
-    const { data, error: err } = await supabase.rpc('pin_community_post', { p_post_id: postId })
+    const pinRes = await fetch(`${API_BASE_URL}/api/communities/${communityId}/posts/${postId}/pin`, { method: 'POST' }).then(r => r.json()).catch(e => ({ success: false, error: e.message }))
+    const data = pinRes.success ? pinRes.data : null
+    const err = pinRes.success ? null : { message: pinRes.error || 'Pin failed' }
     if (err) {
       if (/already_pinned/i.test(err.message)) setError('This post is already pinned.')
       else if (/not_authorized/i.test(err.message)) setError('Only community owners and admins can pin.')
@@ -262,11 +270,8 @@ export default function CommunityFeed({ communityId, isMember }) {
   useEffect(() => {
     if (!session?.user?.id || !communityId) return
     ;(async () => {
-      const { data } = await supabase.from('community_memberships')
-        .select('role')
-        .eq('community_id', communityId)
-        .eq('user_id', session.user.id)
-        .maybeSingle()
+      const roleRes = await fetch(`${API_BASE_URL}/api/communities/${communityId}/my-role`).then(r => r.json()).catch(() => ({ success: false }))
+      const data = roleRes.success ? { role: roleRes.data?.role } : null
       setMyRole(data?.role || null)
     })()
   }, [communityId, session?.user?.id])

@@ -3915,6 +3915,54 @@ export default {
         }
       }
 
+
+      // 52. GET /api/mutes/ids — muted user ids for me
+      if (path === "/api/mutes/ids" && request.method === "GET") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const r = await queryDatabase(`SELECT muted_id FROM user_mutes WHERE muter_id = $1::uuid`, [me.id]);
+          return new Response(JSON.stringify({ success: true, data: r.rows }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 53. GET /api/communities/:id/my-role — my membership role in this community
+      {
+        const m = path.match(/^\/api\/communities\/(\d{1,18})\/my-role$/);
+        if (m && request.method === "GET") {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+          try {
+            const r = await queryDatabase(`SELECT role FROM community_memberships WHERE community_id = $1::bigint AND user_id = $2::uuid`, [m[1], me.id]);
+            return new Response(JSON.stringify({ success: true, data: { role: r.rows[0]?.role || null } }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+        }
+      }
+
+      // 54. POST /api/communities/:id/posts/:postId/pin — pin a community post
+      {
+        const m = path.match(/^\/api\/communities\/(\d{1,18})\/posts\/(\d{1,18})\/pin$/);
+        if (m && request.method === "POST") {
+          const me = await getSessionUser(request, env, url);
+          if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+          try {
+            const communityId = m[1];
+            const postId = m[2];
+            const rc = await queryDatabase(`SELECT role FROM community_memberships WHERE community_id = $1::bigint AND user_id = $2::uuid`, [communityId, me.id]);
+            const myRole = rc.rows[0]?.role;
+            if (!["owner", "admin"].includes(myRole)) {
+              return new Response(JSON.stringify({ success: false, error: "not_authorized" }), { status: 403, headers: { ...cors, "Content-Type": "application/json" } });
+            }
+            const existing = await queryDatabase(`SELECT 1 FROM community_pinned_posts WHERE community_id = $1::bigint AND post_id = $2::bigint LIMIT 1`, [communityId, postId]);
+            if (existing.rows.length) {
+              return new Response(JSON.stringify({ success: false, error: "already_pinned" }), { status: 409, headers: { ...cors, "Content-Type": "application/json" } });
+            }
+            await queryDatabase(`INSERT INTO community_pinned_posts (community_id, post_id, pinned_by) VALUES ($1::bigint, $2::bigint, $3::uuid)`, [communityId, postId, me.id]);
+            return new Response(JSON.stringify({ success: true, data: { pinned: true } }), { headers: { ...cors, "Content-Type": "application/json" } });
+          } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+        }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });
