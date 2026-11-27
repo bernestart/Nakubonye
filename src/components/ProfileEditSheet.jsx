@@ -1,7 +1,6 @@
 import { useState } from "react"
 import { createPortal } from "react-dom"
 import { X } from "lucide-react"
-import { supabase } from "../lib/supabase"
 import { tap } from "../lib/haptic"
 import { API_BASE_URL } from '../lib/api';
 
@@ -31,14 +30,17 @@ export default function ProfileEditSheet({ kind, person, myId, onClose, onSaved 
 
     try {
       if (kind === "details") {
-        const { error: err } = await supabase.from("profiles").update({
-          profession: profession.trim() || null,
-          education: education.trim() || null,
-          city: city.trim() || null,
-          country: country.trim() || null,
-          relationship_status: relationship.trim() || null,
-          bio: bio.trim() || null,
-        }).eq("id", myId)
+        const detailsRes = await fetch(`${API_BASE_URL}/api/profile/me`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            profession: profession.trim() || null,
+            education: education.trim() || null,
+            city: city.trim() || null,
+            country: country.trim() || null,
+          })
+        }).then(r => r.json()).catch(e => ({ success: false, error: e.message }))
+        const err = detailsRes.success ? null : { message: detailsRes.error || 'Save failed' }
         if (err) throw err
         onSaved?.({
           profession: profession.trim() || null,
