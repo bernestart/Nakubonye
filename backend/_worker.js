@@ -2966,6 +2966,59 @@ export default {
         } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
       }
 
+      
+      // 24. PHASE T2: Community State & Read
+      if (path === "/api/community/state" && request.method === "GET") {
+        try {
+          const communityId = url.searchParams.get("communityId");
+          const myId = url.searchParams.get("myId");
+          const [clear, mute, comm] = await Promise.all([
+            queryDatabase(`SELECT cleared_at FROM community_clears WHERE community_id = $1 AND user_id = $2`, [communityId, myId]),
+            queryDatabase(`SELECT community_id FROM community_mutes WHERE community_id = $1 AND user_id = $2`, [communityId, myId]),
+            queryDatabase(`SELECT disappearing_timer_seconds FROM communities WHERE id = $1`, [communityId])
+          ]);
+          return new Response(JSON.stringify({ success: true, data: {
+            clearedAt: clear.rows[0]?.cleared_at || null,
+            isMuted: mute.rows.length > 0,
+            timerSeconds: comm.rows[0]?.disappearing_timer_seconds || 0
+          }}), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 25. PHASE T2: Community Actions
+      if (path === "/api/community/action" && request.method === "POST") {
+        try {
+          const body = await request.json();
+          const { action, communityId, userId, messageId, viewedBy, pinData } = body;
+
+          if (action === 'view_once') await queryDatabase(`UPDATE community_messages SET viewed_by = $1 WHERE id = $2`, [JSON.stringify(viewedBy), messageId]);
+          if (action === 'unsend') await queryDatabase(`UPDATE community_messages SET deleted_at = NOW(), content = '', media_url = null WHERE id = $1 AND sender_id = $2`, [messageId, userId]);
+          if (action === 'mute') await queryDatabase(`INSERT INTO community_mutes (community_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [communityId, userId]);
+          if (action === 'unmute') await queryDatabase(`DELETE FROM community_mutes WHERE community_id = $1 AND user_id = $2`, [communityId, userId]);
+          if (action === 'clear') await queryDatabase(`INSERT INTO community_clears (community_id, user_id, cleared_at) VALUES ($1, $2, NOW()) ON CONFLICT (community_id, user_id) DO UPDATE SET cleared_at = NOW()`, [communityId, userId]);
+          if (action === 'unpin') await queryDatabase(`DELETE FROM community_pinned_messages WHERE community_id = $1`, [communityId]);
+          if (action === 'pin' && pinData) await queryDatabase(`INSERT INTO community_pinned_messages (community_id, message_id, pinned_by) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, [communityId, pinData.messageId, userId]);
+          if (action === 'highlight') await queryDatabase(`UPDATE community_messages SET is_highlighted = true WHERE id = $1`, [messageId]);
+
+          return new Response(JSON.stringify({ success: true }), { headers: cors });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
+      // 26. PHASE T2: Community Reactions
+      if (path === "/api/community/reactions" && request.method === "POST") {
+        try {
+          const { action, messageId, userId, reaction } = await request.json();
+          if (action === 'remove') await queryDatabase(`DELETE FROM community_message_reactions WHERE message_id = $1 AND user_id = $2`, [messageId, userId]);
+          if (action === 'update') await queryDatabase(`UPDATE community_message_reactions SET reaction = $1 WHERE message_id = $2 AND user_id = $3`, [reaction, messageId, userId]);
+          if (action === 'insert') await queryDatabase(`INSERT INTO community_message_reactions (message_id, user_id, reaction) VALUES ($1, $2, $3)`, [messageId, userId, reaction]);
+          if (action === 'get') {
+            const res = await queryDatabase(`SELECT message_id, user_id, reaction FROM community_message_reactions WHERE message_id = $1`, [messageId]);
+            return new Response(JSON.stringify({ success: true, data: res.rows }), { headers: cors });
+          }
+          return new Response(JSON.stringify({ success: true }), { headers: cors });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });

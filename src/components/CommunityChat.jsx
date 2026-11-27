@@ -111,9 +111,9 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
     setLoading(true); setError('')
 
     const [clearRes, muteRes, communityRes] = await Promise.all([
-      supabase.from("community_clears").select("cleared_at").eq("community_id", communityId).eq("user_id", myId).maybeSingle(),
-      supabase.from("community_mutes").select("community_id").eq("community_id", communityId).eq("user_id", myId).maybeSingle(),
-      supabase.from("communities").select("disappearing_timer_seconds").eq("id", communityId).maybeSingle(),
+      fetch(`${API_BASE_URL}/api/community/state?communityId=${communityId}&myId=${myId}`).then(r => r.json()).then(d => ({ data: { cleared_at: d.data?.clearedAt } })),
+      fetch(`${API_BASE_URL}/api/community/state?communityId=${communityId}&myId=${myId}`).then(r => r.json()).then(d => ({ data: d.data?.isMuted ? { community_id: communityId } : null })),
+      fetch(`${API_BASE_URL}/api/community/state?communityId=${communityId}&myId=${myId}`).then(r => r.json()).then(d => ({ data: { disappearing_timer_seconds: d.data?.timerSeconds } })),
     ])
     setClearedAt(clearRes.data?.cleared_at || null)
     setIsMuted(!!muteRes.data)
@@ -283,19 +283,10 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
   // Typing broadcast channel
   useEffect(() => {
     if (!communityId || !myId) return
-    const ch = supabase.channel("ctyping-" + communityId)
-    ch.on("broadcast", { event: "typing" }, (payload) => {
-      const data = payload?.payload
-      if (!data || data.user_id === myId) return
-      setTypers((prev) => {
-        const next = { ...prev }
-        if (data.typing) next[data.user_id] = Date.now()
-        else delete next[data.user_id]
-        return next
-      })
-    }).subscribe()
-    typingChannelRef.current = ch
-    return () => { supabase.removeChannel(ch); typingChannelRef.current = null }
+    const typingInterval = setInterval(async () => {
+      try { const res = await fetch(`${API_BASE_URL}/api/typing/check?roomId=${communityId}&userId=${myId}`); const d = await res.json(); setOtherTyping(d.isTyping || false); } catch (e) {}
+    }, 2000);
+    return () => { clearInterval(typingInterval); typingChannelRef.current = null }
   }, [communityId, myId])
 
   // Auto-expire typers after 3s
@@ -405,13 +396,9 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
 
     setSending(true)
     const ext = result.mimeType?.includes("mp4") ? "mp4" : "webm";
-    const path = "community-media/" + communityId + "/" + crypto.randomUUID() + "." + ext
-    const { error: upErr } = await supabase.storage
-      .from("chat-media")
-      .upload(path, result.blob, { upsert: false, contentType: result.mimeType })
-    if (upErr) { setSending(false); setError(upErr.message); return }
-    const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path)
-
+    const path = await uploadMedia(attachment);
+    if (!path) { setError("Upload failed"); return; }
+    const pub = { publicUrl: path };
         // META-SCALE: Upload Voice to Telegram & Save to Neon
         let fileId = "";
         try { fileId = await uploadMedia(result.blob); } catch (uploadErr) { setSending(false); setError(uploadErr.message); return; }
@@ -540,7 +527,8 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
     if (!confirm('Highlight this message for 24 hours? Costs 25 coins.')) return
     tap('medium')
     setError('')
-    const { data, error: err } = await supabase.rpc('highlight_community_message', { p_message_id: messageId })
+    const res = await fetch(`${API_BASE_URL}/api/community/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'highlight', messageId, communityId, userId: myId }) }).then(r => r.json());
+    const err = res.success ? null : { message: res.error };
     if (err) {
       if (/insufficient/i.test(err.message)) setError('Not enough coins. Get more in Wallet.')
       else if (/already highlighted/i.test(err.message)) setError('This message is already highlighted.')
@@ -556,15 +544,15 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
     tap("light")
     const current = (reactions[messageId] || []).find((r) => r.user_id === myId)
     if (current?.reaction === emoji) {
-      await supabase.from("community_message_reactions").delete().eq("message_id", messageId).eq("user_id", myId)
+      await fetch(`${API_BASE_URL}/api/community/reactions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "remove", messageId, userId: myId }) })
     } else if (current) {
-      await supabase.from("community_message_reactions").update({ reaction: emoji }).eq("message_id", messageId).eq("user_id", myId)
+      await fetch(`${API_BASE_URL}/api/community/reactions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "update", messageId, userId: myId, reaction: emoji }) })
     } else {
-      await supabase.from("community_message_reactions").insert({ message_id: messageId, user_id: myId, reaction: emoji })
+      await fetch(`${API_BASE_URL}/api/community/reactions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "insert", messageId, userId: myId, reaction: emoji }) })
     }
     setReactionPickerFor(null)
     // Refetch reactions for this message
-    const { data } = await supabase.from("community_message_reactions").select("message_id, user_id, reaction").eq("message_id", messageId)
+    const { data } = await fetch(`${API_BASE_URL}/api/community/reactions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "get", messageId }) }).then(r => r.json())
     setReactions((prev) => {
       const next = { ...prev }
       next[messageId] = (data || []).map((r) => ({ user_id: r.user_id, reaction: r.reaction }))
@@ -578,7 +566,7 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
     if (already) return
     const nextViewedBy = Array.isArray(m.viewed_by) ? [...m.viewed_by, myId] : [myId]
     setMessages((cur) => cur.map((x) => x.id === m.id ? { ...x, viewed_by: nextViewedBy } : x))
-    try { await supabase.from("community_messages").update({ viewed_by: nextViewedBy }).eq("id", m.id) } catch (e) {}
+    try { await fetch(`${API_BASE_URL}/api/community/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'view_once', messageId: m.id, viewedBy: nextViewedBy, communityId, userId: myId }) }); } catch (e) {}
   }
 
   async function deleteMessage(messageId) {
@@ -667,14 +655,10 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
     if (!communityId || !myId) return
     tap("light")
     if (pinnedMsg?.id === message.id) {
-      await supabase.from("community_pinned_messages").delete().eq("community_id", communityId)
+      await fetch(`${API_BASE_URL}/api/community/action`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "unpin", communityId, userId: myId }) })
       setPinnedMsg(null)
     } else {
-      await supabase.from("community_pinned_messages").upsert({
-        community_id: communityId,
-        message_id: message.id,
-        pinned_by: myId,
-      }, { onConflict: "community_id" })
+      await fetch(`${API_BASE_URL}/api/community/action`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "pin", communityId, userId: myId, pinData: { messageId } }) })
       setPinnedMsg({ ...message, pinned_by: myId })
     }
   }
@@ -684,10 +668,7 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
     if (!confirm("Clear this chat? Messages will be hidden for you only.")) return
     tap("light")
     const now = new Date().toISOString()
-    await supabase.from("community_clears").upsert(
-      { community_id: communityId, user_id: myId, cleared_at: now },
-      { onConflict: "community_id,user_id" }
-    )
+    await fetch(`${API_BASE_URL}/api/community/action`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "clear", communityId, userId: myId }) })
     setClearedAt(now)
   }
 
@@ -695,10 +676,10 @@ export default function CommunityChat({ communityId, isMember, communityName }) 
     if (!communityId || !myId) return
     tap("light")
     if (isMuted) {
-      await supabase.from("community_mutes").delete().eq("community_id", communityId).eq("user_id", myId)
+      await fetch(`${API_BASE_URL}/api/community/action`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "unmute", communityId, userId: myId }) });
       setIsMuted(false)
     } else {
-      await supabase.from("community_mutes").insert({ community_id: communityId, user_id: myId })
+      await fetch(`${API_BASE_URL}/api/community/action`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "mute", communityId, userId: myId }) });
       setIsMuted(true)
     }
   }
