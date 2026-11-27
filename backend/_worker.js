@@ -3989,6 +3989,36 @@ export default {
         }
       }
 
+
+      // 56. POST /api/community-posts — create post (server sets author_id, validates role for announcements)
+      if (path === "/api/community-posts" && request.method === "POST") {
+        const me = await getSessionUser(request, env, url);
+        if (!me) return new Response(JSON.stringify({ success: false, error: "UNAUTHENTICATED" }), { status: 401, headers: cors });
+        try {
+          const b = await request.json().catch(() => ({}));
+          const communityId = String(b.community_id || "");
+          if (!/^\d{1,18}$/.test(communityId)) return new Response(JSON.stringify({ success: false, error: "BAD_COMMUNITY_ID" }), { status: 400, headers: cors });
+
+          // Require membership
+          const mem = await queryDatabase(`SELECT role FROM community_memberships WHERE community_id = $1::bigint AND user_id = $2::uuid`, [communityId, me.id]);
+          if (!mem.rows.length) return new Response(JSON.stringify({ success: false, error: "NOT_A_MEMBER" }), { status: 403, headers: cors });
+          const myRole = mem.rows[0]?.role;
+
+          // Announcement gating
+          const wantsAnnounce = !!b.is_announcement;
+          const canAnnounce = ["owner", "admin"].includes(myRole);
+          const isAnnounce = wantsAnnounce && canAnnounce;
+          const annTitle = isAnnounce && b.announcement_title ? String(b.announcement_title).trim().slice(0, 200) || null : null;
+
+          const ins = await queryDatabase(
+            `INSERT INTO community_posts (community_id, author_id, content, image_path, is_announcement, announcement_title)
+             VALUES ($1::bigint, $2::uuid, $3, $4, $5, $6) RETURNING *`,
+            [communityId, me.id, String(b.content || "").slice(0, 10000), b.image_path || null, isAnnounce, annTitle]
+          );
+          return new Response(JSON.stringify({ success: true, data: ins.rows[0] }), { headers: { ...cors, "Content-Type": "application/json" } });
+        } catch (err) { return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: cors }); }
+      }
+
       return new Response(JSON.stringify({ success: true, message: "Nakubonye API Gateway is Live" }), { headers: { ...cors, "Content-Type": "application/json" } });
     } catch (err) {
       return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...cors, "Content-Type": "application/json" } });

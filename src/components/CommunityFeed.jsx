@@ -4,7 +4,6 @@ import { getCommunityPosts } from '../lib/api';
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Send, Trash2, ImagePlus, X, Heart, Smile, Pin } from 'lucide-react'
-import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { publicPhotoUrl } from '../lib/photo'
 import { tap } from '../lib/haptic'
@@ -166,16 +165,18 @@ export default function CommunityFeed({ communityId, isMember }) {
       imagePath = path
     }
 
-    const { error: insErr } = await supabase
-      .from('community_posts')
-      .insert({
+    const insRes = await fetch(`${API_BASE_URL}/api/community-posts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         community_id: communityId,
-        author_id: session.user.id,
         content: body || '',
         image_path: imagePath,
         is_announcement: isAnnouncement && (myRole === 'owner' || myRole === 'admin'),
         announcement_title: isAnnouncement && (myRole === 'owner' || myRole === 'admin') ? announcementTitle.trim() || null : null,
       })
+    }).then(r => r.json()).catch(e => ({ success: false, error: e.message }))
+    const insErr = insRes.success ? null : { message: insRes.error || 'Post failed' }
 
     if (insErr) { setSubmitting(false); setError(insErr.message); return }
 
